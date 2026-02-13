@@ -30,9 +30,12 @@ const router = createRouter({
     },
     {
       path: '/customer',
-      name: 'customer',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'customer' },
+      children: [
+        { path: '', name: 'customer-list', component: () => import('@/views/customer/CustomerListView.vue') },
+        { path: 'new', name: 'customer-new', component: () => import('@/views/customer/CustomerFormView.vue'), meta: { requiresAuth: true, pageKey: 'customer' } },
+        { path: ':id', name: 'customer-detail', component: () => import('@/views/customer/CustomerDetailView.vue'), meta: { requiresAuth: true, pageKey: 'customer' } },
+      ],
     },
     {
       path: '/order',

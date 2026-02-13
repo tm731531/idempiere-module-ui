@@ -17,6 +17,7 @@
 - **附件管理** — 支援圖片上傳、原圖壓縮、預覽
 - **Document Action** — 完整的文件動作流程（完成/作廢/反轉）
 - **三表聯動** — 業務夥伴建立時同步建立 Location + Contact
+- **角色權限** — AD_SysConfig 定義角色→頁面對照表，控制選單可見性
 
 ### 身份識別
 | 項目 | 值 |
@@ -70,7 +71,7 @@
 │ AD_User             │            │                 │
 ├─────────────────────┴────────────┴─────────────────┤
 │              橫切面功能                             │
-│  動態欄位 │ 附件管理 │ DocAction │ 搜尋選擇器       │
+│  動態欄位 │ 附件管理 │ DocAction │ 搜尋選擇器 │ 角色權限 │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -335,6 +336,53 @@ await apiClient.put(`/api/v1/models/C_Order/${id}`, {
 3. 根據筆數自動切換模式（Dropdown / Search / Search+分頁）
 4. **QuickCreate** — 找不到時彈出快速建立 Dialog
 
+### 4.5 角色權限系統
+
+**設計原則**: 只控制頁面可見性，不限制頁面內操作。操作紀錄依靠 iDempiere 內建的 `CreatedBy` / `UpdatedBy` 自動追蹤。
+
+**AD_SysConfig 對照表**:
+```
+Key:   AESTHETICS_ROLE_{AD_Role_ID}_PAGES
+Value: appointment,consultation,customer,order,treatment,payment,shipment
+```
+
+**範例**:
+| AD_SysConfig Key | Value | 說明 |
+|---|---|---|
+| `AESTHETICS_ROLE_1000001_PAGES` | `appointment,consultation,customer,order,treatment,payment,shipment` | 管理員（全部頁面） |
+| `AESTHETICS_ROLE_1000002_PAGES` | `appointment,consultation,customer,order,treatment` | 醫師（不含收付款/收發貨） |
+| `AESTHETICS_ROLE_1000003_PAGES` | `appointment,customer,order,payment` | 櫃台（不含諮詢/療程/收發貨） |
+| `AESTHETICS_ROLE_1000004_PAGES` | `shipment` | 倉管（僅收發貨） |
+
+**前端實作**:
+1. 登入完成後（取得 `AD_Role_ID`），查詢 `AD_SysConfig` 取得該角色的 `PAGES` 值
+2. 解析為頁面 key 陣列
+3. Router guard 根據此陣列過濾可存取的路由
+4. 首頁選單只顯示有權限的模組
+5. 未設定 `AESTHETICS_ROLE_{roleId}_PAGES` 的角色 → 預設不顯示任何業務頁面（僅登入頁）
+
+**頁面 Key 對照**:
+
+| Page Key | 路由 | 對應模組 |
+|---|---|---|
+| `appointment` | `/appointment` | 資源預約 |
+| `consultation` | `/consultation` | 諮詢單 |
+| `customer` | `/customer` | 業務夥伴 |
+| `order` | `/order` | 訂單 |
+| `treatment` | `/treatment` | 療程單 |
+| `payment` | `/payment` | 收付款 |
+| `shipment` | `/shipment` | 收發貨 |
+
+**Composable**: `usePermission.ts`
+```typescript
+// 用法
+const { allowedPages, canAccess } = usePermission()
+
+if (canAccess('order')) {
+  // 顯示訂單選單項目
+}
+```
+
 ---
 
 ## 5. 專案結構
@@ -379,7 +427,8 @@ idempiere-module-ui/
 │       │   ├── useMetadata.ts         # 動態欄位 metadata 載入+快取
 │       │   ├── useAttachment.ts       # 附件管理邏輯（壓縮+上傳）
 │       │   ├── useDocAction.ts        # DocAction 狀態判斷+執行
-│       │   └── useSearchSelector.ts   # 搜尋選擇器邏輯
+│       │   ├── useSearchSelector.ts   # 搜尋選擇器邏輯
+│       │   └── usePermission.ts       # 角色→頁面權限控制
 │       │
 │       ├── components/                # 通用元件
 │       │   ├── DynamicForm.vue        # 動態表單渲染器
@@ -459,6 +508,7 @@ idempiere-module-ui/
 8. SearchSelector 元件（含 QuickCreate）
 9. DocActionBar 元件
 10. AttachmentManager 元件（含圖片壓縮）
+11. 角色權限（`usePermission` composable + Router guard 整合）
 
 ### Phase 2: 業務夥伴（最基礎的 Master Data）
 11. `api/bpartner.ts` — 三表聯動 CRUD
@@ -524,6 +574,11 @@ R_Request 沒有 DocAction，用 `R_Status_ID` + `Processed` 管理生命週期�
 ### D7: DocAction 用 REST PUT 而非 Process
 iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction，
 不需要走 Process endpoint。注意 key 是 `doc-action`（小寫+連字號）。
+
+### D8: 角色權限用 AD_SysConfig 而非 AD_Role Window Access
+我們的頁面不是 iDempiere 的 AD_Window，無法直接吃 AD_Role 的 Window Access。
+改用 AD_SysConfig 定義 `AESTHETICS_ROLE_{roleId}_PAGES` 對照表。
+只控制頁面可見性，不限制頁面內操作。操作紀錄依靠 iDempiere 內建的 `CreatedBy` / `UpdatedBy`。
 
 ---
 

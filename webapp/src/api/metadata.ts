@@ -57,5 +57,5 @@ export async function fetchRefListItems(referenceValueId: number): Promise<{ val
 export async function fetchFieldDefinitions(tabId: number): Promise<FieldDefinition[]> {
   const fields = await fetchFieldsForTab(tabId)
   const columns = await Promise.all(fields.map(f => fetchColumn(f.columnId)))
-  return fields.map((field, i) => ({ field, column: columns[i] }))
+  return fields.map((field, i) => ({ field, column: columns[i]! }))
 }

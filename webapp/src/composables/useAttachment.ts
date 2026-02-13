@@ -32,7 +32,7 @@ export function useAttachment(tableName: string) {
       const base64 = await new Promise<string>((resolve, reject) => {
         reader.onload = () => {
           const result = reader.result as string
-          resolve(result.split(',')[1]) // strip data:...;base64, prefix
+          resolve(result.split(',')[1] || '') // strip data:...;base64, prefix
         }
         reader.onerror = reject
         reader.readAsDataURL(processedFile)

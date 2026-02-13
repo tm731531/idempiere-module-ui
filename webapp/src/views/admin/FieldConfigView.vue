@@ -249,42 +249,44 @@ async function onTabChange() {
 }
 
 function updateSeqNo(idx: number, value: string) {
-  fields.value[idx].seqNo = parseInt(value, 10) || 0
+  fields.value[idx]!.seqNo = parseInt(value, 10) || 0
   markDirty(idx)
 }
 
 function markDirty(idx: number) {
-  dirtySet.add(fields.value[idx].id)
+  dirtySet.add(fields.value[idx]!.id)
 }
 
 function moveUp(idx: number) {
   if (idx <= 0) return
   const arr = fields.value
+  const current = arr[idx]!
+  const prev = arr[idx - 1]!
   // Swap seqNo values
-  const tmpSeq = arr[idx].seqNo
-  arr[idx].seqNo = arr[idx - 1].seqNo
-  arr[idx - 1].seqNo = tmpSeq
+  const tmpSeq = current.seqNo
+  current.seqNo = prev.seqNo
+  prev.seqNo = tmpSeq
   // Swap positions
-  const tmp = arr[idx]
-  arr[idx] = arr[idx - 1]
-  arr[idx - 1] = tmp
-  dirtySet.add(arr[idx].id)
-  dirtySet.add(arr[idx - 1].id)
+  arr[idx] = prev
+  arr[idx - 1] = current
+  dirtySet.add(arr[idx]!.id)
+  dirtySet.add(arr[idx - 1]!.id)
 }
 
 function moveDown(idx: number) {
   if (idx >= fields.value.length - 1) return
   const arr = fields.value
+  const current = arr[idx]!
+  const next = arr[idx + 1]!
   // Swap seqNo values
-  const tmpSeq = arr[idx].seqNo
-  arr[idx].seqNo = arr[idx + 1].seqNo
-  arr[idx + 1].seqNo = tmpSeq
+  const tmpSeq = current.seqNo
+  current.seqNo = next.seqNo
+  next.seqNo = tmpSeq
   // Swap positions
-  const tmp = arr[idx]
-  arr[idx] = arr[idx + 1]
-  arr[idx + 1] = tmp
-  dirtySet.add(arr[idx].id)
-  dirtySet.add(arr[idx + 1].id)
+  arr[idx] = next
+  arr[idx + 1] = current
+  dirtySet.add(arr[idx]!.id)
+  dirtySet.add(arr[idx + 1]!.id)
 }
 
 async function handleSave() {

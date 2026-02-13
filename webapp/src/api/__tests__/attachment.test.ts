@@ -20,7 +20,7 @@ describe('attachment API', () => {
     const { listAttachments } = await import('@/api/attachment')
     const result = await listAttachments('C_BPartner', 100)
     expect(result).toHaveLength(1)
-    expect(result[0].name).toBe('photo.jpg')
+    expect(result[0]!.name).toBe('photo.jpg')
   })
 
   it('listAttachments returns empty on error', async () => {

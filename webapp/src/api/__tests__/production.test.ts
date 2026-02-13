@@ -34,7 +34,7 @@ describe('production API', () => {
       ProductionQty: 1,
     }))
     // Verify date doesn't have milliseconds
-    const postedData = vi.mocked(apiClient.post).mock.calls[0][1] as any
+    const postedData = vi.mocked(apiClient.post).mock.calls[0]![1] as any
     expect(postedData.MovementDate).not.toContain('.')
   })
 

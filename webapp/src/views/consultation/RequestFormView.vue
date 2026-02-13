@@ -114,6 +114,7 @@ import {
   updateRequest,
   listRequestTypes,
   listRequestStatuses,
+  type RequestData,
 } from '@/api/request'
 
 const router = useRouter()
@@ -220,7 +221,7 @@ async function handleSubmit() {
       if (form.C_BPartner_ID !== null) {
         payload.C_BPartner_ID = form.C_BPartner_ID
       }
-      await createRequest(payload)
+      await createRequest(payload as RequestData)
       router.push({ name: 'consultation-list' })
     }
   } catch {

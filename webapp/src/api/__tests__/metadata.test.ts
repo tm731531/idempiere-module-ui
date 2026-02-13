@@ -22,7 +22,7 @@ describe('metadata API', () => {
     const { fetchFieldsForTab } = await import('@/api/metadata')
     const fields = await fetchFieldsForTab(100)
     expect(fields).toHaveLength(1)
-    expect(fields[0].name).toBe('DocumentNo')
+    expect(fields[0]!.name).toBe('DocumentNo')
   })
 
   it('should fetch AD_Column details', async () => {

@@ -30,7 +30,7 @@ const autoExpandedGroups = computed(() => {
   const result = new Set<string>()
   const names = groupNames.value
   if (names.length > 0) {
-    result.add(names[0])
+    result.add(names[0]!)
   }
   for (const [groupName, defs] of grouped.value) {
     if (defs.some(d => d.column.isMandatory)) {

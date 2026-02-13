@@ -103,6 +103,10 @@ function onSearchInput(event: Event): void {
   }, 300)
 }
 
+function onSearchBlur(): void {
+  window.setTimeout(() => { showDropdown.value = false }, 200)
+}
+
 function selectItem(item: { id: number; label: string }): void {
   emit('update:modelValue', item.id)
   searchText.value = item.label
@@ -178,7 +182,7 @@ watch(() => props.modelValue, (newVal) => {
         placeholder="搜尋..."
         @input="onSearchInput"
         @focus="showDropdown = searchResults.length > 0"
-        @blur="setTimeout(() => showDropdown = false, 200)"
+        @blur="onSearchBlur"
       />
 
       <ul v-if="showDropdown && searchResults.length > 0" class="selector-dropdown">

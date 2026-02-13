@@ -169,8 +169,8 @@ async function loadAssignments() {
 
 // Get appointments for a given resource and time slot
 function getAppointmentsAt(resourceId: number, slot: string): any[] {
-  const slotHour = parseInt(slot.split(':')[0])
-  const slotMin = parseInt(slot.split(':')[1])
+  const slotHour = parseInt(slot.split(':')[0]!)
+  const slotMin = parseInt(slot.split(':')[1]!)
 
   return assignments.value.filter((a) => {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID

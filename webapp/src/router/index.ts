@@ -62,15 +62,21 @@ const router = createRouter({
     },
     {
       path: '/payment',
-      name: 'payment',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'payment' },
+      children: [
+        { path: '', name: 'payment-list', component: () => import('@/views/payment/PaymentListView.vue') },
+        { path: 'new', name: 'payment-new', component: () => import('@/views/payment/PaymentFormView.vue'), meta: { requiresAuth: true, pageKey: 'payment' } },
+        { path: ':id', name: 'payment-detail', component: () => import('@/views/payment/PaymentFormView.vue'), meta: { requiresAuth: true, pageKey: 'payment' } },
+      ],
     },
     {
       path: '/shipment',
-      name: 'shipment',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'shipment' },
+      children: [
+        { path: '', name: 'shipment-list', component: () => import('@/views/shipment/InOutListView.vue') },
+        { path: 'new', name: 'shipment-new', component: () => import('@/views/shipment/InOutFormView.vue'), meta: { requiresAuth: true, pageKey: 'shipment' } },
+        { path: ':id', name: 'shipment-detail', component: () => import('@/views/shipment/InOutFormView.vue'), meta: { requiresAuth: true, pageKey: 'shipment' } },
+      ],
     },
     {
       path: '/admin/fields',

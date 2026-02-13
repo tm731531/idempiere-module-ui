@@ -440,9 +440,13 @@ PUT  /api/v1/models/AD_Field/{id}
      { "IsDisplayed": true/false, "SeqNo": 10, "FieldGroup": "基本資訊" }
 ```
 
+**權限限制**: AD_Field 是 System level（AccessLevel=4），只有 UserLevel 含 'S' 的角色才能寫入。
+一般 Client 角色可以**讀取** AD_Field（表單渲染正常），但**不能寫入**。
+因此欄位設定頁僅限 System 角色操作（登入時選 System Administrator 角色）。
+
 **管理頁面 (`FieldConfigView.vue`)**:
 - 路由: `/admin/fields`
-- 權限: 僅管理員角色可見
+- 權限: 僅 System 角色可見（前端檢查 `userLevel` 含 'S'）
 - 選擇 Window → Tab → 顯示該 Tab 下所有 AD_Field
 - 每個欄位一行：名稱 | 顯示開關 | 排序拖曳 | 分組選擇
 - 拖曳排序自動更新 `SeqNo`
@@ -487,7 +491,7 @@ Value: appointment,consultation,customer,order,treatment,payment,shipment
 | `treatment` | `/treatment` | 療程單 |
 | `payment` | `/payment` | 收付款 |
 | `shipment` | `/shipment` | 收發貨 |
-| `fieldconfig` | `/admin/fields` | 欄位設定管理 |
+| `fieldconfig` | `/admin/fields` | 欄位設定管理（System 角色限定，不走 SysConfig） |
 
 **Composable**: `usePermission.ts`
 ```typescript
@@ -698,10 +702,11 @@ iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction
 依 FieldGroup 分組為可收合面板，預設只展開必填/常用欄位（5-8 個）。
 列表頁只顯示 3-5 個關鍵欄位。Mobile-First 單欄排版。
 
-### D10: 欄位設定直接更新 AD_Field
+### D10: 欄位設定直接更新 AD_Field（System 角色限定）
 不另建覆寫層（SysConfig），直接透過 REST PUT 更新 AD_Field 的 IsDisplayed、SeqNo、FieldGroup。
-改的是 iDempiere 本身的 metadata，所有使用同一 Window 的前端都會同步生效。
-前端設定頁提供拖曳排序+開關切換，管理員不需進 ZK 後台。
+AD_Field 是 System level（AccessLevel=4），寫入需要 UserLevel 含 'S'。
+因此欄位設定頁僅限 System Administrator 角色操作，一般 Client 角色看不到此頁面。
+讀取 AD_Field 不受此限制，所有角色都能正常渲染動態表單。
 
 ### D11: 資源預約獨立於業務流程
 預約不從屬於訂單或諮詢。客戶可能為純諮詢、療程、回診、或臨時需求而預約。
@@ -740,3 +745,4 @@ iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction
 | 圖片壓縮品質不夠 | 提供壓縮品質設定（可調整 maxSizeMB） |
 | 三表聯動部分失敗 | 實作前端回滾邏輯（DELETE 已建立的記錄） |
 | S_ResourceAssignment.IsConfirmed 不可 PUT | 記錄為已知限制，不在 UI 提供確認功能或走 Process |
+| AD_Field 寫入需 System 角色 | 欄位設定頁檢查 UserLevel 含 'S'，非 System 角色不顯示此頁面 |

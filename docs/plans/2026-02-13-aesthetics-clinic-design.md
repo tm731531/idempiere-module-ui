@@ -15,7 +15,7 @@
 ### 核心特色
 - **動態欄位渲染** — 基於 AD_Field + AD_Column metadata，欄位定義不寫死在前端
 - **附件管理** — 支援圖片上傳、原圖壓縮、預覽
-- **Document Action** — 完整的文件動作流程（完成/作廢/反轉）
+- **Document Action** — 透過 Process 端點完成單據
 - **三表聯動** — 業務夥伴建立時同步建立 Location + Contact
 - **角色權限** — AD_SysConfig 定義角色→頁面對照表，控制選單可見性
 
@@ -59,7 +59,7 @@
 3. **Mobile-First** — 單欄排版，一個欄位一行，拇指可觸及的按鈕大小（最小 44px）
 4. **即時回饋** — 欄位驗證即時顯示（不等到送出），必填欄位明確標示
 5. **上下文相關** — SearchSelector 只在聚焦時展開搜尋，不預先載入全部選項
-6. **操作確認** — DocAction（完成/作廢/反轉）必須二次確認，防止誤觸
+6. **操作確認** — DocAction（完成）必須二次確認，防止誤觸
 
 **動態欄位的顯示策略**:
 ```
@@ -249,9 +249,8 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 - 訂單明細行可新增/刪除/修改
 
 **關鍵邏輯**:
-- **DocAction 支援** — Complete(CO)、Void(VO)、Close(CL)、Reverse(RE)
-- **DocAction** — 透過 Process 端點驅動 Workflow 執行（見 4.3 節）
-- 完成後不可編輯 — 需作廢後重建
+- **DocAction** — Complete(CO)，透過 Process 端點驅動 Workflow 執行（見 4.3 節）
+- 完成後不可編輯
 - 必填欄位從 AD_Column 動態讀取
 
 ### 3.7 療程單 (M_Production + M_ProductionLine)
@@ -281,7 +280,7 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 - 付款記錄列表
 
 **關鍵邏輯**:
-- **DocAction 支援** — Complete(CO)、Void(VO)
+- **DocAction 支援** — Complete(CO)
 - TenderType — 現金、信用卡、轉帳
 - 可關聯到 C_Order 或 C_Invoice
 - 預收款（儲值卡概念）支援
@@ -296,7 +295,7 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 - 明細行管理
 
 **關鍵邏輯**:
-- **DocAction 支援** — Complete(CO)、Reverse(RE)
+- **DocAction 支援** — Complete(CO)
 - 收貨增加庫存、出貨減少庫存
 - 可從 C_Order 自動產生
 
@@ -393,37 +392,22 @@ DELETE /api/v1/models/{table}/{id}/attachments/{name}    → 刪除附件
 
 | DocStatus | 可用動作 | 按鈕樣式 |
 |---|---|---|
-| DR (草稿) | Complete, Void | Primary, Danger |
-| IP (處理中) | Complete, Void | Primary, Danger |
-| CO (已完成) | Close, Void, Reverse | Default, Danger, Warning |
-| CL (已關閉) | (無) | — |
-| VO (已作廢) | (無) | — |
+| DR (草稿) | Complete | Primary |
+| CO (已完成) | (無) | — |
 
 **API 呼叫方式（透過 Process 端點）**:
 
-DocAction **必須透過 Process 端點執行**，走 iDempiere 正規路徑：
+DocAction **透過 Process 端點執行**，走 iDempiere 正規路徑：
 Process → AD_Workflow → 完整財會流程（驗證、過帳、庫存異動等）。
 
-**兩步驟**:
-1. **PUT 設定 DocAction 欄位值**（告訴系統要做什麼動作）
-2. **POST Process 端點**（驅動 Workflow 執行）
+**單一步驟**: POST Process 端點，由 Process 控制狀態轉換。
 
 ```typescript
-// Step 1: 設定要執行的動作
-await apiClient.put(`/api/v1/models/C_Order/${id}`, {
-  'DocAction': 'CO'
-})
-
-// Step 2: 透過 Process 驅動 Workflow 執行
 await apiClient.post(`/api/v1/processes/c_order-process`, {
   'record-id': id,
   'table-id': 259
 })
 ```
-
-> **為何需要 Step 1？** Document Process 無 AD_Process_Para（parameters=[]），
-> Workflow 從 record 的 `DocAction` 欄位讀取動作。新單據預設 `DocAction='CO'`，
-> Complete 看似可省略 Step 1，但 Void/Close/Reverse **必須**先 PUT。為一致性全部走兩步。
 
 **各 Document 對應的 Process Slug + Table ID**:
 
@@ -435,14 +419,10 @@ await apiClient.post(`/api/v1/processes/c_order-process`, {
 | M_InOut | 319 | `m_inout-process` | Process_Shipment |
 | M_Production | — | `m_production-process` | Process_Production |
 
-> `table-id` 比 `model-name` 更可靠（直接 int 比對，無需表名解析）。
-
 **R_Request 例外**: 無 DocAction，狀態透過 `R_Status_ID` + `Processed` 管理
 
 **鎖定邏輯**:
 - `DocStatus !== 'DR'` 時，所有欄位變為唯讀
-- DocAction 按鈕仍可操作（作廢、反轉等）
-- 作廢/反轉後，原單唯讀，新單可編輯
 
 ### 4.4 搜尋選擇器 (SearchSelector)
 
@@ -728,12 +708,10 @@ R_Request 沒有 DocAction，用 `R_Status_ID` + `Processed` 管理生命週期�
 業務夥伴建立時，C_Location → C_BPartner → C_BPartner_Location → AD_User
 四個 API call 必須在同一個操作中完成。任一失敗需要回滾已建立的記錄。
 
-### D7: DocAction 必須走 Process 端點
-DocAction 透過 `/api/v1/processes/{slug}` 執行，走 iDempiere 正規路徑：
-Process → AD_Workflow → 完整財會流程（驗證、過帳、庫存異動）。
-先 PUT 設定 `DocAction` 欄位值，再 POST Process 端點驅動 Workflow。
-每個 Document 有對應的 Process（如 `c_order-process`、`m_production-process`），
-Process 從 record 的 `DocAction` 欄位讀取要執行的動作。
+### D7: DocAction 走 Process 端點
+DocAction 透過 POST `/api/v1/processes/{slug}` 執行，由 Process 控制狀態轉換。
+前端不更新 DocAction 欄位，只負責呼叫 Process 端點。
+目前只支援 Complete (CO)，新單據預設 `DocAction='CO'`。
 
 ### D8: 角色權限用 AD_SysConfig 而非 AD_Role Window Access
 我們的頁面不是 iDempiere 的 AD_Window，無法直接吃 AD_Role 的 Window Access。

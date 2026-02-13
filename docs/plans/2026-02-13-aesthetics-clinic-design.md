@@ -49,6 +49,32 @@
 4. **Tree-shakable** — 只打包用到的元件
 5. **MIT 授權** — 商業使用無限制
 
+### UX 設計原則
+
+**漸進式揭露（Progressive Disclosure）**:
+動態欄位系統雖然可以渲染大量欄位，但 UI 不應一次全部攤開。
+
+1. **分層顯示** — 表單依 `FieldGroup` 分組為可收合區塊，預設只展開必填/常用區塊
+2. **主要欄位優先** — 初始只顯示核心欄位（5-8 個），其餘收在「更多資訊」區塊
+3. **Mobile-First** — 單欄排版，一個欄位一行，拇指可觸及的按鈕大小（最小 44px）
+4. **即時回饋** — 欄位驗證即時顯示（不等到送出），必填欄位明確標示
+5. **上下文相關** — SearchSelector 只在聚焦時展開搜尋，不預先載入全部選項
+6. **操作確認** — DocAction（完成/作廢/反轉）必須二次確認，防止誤觸
+
+**動態欄位的顯示策略**:
+```
+AD_Field.FieldGroup 分組 → 每組一個可收合面板
+
+面板 A: 基本資訊（展開）     ← 必填欄位所在
+面板 B: 詳細資訊（收合）     ← 選填欄位
+面板 C: 其他（收合）         ← 進階/少用欄位
+```
+
+**列表頁設計**:
+- 預設顯示 3-5 個關鍵欄位（不是全部欄位）
+- 支援篩選/搜尋，但不做複雜的多條件組合
+- 點擊直接進入詳情/編輯，減少點擊次數
+
 ---
 
 ## 3. 業務模組
@@ -77,21 +103,30 @@
 
 ### 3.2 業務流程
 
-**主流程（諮詢驅動）**:
+**核心原則：各模組獨立操作，不強制固定流程順序。**
+
+**典型流程（諮詢驅動）**:
 ```
-客戶來電/到店/網路詢問
+[業務夥伴] 建立或查詢客戶資料
   ↓
-[業務夥伴] 建立或查詢客戶資料（三表聯動）
+[諮詢單] 初步諮詢 → 評估方案 → 拍術前照
   ↓
-[諮詢單] 初步諮詢：了解需求、評估方案、拍術前照
+[訂單] 開立銷售訂單（療程+產品）
   ↓
-[訂單] 客戶決定做 → 開立銷售訂單（療程+產品）
-  ↓
-[資源預約] 預約療程時段+醫師/設備
-  ↓
-[療程單] 到店執行療程，扣耗材庫存
+[療程單] 執行療程，扣耗材庫存
   ↓
 [諮詢單] 術後追蹤回診，拍術後照對比
+```
+
+**資源預約（獨立模組，隨時可用）**:
+```
+預約不從屬於任何流程，使用場景多元：
+
+- 純諮詢預約 → 客戶想跟醫師聊聊
+- 療程預約   → 確定要做，預約手術/療程時段
+- 回診預約   → 術後追蹤
+- 設備預約   → 預約特定設備/診間
+- 臨時加約   → 現場直接安排
 ```
 
 **收款（獨立於主流程，時機不定）**:
@@ -123,7 +158,8 @@
 
 **流程特點**:
 - 各模組可獨立操作，不強制按順序
-- 諮詢單是起點，但客戶也可能直接預約
+- 資源預約是獨立入口，不綁定訂單或諮詢
+- 諮詢單是常見起點，但不是唯一起點
 - 收款與主流程解耦，支援各種付款時機
 - 每筆操作都有 CreatedBy/UpdatedBy 追蹤
 
@@ -567,32 +603,27 @@ idempiere-module-ui/
 12. CustomerListView / CustomerFormView
 13. SearchSelector 整合（選客戶時可 QuickCreate）
 
-### Phase 3: 諮詢單（業務起點）
-12. `api/request.ts`
-13. RequestListView / RequestFormView
-14. 附件整合（術前/術後照片）
-15. R_Status 狀態流轉
+### Phase 3: 諮詢單 + 資源預約（兩個獨立入口）
+12. `api/request.ts` — 諮詢單 CRUD + R_Status 流轉
+13. RequestListView / RequestFormView + 附件整合（術前/術後照片）
+14. `api/resource.ts` + `api/assignment.ts` — 資源預約
+15. CalendarView（週視圖）+ AppointmentForm
 
 ### Phase 4: 訂單
 16. `api/order.ts`
 17. OrderListView / OrderFormView（Header + Lines 同頁）
 18. DocAction 整合
 
-### Phase 5: 資源預約
-19. `api/resource.ts` + `api/assignment.ts`
-20. CalendarView（週視圖）
-21. AppointmentForm（預約建立/編輯）
+### Phase 5: 療程單
+19. `api/production.ts`
+20. ProductionListView / ProductionFormView
+21. BOM 展開 + 耗材管理
+22. DocAction 整合
 
-### Phase 6: 療程單
-22. `api/production.ts`
-23. ProductionListView / ProductionFormView
-24. BOM 展開 + 耗材管理
+### Phase 6: 收付款 + 收發貨
+23. `api/payment.ts` + PaymentFormView
+24. `api/inout.ts` + InOutFormView
 25. DocAction 整合
-
-### Phase 7: 收付款 + 收發貨
-26. `api/payment.ts` + PaymentFormView
-29. `api/inout.ts` + InOutFormView
-30. DocAction 整合
 
 ---
 
@@ -631,6 +662,15 @@ iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction
 我們的頁面不是 iDempiere 的 AD_Window，無法直接吃 AD_Role 的 Window Access。
 改用 AD_SysConfig 定義 `AESTHETICS_ROLE_{roleId}_PAGES` 對照表。
 只控制頁面可見性，不限制頁面內操作。操作紀錄依靠 iDempiere 內建的 `CreatedBy` / `UpdatedBy`。
+
+### D9: 漸進式揭露（Progressive Disclosure）
+動態欄位可能帶出大量欄位，但 UI 不應一次全部攤開。
+依 FieldGroup 分組為可收合面板，預設只展開必填/常用欄位（5-8 個）。
+列表頁只顯示 3-5 個關鍵欄位。Mobile-First 單欄排版。
+
+### D10: 資源預約獨立於業務流程
+預約不從屬於訂單或諮詢。客戶可能為純諮詢、療程、回診、或臨時需求而預約。
+預約與訂單/諮詢之間是可選的關聯，不是強制的前後步驟。
 
 ---
 

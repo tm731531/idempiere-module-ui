@@ -18,9 +18,11 @@ const router = createRouter({
     },
     {
       path: '/appointment',
-      name: 'appointment',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'appointment' },
+      children: [
+        { path: '', name: 'appointment-calendar', component: () => import('@/views/appointment/CalendarView.vue') },
+        { path: 'new', name: 'appointment-new', component: () => import('@/views/appointment/AppointmentForm.vue'), meta: { requiresAuth: true, pageKey: 'appointment' } },
+      ],
     },
     {
       path: '/consultation',

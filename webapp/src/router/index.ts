@@ -44,9 +44,12 @@ const router = createRouter({
     },
     {
       path: '/order',
-      name: 'order',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'order' },
+      children: [
+        { path: '', name: 'order-list', component: () => import('@/views/order/OrderListView.vue') },
+        { path: 'new', name: 'order-new', component: () => import('@/views/order/OrderFormView.vue'), meta: { requiresAuth: true, pageKey: 'order' } },
+        { path: ':id', name: 'order-detail', component: () => import('@/views/order/OrderFormView.vue'), meta: { requiresAuth: true, pageKey: 'order' } },
+      ],
     },
     {
       path: '/treatment',

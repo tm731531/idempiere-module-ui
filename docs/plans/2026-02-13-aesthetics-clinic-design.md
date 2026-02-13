@@ -97,7 +97,7 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 │ AD_User             │            │                 │
 ├─────────────────────┴────────────┴─────────────────┤
 │              橫切面功能                             │
-│  動態欄位 │ 附件管理 │ DocAction │ 搜尋選擇器 │ 角色權限 │
+│ 動態欄位 │ 附件管理 │ DocAction │ 搜尋選擇器 │ 欄位設定 │ 角色權限 │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -424,7 +424,34 @@ await apiClient.put(`/api/v1/models/C_Order/${id}`, {
 3. 根據筆數自動切換模式（Dropdown / Search / Search+分頁）
 4. **QuickCreate** — 找不到時彈出快速建立 Dialog
 
-### 4.5 角色權限系統
+### 4.5 欄位設定管理
+
+**用途**: 管理員在前端直接調整各表單的欄位顯示/隱藏、排序，不需進 iDempiere ZK 後台。
+
+**原理**: 直接透過 REST API 更新 AD_Field 記錄（`IsDisplayed`、`SeqNo`、`FieldGroup` 等），修改的是 iDempiere 本身的 metadata，前端下次載入表單時自動生效。
+
+**API 操作**:
+```
+GET  /api/v1/models/AD_Field?$filter=AD_Tab_ID eq {tabId}
+     &$select=AD_Field_ID,Name,SeqNo,IsDisplayed,FieldGroup,IsReadOnly
+     &$orderby=SeqNo
+
+PUT  /api/v1/models/AD_Field/{id}
+     { "IsDisplayed": true/false, "SeqNo": 10, "FieldGroup": "基本資訊" }
+```
+
+**管理頁面 (`FieldConfigView.vue`)**:
+- 路由: `/admin/fields`
+- 權限: 僅管理員角色可見
+- 選擇 Window → Tab → 顯示該 Tab 下所有 AD_Field
+- 每個欄位一行：名稱 | 顯示開關 | 排序拖曳 | 分組選擇
+- 拖曳排序自動更新 `SeqNo`
+- 開關切換 `IsDisplayed`
+- 儲存後清除前端 metadata 快取，立即生效
+
+**頁面 Key**: `fieldconfig`（加入角色權限對照）
+
+### 4.6 角色權限系統
 
 **設計原則**: 只控制頁面可見性，不限制頁面內操作。操作紀錄依靠 iDempiere 內建的 `CreatedBy` / `UpdatedBy` 自動追蹤。
 
@@ -460,6 +487,7 @@ Value: appointment,consultation,customer,order,treatment,payment,shipment
 | `treatment` | `/treatment` | 療程單 |
 | `payment` | `/payment` | 收付款 |
 | `shipment` | `/shipment` | 收發貨 |
+| `fieldconfig` | `/admin/fields` | 欄位設定管理 |
 
 **Composable**: `usePermission.ts`
 ```typescript
@@ -560,9 +588,11 @@ idempiere-module-ui/
 │       │   ├── payment/              # 收付款
 │       │   │   ├── PaymentListView.vue
 │       │   │   └── PaymentFormView.vue
-│       │   └── shipment/             # 收發貨
-│       │       ├── InOutListView.vue
-│       │       └── InOutFormView.vue
+│       │   ├── shipment/             # 收發貨
+│       │   │   ├── InOutListView.vue
+│       │   │   └── InOutFormView.vue
+│       │   └── admin/                # 管理
+│       │       └── FieldConfigView.vue
 │       │
 │       └── router/
 │           └── index.ts
@@ -668,7 +698,12 @@ iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction
 依 FieldGroup 分組為可收合面板，預設只展開必填/常用欄位（5-8 個）。
 列表頁只顯示 3-5 個關鍵欄位。Mobile-First 單欄排版。
 
-### D10: 資源預約獨立於業務流程
+### D10: 欄位設定直接更新 AD_Field
+不另建覆寫層（SysConfig），直接透過 REST PUT 更新 AD_Field 的 IsDisplayed、SeqNo、FieldGroup。
+改的是 iDempiere 本身的 metadata，所有使用同一 Window 的前端都會同步生效。
+前端設定頁提供拖曳排序+開關切換，管理員不需進 ZK 後台。
+
+### D11: 資源預約獨立於業務流程
 預約不從屬於訂單或諮詢。客戶可能為純諮詢、療程、回診、或臨時需求而預約。
 預約與訂單/諮詢之間是可選的關聯，不是強制的前後步驟。
 

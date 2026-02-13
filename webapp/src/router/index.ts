@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePermission } from '@/composables/usePermission'
 
 const router = createRouter({
   history: createWebHashHistory('/aesthetics/'),
@@ -82,6 +83,17 @@ router.beforeEach(async (to, _from, next) => {
   if (to.name === 'login' && authStore.isAuthenticated) {
     next({ name: 'home' })
     return
+  }
+
+  // Permission check for authenticated pages with pageKey
+  if (authStore.isAuthenticated && to.meta.pageKey) {
+    const { loadPermissions, canAccess } = usePermission()
+    const roleId = authStore.context?.roleId || 0
+    await loadPermissions(roleId)
+    if (!canAccess(to.meta.pageKey as string)) {
+      next({ name: 'home', query: { denied: '1' } })
+      return
+    }
   }
 
   next()

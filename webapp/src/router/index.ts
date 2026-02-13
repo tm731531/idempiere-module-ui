@@ -79,10 +79,10 @@ const router = createRouter({
       ],
     },
     {
-      path: '/admin/fields',
-      name: 'fieldconfig',
-      component: () => import('@/views/PlaceholderView.vue'),
-      meta: { requiresAuth: true, pageKey: 'fieldconfig' },
+      path: '/admin/field-config',
+      name: 'field-config',
+      component: () => import('@/views/admin/FieldConfigView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/:pathMatch(.*)*',

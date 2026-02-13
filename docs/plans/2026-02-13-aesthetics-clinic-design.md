@@ -417,20 +417,25 @@ await apiClient.put(`/api/v1/models/C_Order/${id}`, {
 // Step 2: 透過 Process 驅動 Workflow 執行
 await apiClient.post(`/api/v1/processes/c_order-process`, {
   'record-id': id,
-  'model-name': 'C_Order'
+  'table-id': 259
 })
 ```
 
-**各 Document 對應的 Process Slug**:
+> **為何需要 Step 1？** Document Process 無 AD_Process_Para（parameters=[]），
+> Workflow 從 record 的 `DocAction` 欄位讀取動作。新單據預設 `DocAction='CO'`，
+> Complete 看似可省略 Step 1，但 Void/Close/Reverse **必須**先 PUT。為一致性全部走兩步。
 
-| Document | Process Value | Slug | Workflow |
+**各 Document 對應的 Process Slug + Table ID**:
+
+| Document | Table ID | Process Slug | Workflow |
 |---|---|---|---|
-| C_Order | `C_Order Process` | `c_order-process` | Process_Order |
-| M_Production | `M_Production Process` | `m_production-process` | Process_Production |
-| C_Payment | `C_Payment_Process` | `c_payment_process` | Process_Payment |
-| M_InOut | `M_InOut Process` | `m_inout-process` | Process_Shipment |
+| C_Order | 259 | `c_order-process` | Process_Order |
+| C_Invoice | 318 | `c_invoice-process` | Process_Invoice |
+| C_Payment | 335 | `c_payment-process` | Process_Payment |
+| M_InOut | 319 | `m_inout-process` | Process_Shipment |
+| M_Production | — | `m_production-process` | Process_Production |
 
-**Process 無參數**（parameters=[]），動作由 record 上的 `DocAction` 欄位值決定。
+> `table-id` 比 `model-name` 更可靠（直接 int 比對，無需表名解析）。
 
 **R_Request 例外**: 無 DocAction，狀態透過 `R_Status_ID` + `Processed` 管理
 

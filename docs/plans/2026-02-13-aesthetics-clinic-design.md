@@ -75,7 +75,59 @@
 └────────────────────────────────────────────────────┘
 ```
 
-### 3.2 資源預約 (S_ResourceAssignment)
+### 3.2 業務流程
+
+**主流程（諮詢驅動）**:
+```
+客戶來電/到店/網路詢問
+  ↓
+[業務夥伴] 建立或查詢客戶資料（三表聯動）
+  ↓
+[諮詢單] 初步諮詢：了解需求、評估方案、拍術前照
+  ↓
+[訂單] 客戶決定做 → 開立銷售訂單（療程+產品）
+  ↓
+[資源預約] 預約療程時段+醫師/設備
+  ↓
+[療程單] 到店執行療程，扣耗材庫存
+  ↓
+[諮詢單] 術後追蹤回診，拍術後照對比
+```
+
+**收款（獨立於主流程，時機不定）**:
+```
+收款時機由業務情境決定，不綁定固定步驟：
+
+1. 訂單前全額預付  → 先收款，再開訂單
+2. 訂單時全額付清  → 訂單完成時收款
+3. 訂單時付訂金    → 部分收款，療程後補尾款
+4. 療程後才付款    → 療程完成後收款
+5. 關係戶/VIP     → 可能延後收款或特殊安排
+6. 分期付款       → 多筆 C_Payment 關聯同一 C_Order
+```
+
+**收發貨（獨立補貨流程）**:
+```
+耗材/產品不足時
+  ↓
+[訂單] 採購訂單（C_Order IsSOTrx=false）
+  ↓
+[收發貨] 供應商送貨 → 收貨入庫（M_InOut）
+```
+
+**反向流程**:
+```
+訂單作廢   → C_Order Void → 已收款則 C_Payment Reverse
+療程單反轉  → M_Production Reverse → 耗材回沖庫存
+```
+
+**流程特點**:
+- 各模組可獨立操作，不強制按順序
+- 諮詢單是起點，但客戶也可能直接預約
+- 收款與主流程解耦，支援各種付款時機
+- 每筆操作都有 CreatedBy/UpdatedBy 追蹤
+
+### 3.3 資源預約 (S_ResourceAssignment)
 
 **用途**: 客戶預約醫美療程的時段管理
 
@@ -94,7 +146,7 @@
 - 預約狀態管理（`IsConfirmed` 不可透過 REST PUT 更新，需注意）
 - 拖曳調整時段（行事曆互動）
 
-### 3.3 諮詢單 (R_Request)
+### 3.4 諮詢單 (R_Request)
 
 **用途**: 醫美諮詢紀錄，記錄客戶需求、診斷、建議方案
 
@@ -115,7 +167,7 @@
 - 照片上傳必須壓縮（原圖可能 5MB+，壓縮至 < 500KB）
 - 可關聯到 C_BPartner（客戶）、C_Order（訂單）
 
-### 3.4 業務夥伴 (C_BPartner 三表聯動)
+### 3.5 業務夥伴 (C_BPartner 三表聯動)
 
 **用途**: 客戶資料管理，一次建立完整客戶資訊
 
@@ -147,7 +199,7 @@
 - QuickCreate — 選擇器中找不到時可快速新增
 - 搜尋選擇器邏輯：≤20 筆 Dropdown、21-200 筆 Search、>200 筆 Search+分頁
 
-### 3.5 訂單 (C_Order + C_OrderLine)
+### 3.6 訂單 (C_Order + C_OrderLine)
 
 **用途**: 銷售訂單，記錄客戶購買的療程/產品
 
@@ -166,7 +218,7 @@
 - 完成後不可編輯 — 需作廢後重建
 - 必填欄位從 AD_Column 動態讀取
 
-### 3.6 療程單 (M_Production + M_ProductionLine)
+### 3.7 療程單 (M_Production + M_ProductionLine)
 
 **用途**: 療程執行記錄，扣減耗材庫存
 
@@ -184,7 +236,7 @@
 - BOM 展開 — 療程關聯的 BOM 自動帶入耗材明細
 - `IsCreated` / `IsUseProductionPlan` 欄位控制建立方式
 
-### 3.7 收付款 (C_Payment)
+### 3.8 收付款 (C_Payment)
 
 **用途**: 收款（客戶付款）與付款（供應商付款）
 
@@ -198,7 +250,7 @@
 - 可關聯到 C_Order 或 C_Invoice
 - 預收款（儲值卡概念）支援
 
-### 3.8 收發貨 (M_InOut + M_InOutLine)
+### 3.9 收發貨 (M_InOut + M_InOutLine)
 
 **用途**: 產品/耗材的進貨與出貨
 
@@ -515,30 +567,30 @@ idempiere-module-ui/
 12. CustomerListView / CustomerFormView
 13. SearchSelector 整合（選客戶時可 QuickCreate）
 
-### Phase 3: 資源預約
-14. `api/resource.ts` + `api/assignment.ts`
-15. CalendarView（週視圖）
-16. AppointmentForm（預約建立/編輯）
+### Phase 3: 諮詢單（業務起點）
+12. `api/request.ts`
+13. RequestListView / RequestFormView
+14. 附件整合（術前/術後照片）
+15. R_Status 狀態流轉
 
-### Phase 4: 諮詢單
-17. `api/request.ts`
-18. RequestListView / RequestFormView
-19. 附件整合（術前/術後照片）
-20. R_Status 狀態流轉
+### Phase 4: 訂單
+16. `api/order.ts`
+17. OrderListView / OrderFormView（Header + Lines 同頁）
+18. DocAction 整合
 
-### Phase 5: 訂單
-21. `api/order.ts`
-22. OrderListView / OrderFormView（Header + Lines 同頁）
-23. DocAction 整合
+### Phase 5: 資源預約
+19. `api/resource.ts` + `api/assignment.ts`
+20. CalendarView（週視圖）
+21. AppointmentForm（預約建立/編輯）
 
 ### Phase 6: 療程單
-24. `api/production.ts`
-25. ProductionListView / ProductionFormView
-26. BOM 展開 + 耗材管理
-27. DocAction 整合
+22. `api/production.ts`
+23. ProductionListView / ProductionFormView
+24. BOM 展開 + 耗材管理
+25. DocAction 整合
 
 ### Phase 7: 收付款 + 收發貨
-28. `api/payment.ts` + PaymentFormView
+26. `api/payment.ts` + PaymentFormView
 29. `api/inout.ts` + InOutFormView
 30. DocAction 整合
 

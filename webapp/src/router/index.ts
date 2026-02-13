@@ -24,9 +24,12 @@ const router = createRouter({
     },
     {
       path: '/consultation',
-      name: 'consultation',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'consultation' },
+      children: [
+        { path: '', name: 'consultation-list', component: () => import('@/views/consultation/RequestListView.vue') },
+        { path: 'new', name: 'consultation-new', component: () => import('@/views/consultation/RequestFormView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
+        { path: ':id', name: 'consultation-edit', component: () => import('@/views/consultation/RequestFormView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
+      ],
     },
     {
       path: '/customer',

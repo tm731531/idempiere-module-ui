@@ -250,7 +250,7 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 
 **關鍵邏輯**:
 - **DocAction 支援** — Complete(CO)、Void(VO)、Close(CL)、Reverse(RE)
-- `doc-action` key 是小寫加連字號（不是 `DocAction`）
+- **DocAction** — PUT body 帶 `doc-action` 觸發完整 Workflow（見 4.3 節）
 - 完成後不可編輯 — 需作廢後重建
 - 必填欄位從 AD_Column 動態讀取
 
@@ -400,12 +400,26 @@ DELETE /api/v1/models/{table}/{id}/attachments/{name}    → 刪除附件
 | VO (已作廢) | (無) | — |
 
 **API 呼叫方式**:
+
+iDempiere REST API 在 PUT/POST body 中帶 `doc-action` 時，
+底層會呼叫 `MWorkflow.runDocumentActionWorkflow(po, docAction)`（`ModelResourceImpl.java:1202`），
+**會執行完整的財會流程**（驗證、過帳、庫存異動等），不是只更新欄位值。
+
 ```typescript
-// 在 PUT 請求中加入 doc-action
+// PUT 更新時帶 doc-action，觸發完整 Workflow
 await apiClient.put(`/api/v1/models/C_Order/${id}`, {
-  'doc-action': 'CO'  // 注意：小寫加連字號
+  'doc-action': 'CO'  // 注意：小寫加連字號（不是 DocAction）
+})
+// 回應中會包含 "doc-processmsg" 欄位表示執行結果
+
+// POST 建立時也可帶 doc-action（建立後立即完成）
+await apiClient.post(`/api/v1/models/C_Order`, {
+  ...orderData,
+  'doc-action': 'CO'
 })
 ```
+
+**注意**: `doc-action` 接受字串 `"CO"` 或物件 `{"id": "CO"}` 兩種格式。
 
 **R_Request 例外**: 無 DocAction，狀態透過 `R_Status_ID` + `Processed` 管理
 
@@ -465,12 +479,15 @@ Key:   AESTHETICS_ROLE_{AD_Role_ID}_PAGES
 Value: appointment,consultation,customer,order,treatment,payment,shipment
 ```
 
+**黑名單制**: Value 列出該角色**可存取**的頁面。**沒有設定 Key 的角色預設可存取全部頁面**。
+只需要為「需要限制」的角色建立 SysConfig 項目。
+
 **範例**:
 | AD_SysConfig Key | Value | 說明 |
 |---|---|---|
-| `AESTHETICS_ROLE_1000001_PAGES` | `appointment,consultation,customer,order,treatment,payment,shipment` | 管理員（全部頁面） |
-| `AESTHETICS_ROLE_1000002_PAGES` | `appointment,consultation,customer,order,treatment` | 醫師（不含收付款/收發貨） |
-| `AESTHETICS_ROLE_1000003_PAGES` | `appointment,customer,order,payment` | 櫃台（不含諮詢/療程/收發貨） |
+| _(Yishou Admin 不設定)_ | _(預設全部頁面)_ | 管理員不需限制 |
+| `AESTHETICS_ROLE_1000002_PAGES` | `appointment,consultation,customer,order,treatment` | 醫師（排除收付款/收發貨） |
+| `AESTHETICS_ROLE_1000003_PAGES` | `appointment,customer,order,payment` | 櫃台（排除諮詢/療程/收發貨） |
 | `AESTHETICS_ROLE_1000004_PAGES` | `shipment` | 倉管（僅收發貨） |
 
 **前端實作**:
@@ -478,7 +495,8 @@ Value: appointment,consultation,customer,order,treatment,payment,shipment
 2. 解析為頁面 key 陣列
 3. Router guard 根據此陣列過濾可存取的路由
 4. 首頁選單只顯示有權限的模組
-5. 未設定 `AESTHETICS_ROLE_{roleId}_PAGES` 的角色 → 預設不顯示任何業務頁面（僅登入頁）
+5. 未設定 `AESTHETICS_ROLE_{roleId}_PAGES` 的角色 → **預設顯示全部業務頁面**（黑名單制：有設定的才限制，沒設定的預設全開）
+6. `fieldconfig` 頁面例外：不走 SysConfig，固定檢查 UserLevel 含 'S'
 
 **頁面 Key 對照**:
 
@@ -501,6 +519,12 @@ const { allowedPages, canAccess } = usePermission()
 if (canAccess('order')) {
   // 顯示訂單選單項目
 }
+
+// 黑名單制實作邏輯:
+// 1. 查詢 AESTHETICS_ROLE_{roleId}_PAGES
+// 2. 若 Key 不存在 → 預設 allowedPages = 全部業務頁面
+// 3. 若 Key 存在   → allowedPages = Value 中列出的頁面
+// 4. fieldconfig 頁面固定檢查 userLevel 含 'S'，不走 SysConfig
 ```
 
 ---
@@ -546,7 +570,7 @@ idempiere-module-ui/
 │       ├── composables/               # Vue Composables
 │       │   ├── useMetadata.ts         # 動態欄位 metadata 載入+快取
 │       │   ├── useAttachment.ts       # 附件管理邏輯（壓縮+上傳）
-│       │   ├── useDocAction.ts        # DocAction 狀態判斷+執行
+│       │   ├── useDocAction.ts        # DocAction 狀態判斷 + Workflow 執行
 │       │   ├── useSearchSelector.ts   # 搜尋選擇器邏輯
 │       │   └── usePermission.ts       # 角色→頁面權限控制
 │       │
@@ -688,9 +712,11 @@ R_Request 沒有 DocAction，用 `R_Status_ID` + `Processed` 管理生命週期�
 業務夥伴建立時，C_Location → C_BPartner → C_BPartner_Location → AD_User
 四個 API call 必須在同一個操作中完成。任一失敗需要回滾已建立的記錄。
 
-### D7: DocAction 用 REST PUT 而非 Process
-iDempiere REST API 支援在 PUT body 中帶 `doc-action` 欄位觸發 DocAction，
-不需要走 Process endpoint。注意 key 是 `doc-action`（小寫+連字號）。
+### D7: DocAction 走完整 Workflow
+PUT/POST body 中帶 `doc-action` 欄位時，iDempiere REST API 底層會呼叫
+`MWorkflow.runDocumentActionWorkflow(po, docAction)`（`ModelResourceImpl.java:1202`），
+執行完整的財會流程（驗證、過帳、庫存異動）。這**不是**單純更新 DocAction 欄位值。
+`doc-action` key 是小寫加連字號（不是 `DocAction`）。
 
 ### D8: 角色權限用 AD_SysConfig 而非 AD_Role Window Access
 我們的頁面不是 iDempiere 的 AD_Window，無法直接吃 AD_Role 的 Window Access。

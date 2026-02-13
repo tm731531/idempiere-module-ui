@@ -53,9 +53,12 @@ const router = createRouter({
     },
     {
       path: '/treatment',
-      name: 'treatment',
-      component: () => import('@/views/PlaceholderView.vue'),
       meta: { requiresAuth: true, pageKey: 'treatment' },
+      children: [
+        { path: '', name: 'treatment-list', component: () => import('@/views/treatment/ProductionListView.vue') },
+        { path: 'new', name: 'treatment-new', component: () => import('@/views/treatment/ProductionFormView.vue'), meta: { requiresAuth: true, pageKey: 'treatment' } },
+        { path: ':id', name: 'treatment-detail', component: () => import('@/views/treatment/ProductionFormView.vue'), meta: { requiresAuth: true, pageKey: 'treatment' } },
+      ],
     },
     {
       path: '/payment',

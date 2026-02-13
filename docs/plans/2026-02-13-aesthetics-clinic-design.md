@@ -250,7 +250,7 @@ AD_Field.FieldGroup 分組 → 每組一個可收合面板
 
 **關鍵邏輯**:
 - **DocAction 支援** — Complete(CO)、Void(VO)、Close(CL)、Reverse(RE)
-- **DocAction** — PUT body 帶 `doc-action` 觸發完整 Workflow（見 4.3 節）
+- **DocAction** — 透過 Process 端點驅動 Workflow 執行（見 4.3 節）
 - 完成後不可編輯 — 需作廢後重建
 - 必填欄位從 AD_Column 動態讀取
 
@@ -399,27 +399,38 @@ DELETE /api/v1/models/{table}/{id}/attachments/{name}    → 刪除附件
 | CL (已關閉) | (無) | — |
 | VO (已作廢) | (無) | — |
 
-**API 呼叫方式**:
+**API 呼叫方式（透過 Process 端點）**:
 
-iDempiere REST API 在 PUT/POST body 中帶 `doc-action` 時，
-底層會呼叫 `MWorkflow.runDocumentActionWorkflow(po, docAction)`（`ModelResourceImpl.java:1202`），
-**會執行完整的財會流程**（驗證、過帳、庫存異動等），不是只更新欄位值。
+DocAction **必須透過 Process 端點執行**，走 iDempiere 正規路徑：
+Process → AD_Workflow → 完整財會流程（驗證、過帳、庫存異動等）。
+
+**兩步驟**:
+1. **PUT 設定 DocAction 欄位值**（告訴系統要做什麼動作）
+2. **POST Process 端點**（驅動 Workflow 執行）
 
 ```typescript
-// PUT 更新時帶 doc-action，觸發完整 Workflow
+// Step 1: 設定要執行的動作
 await apiClient.put(`/api/v1/models/C_Order/${id}`, {
-  'doc-action': 'CO'  // 注意：小寫加連字號（不是 DocAction）
+  'DocAction': 'CO'
 })
-// 回應中會包含 "doc-processmsg" 欄位表示執行結果
 
-// POST 建立時也可帶 doc-action（建立後立即完成）
-await apiClient.post(`/api/v1/models/C_Order`, {
-  ...orderData,
-  'doc-action': 'CO'
+// Step 2: 透過 Process 驅動 Workflow 執行
+await apiClient.post(`/api/v1/processes/c_order-process`, {
+  'record-id': id,
+  'model-name': 'C_Order'
 })
 ```
 
-**注意**: `doc-action` 接受字串 `"CO"` 或物件 `{"id": "CO"}` 兩種格式。
+**各 Document 對應的 Process Slug**:
+
+| Document | Process Value | Slug | Workflow |
+|---|---|---|---|
+| C_Order | `C_Order Process` | `c_order-process` | Process_Order |
+| M_Production | `M_Production Process` | `m_production-process` | Process_Production |
+| C_Payment | `C_Payment_Process` | `c_payment_process` | Process_Payment |
+| M_InOut | `M_InOut Process` | `m_inout-process` | Process_Shipment |
+
+**Process 無參數**（parameters=[]），動作由 record 上的 `DocAction` 欄位值決定。
 
 **R_Request 例外**: 無 DocAction，狀態透過 `R_Status_ID` + `Processed` 管理
 
@@ -570,7 +581,7 @@ idempiere-module-ui/
 │       ├── composables/               # Vue Composables
 │       │   ├── useMetadata.ts         # 動態欄位 metadata 載入+快取
 │       │   ├── useAttachment.ts       # 附件管理邏輯（壓縮+上傳）
-│       │   ├── useDocAction.ts        # DocAction 狀態判斷 + Workflow 執行
+│       │   ├── useDocAction.ts        # DocAction 狀態判斷 + Process 端點執行
 │       │   ├── useSearchSelector.ts   # 搜尋選擇器邏輯
 │       │   └── usePermission.ts       # 角色→頁面權限控制
 │       │
@@ -712,11 +723,12 @@ R_Request 沒有 DocAction，用 `R_Status_ID` + `Processed` 管理生命週期�
 業務夥伴建立時，C_Location → C_BPartner → C_BPartner_Location → AD_User
 四個 API call 必須在同一個操作中完成。任一失敗需要回滾已建立的記錄。
 
-### D7: DocAction 走完整 Workflow
-PUT/POST body 中帶 `doc-action` 欄位時，iDempiere REST API 底層會呼叫
-`MWorkflow.runDocumentActionWorkflow(po, docAction)`（`ModelResourceImpl.java:1202`），
-執行完整的財會流程（驗證、過帳、庫存異動）。這**不是**單純更新 DocAction 欄位值。
-`doc-action` key 是小寫加連字號（不是 `DocAction`）。
+### D7: DocAction 必須走 Process 端點
+DocAction 透過 `/api/v1/processes/{slug}` 執行，走 iDempiere 正規路徑：
+Process → AD_Workflow → 完整財會流程（驗證、過帳、庫存異動）。
+先 PUT 設定 `DocAction` 欄位值，再 POST Process 端點驅動 Workflow。
+每個 Document 有對應的 Process（如 `c_order-process`、`m_production-process`），
+Process 從 record 的 `DocAction` 欄位讀取要執行的動作。
 
 ### D8: 角色權限用 AD_SysConfig 而非 AD_Role Window Access
 我們的頁面不是 iDempiere 的 AD_Window，無法直接吃 AD_Role 的 Window Access。

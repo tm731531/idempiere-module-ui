@@ -65,15 +65,13 @@ if [ "$1" = "--deploy" ]; then
 
     if [ -n "$BUNDLE_ID" ]; then
         # Update existing bundle in-place (keeps same bundle ID)
-        HTTP_CODE=$(curl -ks -b /tmp/felix-deploy -X POST \
-            -F "action=update" \
+        # Felix uses: action=install + uploadid={id} + bundlefile to update
+        curl -ks -b /tmp/felix-deploy -X POST \
+            -F "action=install" \
+            -F "uploadid=$BUNDLE_ID" \
             -F "bundlefile=@$DEPLOY_JAR" \
-            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID" -o /dev/null -w "%{http_code}")
-        if [ "$HTTP_CODE" = "200" ]; then
-            echo "Bundle $BUNDLE_ID updated and active."
-        else
-            echo "WARNING: Update returned HTTP $HTTP_CODE"
-        fi
+            "$FELIX_BASE/system/console/bundles" -o /dev/null
+        echo "Bundle $BUNDLE_ID updated."
     else
         # First install — no existing bundle found
         curl -ks -b /tmp/felix-deploy -X POST \
@@ -81,7 +79,9 @@ if [ "$1" = "--deploy" ]; then
             -F "bundlefile=@$DEPLOY_JAR" \
             -F "bundlestart=start" \
             "$FELIX_BASE/system/console/bundles" -o /dev/null
-        echo "Bundle installed and started (first deploy)."
+        BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
+            python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
+        echo "Bundle $BUNDLE_ID installed and started."
     fi
 
     rm -f /tmp/felix-deploy

@@ -7,6 +7,8 @@ export interface InOutData {
   M_Warehouse_ID: number
   AD_Org_ID: number
   IsSOTrx: boolean  // true=Shipment, false=Receipt
+  C_Order_ID?: number
+  MovementDate?: string  // yyyy-MM-dd format
   Description?: string
 }
 
@@ -45,18 +47,27 @@ export async function createInOut(data: InOutData): Promise<any> {
     lookupBPartnerLocationId(data.C_BPartner_ID),
   ])
 
-  const resp = await apiClient.post('/api/v1/models/M_InOut', {
+  const movDate = data.MovementDate
+    ? new Date(data.MovementDate + 'T00:00:00')
+    : new Date()
+
+  const payload: Record<string, any> = {
     AD_Org_ID: data.AD_Org_ID,
     C_DocType_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
     C_BPartner_Location_ID: bpLocationId,
     M_Warehouse_ID: data.M_Warehouse_ID,
-    MovementDate: toIdempiereDateTime(new Date()),
-    DateAcct: toIdempiereDateTime(new Date()),
+    MovementDate: toIdempiereDateTime(movDate),
+    DateAcct: toIdempiereDateTime(movDate),
     IsSOTrx: data.IsSOTrx,
-    MovementType: data.IsSOTrx ? 'C-' : 'V+',  // Customer Shipment or Vendor Receipt
+    MovementType: data.IsSOTrx ? 'C-' : 'V+',
     Description: data.Description || '',
-  })
+  }
+  if (data.C_Order_ID) {
+    payload.C_Order_ID = data.C_Order_ID
+  }
+
+  const resp = await apiClient.post('/api/v1/models/M_InOut', payload)
   return resp.data
 }
 

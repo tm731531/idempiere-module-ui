@@ -12,10 +12,13 @@
     <template v-else>
       <!-- Order Header -->
       <div class="form-section">
-        <div v-if="!isCreate && order" class="order-info">
-          <span class="order-docno">{{ order.DocumentNo }}</span>
+        <div v-if="!isCreate && order" class="doc-info">
+          <span class="doc-docno">{{ order.DocumentNo }}</span>
           <StatusBadge :status="docStatus" />
         </div>
+
+        <!-- 基本資訊 -->
+        <h3 class="section-title">基本資訊</h3>
 
         <div class="form-group">
           <label>客戶 <span class="required">*</span></label>
@@ -30,7 +33,41 @@
         </div>
 
         <div class="form-group">
-          <label>備註</label>
+          <label>倉庫 <span class="required">*</span></label>
+          <select v-model="form.M_Warehouse_ID" class="form-input" :disabled="readOnly">
+            <option :value="0">-- 請選擇 --</option>
+            <option v-for="wh in warehouses" :key="wh.id" :value="wh.id">
+              {{ wh.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="inline-fields">
+          <div class="form-group">
+            <label>訂單日期</label>
+            <input
+              v-model="form.DateOrdered"
+              type="date"
+              class="form-input"
+              :disabled="readOnly"
+            />
+          </div>
+          <div class="form-group">
+            <label>預計交貨日</label>
+            <input
+              v-model="form.DatePromised"
+              type="date"
+              class="form-input"
+              :disabled="readOnly"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 備註 -->
+      <div class="form-section">
+        <h3 class="section-title">備註</h3>
+        <div class="form-group">
           <textarea
             v-model="form.Description"
             rows="2"
@@ -43,16 +80,10 @@
 
       <!-- Save header button (create mode) -->
       <div v-if="isCreate" class="form-actions">
+        <button type="button" class="cancel-btn" @click="goBack">取消</button>
         <button
           type="button"
-          class="cancel-btn"
-          @click="goBack"
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          :disabled="saving || !form.C_BPartner_ID"
+          :disabled="saving || !form.C_BPartner_ID || !form.M_Warehouse_ID"
           @click="handleCreateOrder"
         >
           {{ saving ? '建立中...' : '建立訂單' }}
@@ -132,13 +163,7 @@
               </div>
             </div>
             <div class="add-line-actions">
-              <button
-                type="button"
-                class="cancel-btn"
-                @click="cancelAddLine"
-              >
-                取消
-              </button>
+              <button type="button" class="cancel-btn" @click="cancelAddLine">取消</button>
               <button
                 type="button"
                 :disabled="addingLine || !newLine.M_Product_ID"
@@ -175,6 +200,8 @@ import { useAuthStore } from '@/stores/auth'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DocActionBar from '@/components/DocActionBar.vue'
+import { toDateString } from '@/api/utils'
+import { lookupWarehouses } from '@/api/lookup'
 import {
   getOrder,
   getOrderLines,
@@ -199,9 +226,15 @@ const lines = ref<any[]>([])
 const docStatus = ref('DR')
 const readOnly = computed(() => docStatus.value !== 'DR' && !isCreate.value)
 
+// Warehouses
+const warehouses = ref<{ id: number; name: string }[]>([])
+
 // Form state
 const form = reactive({
   C_BPartner_ID: null as number | null,
+  M_Warehouse_ID: 0,
+  DateOrdered: toDateString(new Date()),
+  DatePromised: toDateString(new Date()),
   Description: '',
 })
 
@@ -233,6 +266,18 @@ function formatAmount(val: any): string {
   return Number(val).toLocaleString()
 }
 
+async function loadWarehouses() {
+  const orgId = authStore.context?.organizationId ?? 0
+  warehouses.value = await lookupWarehouses(orgId)
+  // Pre-select from context or first available
+  const contextWh = authStore.context?.warehouseId
+  if (contextWh && warehouses.value.some(w => w.id === contextWh)) {
+    form.M_Warehouse_ID = contextWh
+  } else if (warehouses.value.length === 1 && warehouses.value[0]) {
+    form.M_Warehouse_ID = warehouses.value[0].id
+  }
+}
+
 async function loadOrder() {
   if (!orderId.value) return
   pageLoading.value = true
@@ -241,18 +286,18 @@ async function loadOrder() {
     const data = await getOrder(orderId.value)
     order.value = data
 
-    // Extract DocStatus (may be object)
     if (data.DocStatus && typeof data.DocStatus === 'object') {
       docStatus.value = data.DocStatus.id || 'DR'
     } else {
       docStatus.value = data.DocStatus || 'DR'
     }
 
-    // Populate form
     form.C_BPartner_ID = data.C_BPartner_ID?.id ?? null
+    form.M_Warehouse_ID = data.M_Warehouse_ID?.id ?? data.M_Warehouse_ID ?? 0
     form.Description = data.Description || ''
+    if (data.DateOrdered) form.DateOrdered = toDateString(new Date(data.DateOrdered))
+    if (data.DatePromised) form.DatePromised = toDateString(new Date(data.DatePromised))
 
-    // Load lines
     await loadLines()
   } catch {
     pageError.value = '載入訂單失敗'
@@ -278,10 +323,8 @@ async function handleCreateOrder() {
     errorMsg.value = '請選擇客戶'
     return
   }
-
-  const warehouseId = authStore.context?.warehouseId
-  if (!warehouseId) {
-    errorMsg.value = '請先選擇倉庫'
+  if (!form.M_Warehouse_ID) {
+    errorMsg.value = '請選擇倉庫'
     return
   }
 
@@ -293,11 +336,10 @@ async function handleCreateOrder() {
     const result = await createOrder({
       C_BPartner_ID: form.C_BPartner_ID,
       AD_Org_ID: orgId,
-      M_Warehouse_ID: warehouseId,
+      M_Warehouse_ID: form.M_Warehouse_ID,
       Description: form.Description,
       username,
     })
-    // Navigate to the newly created order
     router.replace({ name: 'order-detail', params: { id: result.id } })
   } catch (e: unknown) {
     const err = e as { message?: string }
@@ -318,10 +360,8 @@ async function handleAddLine() {
       QtyOrdered: newLine.QtyOrdered,
       PriceEntered: newLine.PriceEntered,
     })
-    // Reset form and refresh lines
     cancelAddLine()
     await loadLines()
-    // Refresh order header (GrandTotal may have changed)
     const data = await getOrder(orderId.value)
     order.value = data
   } catch {
@@ -344,7 +384,6 @@ async function handleDeleteLine(lineId: number) {
   try {
     await deleteOrderLine(lineId)
     await loadLines()
-    // Refresh header
     const data = await getOrder(orderId.value)
     order.value = data
   } catch {
@@ -353,7 +392,6 @@ async function handleDeleteLine(lineId: number) {
 }
 
 async function onCompleted() {
-  // Refresh order to get updated DocStatus
   if (!orderId.value) return
   try {
     const data = await getOrder(orderId.value)
@@ -364,7 +402,6 @@ async function onCompleted() {
       docStatus.value = data.DocStatus || 'CO'
     }
   } catch {
-    // At minimum update the status
     docStatus.value = 'CO'
   }
 }
@@ -377,9 +414,11 @@ function goBack() {
   router.push({ name: 'order-list' })
 }
 
-onMounted(() => {
-  if (!isCreate.value) {
-    loadOrder()
+onMounted(async () => {
+  if (isCreate.value) {
+    await loadWarehouses()
+  } else {
+    await Promise.all([loadWarehouses(), loadOrder()])
   }
 })
 </script>
@@ -423,14 +462,14 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 
-.order-info {
+.doc-info {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
 
-.order-docno {
+.doc-docno {
   font-size: 1.125rem;
   font-weight: 600;
 }
@@ -478,6 +517,15 @@ onMounted(() => {
   opacity: 0.6;
   cursor: not-allowed;
   background: #f8fafc;
+}
+
+.inline-fields {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.inline-fields .form-group {
+  flex: 1;
 }
 
 .form-actions {
@@ -594,15 +642,6 @@ onMounted(() => {
   background: #f8fafc;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-}
-
-.inline-fields {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.inline-fields .form-group {
-  flex: 1;
 }
 
 .add-line-actions {

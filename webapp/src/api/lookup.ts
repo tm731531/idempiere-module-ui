@@ -286,6 +286,40 @@ export async function lookupBPartnerLocationId(bpartnerId: number): Promise<numb
   return records[0].id
 }
 
+/**
+ * Lookup all active warehouses for the current org.
+ * Returns list for dropdown selection.
+ */
+export async function lookupWarehouses(orgId?: number): Promise<{ id: number; name: string }[]> {
+  const filter = orgId && orgId > 0
+    ? `IsActive eq true and AD_Org_ID eq ${orgId}`
+    : 'IsActive eq true'
+  const resp = await apiClient.get('/api/v1/models/M_Warehouse', {
+    params: {
+      '$filter': filter,
+      '$select': 'M_Warehouse_ID,Name',
+      '$orderby': 'Name',
+      '$top': '50',
+    },
+  })
+  return (resp.data.records || []).map((r: any) => ({ id: r.id, name: r.Name }))
+}
+
+/**
+ * Lookup locators for a warehouse.
+ */
+export async function lookupLocators(warehouseId: number): Promise<{ id: number; name: string }[]> {
+  const resp = await apiClient.get('/api/v1/models/M_Locator', {
+    params: {
+      '$filter': `M_Warehouse_ID eq ${warehouseId} and IsActive eq true`,
+      '$select': 'M_Locator_ID,Value',
+      '$orderby': 'Value',
+      '$top': '50',
+    },
+  })
+  return (resp.data.records || []).map((r: any) => ({ id: r.id, name: r.Value || `Locator #${r.id}` }))
+}
+
 export async function lookupDefaultBankAccountId(): Promise<number> {
   if (cache['C_BankAccount'] !== undefined) return cache['C_BankAccount']
   const resp = await apiClient.get('/api/v1/models/C_BankAccount', {

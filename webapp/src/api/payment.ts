@@ -8,6 +8,7 @@ export interface PaymentData {
   TenderType: string  // X=Cash, K=Check, C=Credit Card, T=Direct Deposit
   C_Order_ID?: number
   AD_Org_ID: number
+  DateTrx?: string  // yyyy-MM-dd format
   Description?: string
 }
 
@@ -32,7 +33,7 @@ export async function listPayments(filter?: string): Promise<any[]> {
 
 export async function getPayment(id: number): Promise<any> {
   const resp = await apiClient.get(`/api/v1/models/C_Payment/${id}`, {
-    params: { '$expand': 'C_BPartner_ID' },
+    params: { '$expand': 'C_BPartner_ID,C_Order_ID' },
   })
   return resp.data
 }
@@ -52,8 +53,8 @@ export async function createPayment(data: PaymentData): Promise<any> {
     C_Currency_ID: currencyId,
     PayAmt: data.PayAmt,
     TenderType: data.TenderType,
-    DateTrx: toIdempiereDateTime(new Date()),
-    DateAcct: toIdempiereDateTime(new Date()),
+    DateTrx: toIdempiereDateTime(data.DateTrx ? new Date(data.DateTrx + 'T00:00:00') : new Date()),
+    DateAcct: toIdempiereDateTime(data.DateTrx ? new Date(data.DateTrx + 'T00:00:00') : new Date()),
     IsReceipt: true,
     Description: data.Description || '',
   }

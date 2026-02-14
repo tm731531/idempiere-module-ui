@@ -9,8 +9,8 @@
           <option :value="0" disabled>請選擇</option>
           <option
             v-for="r in resources"
-            :key="r.S_Resource_ID"
-            :value="r.S_Resource_ID"
+            :key="r.id"
+            :value="r.id"
           >
             {{ r.Name }}
           </option>
@@ -57,16 +57,7 @@
 
       <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
 
-      <!-- Conflict warning -->
-      <div v-if="showConflictWarning" class="conflict-warning">
-        <p>此時段已有預約，是否繼續？</p>
-        <div class="conflict-actions">
-          <button class="btn btn-secondary" @click="showConflictWarning = false">取消</button>
-          <button class="btn btn-primary" @click="confirmSave">確定儲存</button>
-        </div>
-      </div>
-
-      <div v-else class="form-actions">
+      <div class="form-actions">
         <button class="btn btn-secondary" @click="$emit('cancel')">取消</button>
         <button class="btn btn-primary" :disabled="saving" @click="handleSave">
           {{ saving ? '儲存中...' : '儲存' }}
@@ -106,7 +97,6 @@ const form = reactive({
 
 const saving = ref(false)
 const errorMsg = ref('')
-const showConflictWarning = ref(false)
 
 onMounted(() => {
   if (props.initialResourceId !== undefined && props.initialResourceId !== 0) {
@@ -161,7 +151,7 @@ async function handleSave() {
     )
 
     if (hasConflict) {
-      showConflictWarning.value = true
+      errorMsg.value = '此服務人員在該時段已有預約，請選擇其他時段'
       saving.value = false
       return
     }
@@ -173,19 +163,13 @@ async function handleSave() {
   }
 }
 
-async function confirmSave() {
-  showConflictWarning.value = false
-  saving.value = true
-  try {
-    await doSave()
-  } catch {
-    errorMsg.value = '儲存失敗，請稍後再試'
-    saving.value = false
-  }
-}
-
 async function doSave() {
   const orgId = authStore.context?.organizationId ?? 0
+  if (!orgId) {
+    errorMsg.value = '請先切換到具體組織（不可使用 * 組織）'
+    saving.value = false
+    return
+  }
 
   await createAssignment({
     S_Resource_ID: form.resourceId,
@@ -267,26 +251,6 @@ async function doSave() {
   color: var(--color-error);
   font-size: 0.875rem;
   margin-bottom: 0.75rem;
-}
-
-.conflict-warning {
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.conflict-warning p {
-  font-size: 0.875rem;
-  margin-bottom: 0.5rem;
-  color: #92400e;
-}
-
-.conflict-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
 }
 
 .form-actions {

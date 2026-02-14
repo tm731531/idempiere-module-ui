@@ -1,9 +1,9 @@
 <template>
   <div class="calendar-page">
-    <!-- Zone 1: Resource selector -->
+    <!-- Resource filter chips -->
     <div class="resource-selector">
       <div class="selector-header">
-        <span class="selector-title">資源</span>
+        <span class="selector-title">服務人員</span>
         <button class="btn-toggle-all" @click="toggleAll">
           {{ allSelected ? '取消全選' : '全選' }}
         </button>
@@ -12,34 +12,42 @@
       <div v-else class="resource-chips">
         <label
           v-for="res in resources"
-          :key="res.S_Resource_ID"
+          :key="res.id"
           class="resource-chip"
-          :class="{ selected: selectedResourceIds.has(res.S_Resource_ID) }"
+          :class="{ selected: selectedResourceIds.has(res.id) }"
+          @click.prevent="toggleResource(res.id)"
         >
-          <input
-            type="checkbox"
-            :checked="selectedResourceIds.has(res.S_Resource_ID)"
-            @change="toggleResource(res.S_Resource_ID)"
-          />
+          <span class="chip-dot" :style="{ backgroundColor: getResourceColor(res.id) }"></span>
           <span class="chip-name">{{ res.Name }}</span>
         </label>
       </div>
     </div>
 
-    <!-- Zone 2: Calendar -->
+    <!-- Calendar -->
     <div class="calendar-section">
-      <!-- Week navigation -->
-      <div class="calendar-header">
-        <div class="nav-row">
-          <button class="nav-btn" @click="prevWeek">&lt;</button>
-          <button class="nav-btn today-btn" @click="goToday">本週</button>
-          <button class="nav-btn" @click="nextWeek">&gt;</button>
-        </div>
-        <div class="week-range">{{ weekRangeLabel }}</div>
+      <!-- View mode tabs -->
+      <div class="view-tabs">
+        <button
+          v-for="m in viewModes"
+          :key="m.key"
+          class="view-tab"
+          :class="{ active: viewMode === m.key }"
+          @click="switchView(m.key)"
+        >{{ m.label }}</button>
       </div>
 
-      <!-- Day tabs -->
-      <div class="day-tabs">
+      <!-- Navigation -->
+      <div class="calendar-header">
+        <div class="nav-row">
+          <button class="nav-btn" @click="navPrev">&lt;</button>
+          <button class="nav-btn today-btn" @click="navToday">今天</button>
+          <button class="nav-btn" @click="navNext">&gt;</button>
+        </div>
+        <div class="header-label">{{ headerLabel }}</div>
+      </div>
+
+      <!-- Day tabs (week view only) -->
+      <div v-if="viewMode === 'week'" class="day-tabs">
         <button
           v-for="day in weekDays"
           :key="day.date"
@@ -54,50 +62,67 @@
 
       <div v-if="loading" class="loading-state">載入中...</div>
 
-      <div v-else-if="selectedResources.length === 0" class="empty-state">
-        請選擇至少一個資源
-      </div>
-
-      <div v-else class="calendar-grid-wrapper">
-        <div class="calendar-grid">
-          <!-- Header row: time column + selected resource columns -->
-          <div class="grid-header">
-            <div class="time-col-header">時間</div>
-            <div
-              v-for="res in selectedResources"
-              :key="res.S_Resource_ID"
-              class="resource-col-header"
-              :style="{ backgroundColor: getResourceColor(res.S_Resource_ID) + '15' }"
-            >
-              <span class="res-dot" :style="{ backgroundColor: getResourceColor(res.S_Resource_ID) }"></span>
-              {{ res.Name }}
-            </div>
-          </div>
-
-          <!-- Time slot rows -->
+      <!-- Day / Week: time grid -->
+      <div v-else-if="viewMode === 'day' || viewMode === 'week'" class="calendar-grid-wrapper">
+        <div class="time-grid">
           <div
             v-for="slot in timeSlots"
             :key="slot"
-            class="grid-row"
+            class="time-row"
+            @click="onSlotClick(slot)"
           >
             <div class="time-label">{{ slot }}</div>
-            <div
-              v-for="res in selectedResources"
-              :key="res.S_Resource_ID"
-              class="slot-cell"
-              @click="onSlotClick(res, slot)"
-            >
+            <div class="slot-content">
               <div
-                v-for="appt in getAppointmentsAt(res.S_Resource_ID, slot)"
+                v-for="appt in getAppointmentsAt(slot)"
                 :key="appt.id"
-                class="appointment-block"
-                :style="{ height: getBlockHeight(appt) + 'px', backgroundColor: getResourceColor(res.S_Resource_ID) }"
-                :title="appt.Name"
+                class="appt-chip"
+                :style="{ backgroundColor: getAppointmentColor(appt) }"
+                :title="`${getResourceName(appt)} — ${appt.Name}`"
               >
+                <span class="appt-resource">{{ getResourceName(appt) }}</span>
                 <span class="appt-name">{{ appt.Name }}</span>
+                <span class="appt-time">{{ formatApptTime(appt) }}</span>
               </div>
+              <div v-if="getAppointmentsAt(slot).length === 0" class="slot-empty">+</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Month: calendar grid -->
+      <div v-else-if="viewMode === 'month'" class="month-grid-wrapper">
+        <div class="month-weekday-header">
+          <span v-for="d in DAY_LABELS" :key="d" class="weekday-label">{{ d }}</span>
+        </div>
+        <div class="month-grid">
+          <div
+            v-for="(cell, i) in monthCells"
+            :key="i"
+            class="month-cell"
+            :class="{
+              'other-month': !cell.currentMonth,
+              today: cell.isToday,
+            }"
+            @click="cell.date && drillToDay(cell.date)"
+          >
+            <span class="cell-day">{{ cell.day }}</span>
+            <span v-if="cell.count > 0" class="cell-count">{{ cell.count }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Year: 12 month cards -->
+      <div v-else-if="viewMode === 'year'" class="year-grid">
+        <div
+          v-for="m in yearMonths"
+          :key="m.month"
+          class="year-month-card"
+          :class="{ 'current-month': m.isCurrent }"
+          @click="drillToMonth(m.month)"
+        >
+          <span class="month-name">{{ m.label }}</span>
+          <span v-if="m.count > 0" class="month-count">{{ m.count }}</span>
         </div>
       </div>
     </div>
@@ -105,7 +130,7 @@
     <!-- Appointment form modal -->
     <AppointmentForm
       v-if="showForm"
-      :resources="selectedResources"
+      :resources="resources"
       :initial-resource-id="selectedResourceId"
       :initial-date="formDate"
       :initial-time="formTime"
@@ -121,17 +146,29 @@ import { listResources } from '@/api/resource'
 import { listAssignments } from '@/api/assignment'
 import AppointmentForm from './AppointmentForm.vue'
 
-// Resources
+// ========== View Mode ==========
+type ViewMode = 'day' | 'week' | 'month' | 'year'
+const viewModes = [
+  { key: 'day' as ViewMode, label: '日' },
+  { key: 'week' as ViewMode, label: '週' },
+  { key: 'month' as ViewMode, label: '月' },
+  { key: 'year' as ViewMode, label: '年' },
+]
+const viewMode = ref<ViewMode>('week')
+const currentDate = ref(new Date())
+
+function switchView(mode: ViewMode) {
+  viewMode.value = mode
+  loadAssignments()
+}
+
+// ========== Resources ==========
 const resources = ref<any[]>([])
 const resourcesLoading = ref(false)
 const selectedResourceIds = reactive(new Set<number>())
 
-const selectedResources = computed(() =>
-  resources.value.filter(r => selectedResourceIds.has(r.S_Resource_ID))
-)
-
 const allSelected = computed(() =>
-  resources.value.length > 0 && resources.value.every(r => selectedResourceIds.has(r.S_Resource_ID))
+  resources.value.length > 0 && resources.value.every(r => selectedResourceIds.has(r.id))
 )
 
 function toggleResource(id: number) {
@@ -146,19 +183,44 @@ function toggleAll() {
   if (allSelected.value) {
     selectedResourceIds.clear()
   } else {
-    resources.value.forEach(r => selectedResourceIds.add(r.S_Resource_ID))
+    resources.value.forEach(r => selectedResourceIds.add(r.id))
   }
 }
 
-// Color palette for resources
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899']
 function getResourceColor(resourceId: number): string {
-  const idx = resources.value.findIndex(r => r.S_Resource_ID === resourceId)
-  return COLORS[idx % COLORS.length]!
+  const idx = resources.value.findIndex(r => r.id === resourceId)
+  return COLORS[idx >= 0 ? idx % COLORS.length : 0]!
 }
 
-// Week navigation
-const currentWeekStart = ref(getMonday(new Date()))
+function getAppointmentColor(appt: any): string {
+  const resId = typeof appt.S_Resource_ID === 'object' ? appt.S_Resource_ID.id : appt.S_Resource_ID
+  return getResourceColor(resId)
+}
+
+function getResourceName(appt: any): string {
+  if (typeof appt.S_Resource_ID === 'object' && appt.S_Resource_ID.identifier) {
+    return appt.S_Resource_ID.identifier
+  }
+  const resId = typeof appt.S_Resource_ID === 'object' ? appt.S_Resource_ID.id : appt.S_Resource_ID
+  const res = resources.value.find(r => r.id === resId)
+  return res?.Name || ''
+}
+
+// ========== Date Helpers ==========
+const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
+const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
+const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+
+function formatDateFull(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+function formatDateShort(d: Date): string {
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+}
 
 function getMonday(d: Date): Date {
   const date = new Date(d)
@@ -176,28 +238,73 @@ function getWeekEnd(start: Date): Date {
   return end
 }
 
-const weekRangeLabel = computed(() => {
-  const start = currentWeekStart.value
-  const end = getWeekEnd(start)
-  return `${formatDateShort(start)} ~ ${formatDateShort(end)}`
+// ========== Navigation ==========
+function navPrev() {
+  const d = new Date(currentDate.value)
+  if (viewMode.value === 'day') d.setDate(d.getDate() - 1)
+  else if (viewMode.value === 'week') d.setDate(d.getDate() - 7)
+  else if (viewMode.value === 'month') d.setMonth(d.getMonth() - 1)
+  else d.setFullYear(d.getFullYear() - 1)
+  currentDate.value = d
+  loadAssignments()
+}
+
+function navNext() {
+  const d = new Date(currentDate.value)
+  if (viewMode.value === 'day') d.setDate(d.getDate() + 1)
+  else if (viewMode.value === 'week') d.setDate(d.getDate() + 7)
+  else if (viewMode.value === 'month') d.setMonth(d.getMonth() + 1)
+  else d.setFullYear(d.getFullYear() + 1)
+  currentDate.value = d
+  loadAssignments()
+}
+
+function navToday() {
+  currentDate.value = new Date()
+  loadAssignments()
+}
+
+// ========== Header Label ==========
+const headerLabel = computed(() => {
+  const d = currentDate.value
+  if (viewMode.value === 'day') {
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${DAY_NAMES[d.getDay()]}`
+  }
+  if (viewMode.value === 'week') {
+    const mon = getMonday(d)
+    const sun = getWeekEnd(mon)
+    return `${formatDateShort(mon)} ~ ${formatDateShort(sun)}`
+  }
+  if (viewMode.value === 'month') {
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`
+  }
+  return `${d.getFullYear()}年`
 })
 
-function formatDateShort(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${m}/${day}`
-}
+// ========== Selected Day (for day/week time grid) ==========
+const selectedDay = ref(formatDateFull(new Date()))
 
-function formatDateFull(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
-}
+// Keep selectedDay in sync with currentDate for day view
+watch([currentDate, viewMode], () => {
+  if (viewMode.value === 'day') {
+    selectedDay.value = formatDateFull(currentDate.value)
+  } else if (viewMode.value === 'week') {
+    const mon = getMonday(currentDate.value)
+    const sun = getWeekEnd(mon)
+    const today = formatDateFull(new Date())
+    const monStr = formatDateFull(mon)
+    const sunStr = formatDateFull(sun)
+    if (today >= monStr && today <= sunStr) {
+      selectedDay.value = today
+    } else {
+      selectedDay.value = monStr
+    }
+  }
+})
 
-const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-
+// ========== Week Days (for week view) ==========
 const weekDays = computed(() => {
-  const start = currentWeekStart.value
+  const start = getMonday(currentDate.value)
   const today = formatDateFull(new Date())
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start)
@@ -212,40 +319,7 @@ const weekDays = computed(() => {
   })
 })
 
-// Selected day (defaults to today if in current week, else Monday)
-const selectedDay = ref(formatDateFull(new Date()))
-
-watch(currentWeekStart, () => {
-  const today = formatDateFull(new Date())
-  const days = weekDays.value.map(d => d.date)
-  if (days.includes(today)) {
-    selectedDay.value = today
-  } else {
-    selectedDay.value = days[0]!
-  }
-})
-
-function prevWeek() {
-  const d = new Date(currentWeekStart.value)
-  d.setDate(d.getDate() - 7)
-  currentWeekStart.value = d
-  loadAssignments()
-}
-
-function nextWeek() {
-  const d = new Date(currentWeekStart.value)
-  d.setDate(d.getDate() + 7)
-  currentWeekStart.value = d
-  loadAssignments()
-}
-
-function goToday() {
-  currentWeekStart.value = getMonday(new Date())
-  selectedDay.value = formatDateFull(new Date())
-  loadAssignments()
-}
-
-// Time slots: 9:00 to 18:00, 30-minute intervals
+// ========== Time Slots ==========
 const timeSlots = computed(() => {
   const slots: string[] = []
   for (let h = 9; h < 18; h++) {
@@ -256,15 +330,37 @@ const timeSlots = computed(() => {
   return slots
 })
 
-// Assignments
+// ========== Assignments ==========
 const assignments = ref<any[]>([])
 const loading = ref(false)
+
+function getDateRange(): { start: Date; end: Date } {
+  const d = currentDate.value
+  if (viewMode.value === 'day') {
+    const start = new Date(d)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(d)
+    end.setHours(23, 59, 59, 0)
+    return { start, end }
+  }
+  if (viewMode.value === 'week') {
+    return { start: getMonday(d), end: getWeekEnd(getMonday(d)) }
+  }
+  if (viewMode.value === 'month') {
+    const start = new Date(d.getFullYear(), d.getMonth(), 1)
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
+    return { start, end }
+  }
+  // year
+  const start = new Date(d.getFullYear(), 0, 1)
+  const end = new Date(d.getFullYear(), 11, 31, 23, 59, 59)
+  return { start, end }
+}
 
 async function loadAssignments() {
   loading.value = true
   try {
-    const start = currentWeekStart.value
-    const end = getWeekEnd(start)
+    const { start, end } = getDateRange()
     assignments.value = await listAssignments(start, end)
   } catch {
     assignments.value = []
@@ -273,41 +369,132 @@ async function loadAssignments() {
   }
 }
 
-// Filter assignments for selected day + resource + slot
-function getAppointmentsAt(resourceId: number, slot: string): any[] {
+// ========== Day/Week: filter for time grid ==========
+function getAppointmentsAt(slot: string): any[] {
   const slotHour = parseInt(slot.split(':')[0]!)
   const slotMin = parseInt(slot.split(':')[1]!)
 
   return assignments.value.filter((a) => {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
-    if (aResId !== resourceId) return false
+    if (!selectedResourceIds.has(aResId)) return false
 
     const from = new Date(a.AssignDateFrom)
-    const dateStr = formatDateFull(from)
-    if (dateStr !== selectedDay.value) return false
+    if (formatDateFull(from) !== selectedDay.value) return false
 
-    const fromH = from.getHours()
-    const fromM = from.getMinutes()
-    return fromH === slotHour && fromM === slotMin
+    return from.getHours() === slotHour && from.getMinutes() === slotMin
   })
 }
 
-function getBlockHeight(appt: any): number {
+function formatApptTime(appt: any): string {
   const from = new Date(appt.AssignDateFrom)
   const to = new Date(appt.AssignDateTo)
-  const durationMin = (to.getTime() - from.getTime()) / (1000 * 60)
-  const slots = Math.max(1, Math.round(durationMin / 30))
-  return slots * 40 - 4
+  const fH = String(from.getHours()).padStart(2, '0')
+  const fM = String(from.getMinutes()).padStart(2, '0')
+  const tH = String(to.getHours()).padStart(2, '0')
+  const tM = String(to.getMinutes()).padStart(2, '0')
+  return `${fH}:${fM}-${tH}:${tM}`
 }
 
-// Form
+// ========== Month: calendar grid ==========
+const monthCells = computed(() => {
+  const d = currentDate.value
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const today = formatDateFull(new Date())
+
+  // Monday-based: getDay() 0=Sun→6, 1=Mon→0, ...
+  let startOffset = firstDay.getDay() - 1
+  if (startOffset < 0) startOffset = 6
+
+  const cells: { day: number; date: string; currentMonth: boolean; isToday: boolean; count: number }[] = []
+
+  // Previous month padding
+  const prevLastDay = new Date(year, month, 0).getDate()
+  for (let i = startOffset - 1; i >= 0; i--) {
+    const pd = prevLastDay - i
+    const pDate = new Date(year, month - 1, pd)
+    cells.push({ day: pd, date: formatDateFull(pDate), currentMonth: false, isToday: false, count: 0 })
+  }
+
+  // Current month
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const dateStr = formatDateFull(new Date(year, month, day))
+    cells.push({ day, date: dateStr, currentMonth: true, isToday: dateStr === today, count: 0 })
+  }
+
+  // Next month padding (fill to 42 cells = 6 rows)
+  let nextDay = 1
+  while (cells.length < 42) {
+    const nDate = new Date(year, month + 1, nextDay)
+    cells.push({ day: nextDay, date: formatDateFull(nDate), currentMonth: false, isToday: false, count: 0 })
+    nextDay++
+  }
+
+  // Count appointments per day
+  for (const a of assignments.value) {
+    const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
+    if (!selectedResourceIds.has(aResId)) continue
+    const dateStr = formatDateFull(new Date(a.AssignDateFrom))
+    const cell = cells.find(c => c.date === dateStr)
+    if (cell) cell.count++
+  }
+
+  return cells
+})
+
+// ========== Year: 12 month cards ==========
+const yearMonths = computed(() => {
+  const year = currentDate.value.getFullYear()
+  const now = new Date()
+  const currentMonth = now.getFullYear() === year ? now.getMonth() : -1
+
+  return Array.from({ length: 12 }, (_, m) => {
+    // Count assignments in this month
+    const monthStart = formatDateFull(new Date(year, m, 1))
+    const monthEnd = formatDateFull(new Date(year, m + 1, 0))
+    let count = 0
+    for (const a of assignments.value) {
+      const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
+      if (!selectedResourceIds.has(aResId)) continue
+      const dateStr = formatDateFull(new Date(a.AssignDateFrom))
+      if (dateStr >= monthStart && dateStr <= monthEnd) count++
+    }
+    return {
+      month: m,
+      label: MONTH_LABELS[m],
+      count,
+      isCurrent: m === currentMonth,
+    }
+  })
+})
+
+// ========== Drill-down ==========
+function drillToDay(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  currentDate.value = new Date(y!, m! - 1, d!)
+  viewMode.value = 'day'
+  loadAssignments()
+}
+
+function drillToMonth(month: number) {
+  const d = new Date(currentDate.value)
+  d.setMonth(month)
+  d.setDate(1)
+  currentDate.value = d
+  viewMode.value = 'month'
+  loadAssignments()
+}
+
+// ========== Form ==========
 const showForm = ref(false)
 const selectedResourceId = ref(0)
 const formDate = ref('')
 const formTime = ref('')
 
-function onSlotClick(resource: any, slot: string) {
-  selectedResourceId.value = resource.S_Resource_ID || resource.id
+function onSlotClick(slot: string) {
+  selectedResourceId.value = 0
   formDate.value = selectedDay.value
   formTime.value = slot
   showForm.value = true
@@ -318,13 +505,12 @@ function onAppointmentSaved() {
   loadAssignments()
 }
 
-// Init
+// ========== Init ==========
 onMounted(async () => {
   resourcesLoading.value = true
   try {
     resources.value = await listResources()
-    // Select all by default
-    resources.value.forEach(r => selectedResourceIds.add(r.S_Resource_ID))
+    resources.value.forEach(r => selectedResourceIds.add(r.id))
   } catch {
     resources.value = []
   } finally {
@@ -337,10 +523,11 @@ onMounted(async () => {
 <style scoped>
 .calendar-page {
   padding: 0.5rem;
-  max-width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
-/* Zone 1: Resource selector */
+/* Resource selector */
 .resource-selector {
   margin-bottom: 0.75rem;
   padding: 0.75rem;
@@ -359,7 +546,6 @@ onMounted(async () => {
 .selector-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text);
 }
 
 .btn-toggle-all {
@@ -391,7 +577,7 @@ onMounted(async () => {
 .resource-chip {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.375rem;
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: 20px;
@@ -408,15 +594,18 @@ onMounted(async () => {
   color: var(--color-primary);
 }
 
-.resource-chip input[type="checkbox"] {
-  display: none;
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .chip-name {
   white-space: nowrap;
 }
 
-/* Zone 2: Calendar */
+/* Calendar section */
 .calendar-section {
   background: white;
   border: 1px solid var(--color-border);
@@ -424,6 +613,31 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+/* View mode tabs */
+.view-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.view-tab {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  min-height: var(--min-touch);
+}
+
+.view-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Calendar header */
 .calendar-header {
   text-align: center;
   padding: 0.5rem;
@@ -461,12 +675,12 @@ onMounted(async () => {
   background: var(--color-primary-hover);
 }
 
-.week-range {
-  font-size: 0.8125rem;
+.header-label {
+  font-size: 0.875rem;
   color: #64748b;
 }
 
-/* Day tabs */
+/* Day tabs (week view) */
 .day-tabs {
   display: flex;
   border-bottom: 1px solid var(--color-border);
@@ -507,124 +721,202 @@ onMounted(async () => {
   font-size: 0.8125rem;
 }
 
-.loading-state,
-.empty-state {
+.loading-state {
   text-align: center;
   padding: 2rem;
   color: #64748b;
   font-size: 0.875rem;
 }
 
-/* Calendar grid */
+/* Time grid (day/week) */
 .calendar-grid-wrapper {
-  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 320px);
   -webkit-overflow-scrolling: touch;
 }
 
-.calendar-grid {
-  min-width: 300px;
+.time-grid {
+  min-width: 0;
 }
 
-.grid-header {
-  display: flex;
-  position: sticky;
-  top: 0;
-  background: white;
-  z-index: 2;
-  border-bottom: 2px solid var(--color-border);
-}
-
-.time-col-header {
-  width: 50px;
-  min-width: 50px;
-  padding: 0.5rem 0.25rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-align: center;
-  color: #64748b;
-}
-
-.resource-col-header {
-  flex: 1;
-  min-width: 100px;
-  padding: 0.5rem 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-align: center;
-  border-left: 1px solid var(--color-border);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-}
-
-.res-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.grid-row {
+.time-row {
   display: flex;
   border-bottom: 1px solid var(--color-border);
-  min-height: 40px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.time-row:hover {
+  background: rgba(99, 102, 241, 0.03);
 }
 
 .time-label {
-  width: 50px;
-  min-width: 50px;
-  padding: 0.25rem;
-  font-size: 0.6875rem;
+  width: 52px;
+  min-width: 52px;
+  padding: 0.375rem 0.25rem;
+  font-size: 0.75rem;
   color: #94a3b8;
   text-align: center;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 0.375rem;
+  border-right: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.slot-cell {
+.slot-content {
   flex: 1;
-  min-width: 100px;
-  border-left: 1px solid var(--color-border);
-  position: relative;
-  cursor: pointer;
-  min-height: 40px;
+  padding: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: flex-start;
+  align-content: flex-start;
 }
 
-.slot-cell:hover {
-  background: rgba(99, 102, 241, 0.04);
+.slot-empty {
+  width: 100%;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 0.875rem;
+  line-height: 36px;
 }
 
-.appointment-block {
-  position: absolute;
-  top: 1px;
-  left: 2px;
-  right: 2px;
+.appt-chip {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
   color: white;
-  border-radius: 4px;
-  padding: 0.125rem 0.375rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  max-width: 100%;
   overflow: hidden;
-  z-index: 1;
   cursor: pointer;
+}
+
+.appt-resource {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .appt-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
+  opacity: 0.9;
 }
 
-.calendar-grid-wrapper::-webkit-scrollbar {
-  height: 4px;
+.appt-time {
+  font-size: 0.6875rem;
+  opacity: 0.8;
 }
 
-.calendar-grid-wrapper::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 2px;
+/* Month grid */
+.month-grid-wrapper {
+  padding: 0.5rem;
+}
+
+.month-weekday-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.month-cell {
+  min-height: 48px;
+  padding: 0.375rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.month-cell:hover {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.month-cell.other-month {
+  opacity: 0.3;
+}
+
+.month-cell.today .cell-day {
+  background: var(--color-primary);
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell-day {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.cell-count {
+  font-size: 0.6875rem;
+  color: white;
+  background: var(--color-primary);
+  border-radius: 10px;
+  padding: 0 0.375rem;
+  line-height: 1.4;
+}
+
+/* Year grid */
+.year-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.year-month-card {
+  padding: 1rem 0.5rem;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.year-month-card:hover {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.year-month-card.current-month {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.month-name {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.month-count {
+  font-size: 0.75rem;
+  color: white;
+  background: var(--color-primary);
+  border-radius: 10px;
+  padding: 0.125rem 0.5rem;
 }
 </style>

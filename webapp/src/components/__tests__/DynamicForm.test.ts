@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DynamicForm from '@/components/DynamicForm.vue'
 
-vi.mock('@/api/metadata', () => ({ fetchRefListItems: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/metadata', () => ({
+  fetchRefListItems: vi.fn().mockResolvedValue([]),
+  fetchIdentifierColumn: vi.fn().mockResolvedValue('Name'),
+}))
 vi.mock('@/i18n/fieldLabels', () => ({
   getFieldLabel: (_columnName: string, fallback: string) => fallback,
 }))

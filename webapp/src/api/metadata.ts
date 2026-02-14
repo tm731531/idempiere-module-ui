@@ -59,6 +59,54 @@ export function clearRefTableCache(): void {
   refTableCache.clear()
 }
 
+// ========== Identifier Column Resolution ==========
+
+const identifierCache = new Map<string, string>()
+
+/**
+ * Fetch the first identifier column for a table by querying AD_Column
+ * where IsIdentifier=true, ordered by SeqNo.
+ * This determines what field to display/search in SearchSelector.
+ * Falls back to 'Name' if no identifier column is found.
+ */
+export async function fetchIdentifierColumn(tableName: string): Promise<string> {
+  if (identifierCache.has(tableName)) return identifierCache.get(tableName)!
+
+  try {
+    // First resolve table name → AD_Table_ID
+    const tableResp = await apiClient.get('/api/v1/models/AD_Table', {
+      params: {
+        '$filter': `TableName eq '${tableName}'`,
+        '$select': 'AD_Table_ID',
+        '$top': 1,
+      },
+    })
+    const tables = tableResp.data.records || []
+    if (tables.length === 0) {
+      identifierCache.set(tableName, 'Name')
+      return 'Name'
+    }
+    const tableId = tables[0].id
+
+    // Query AD_Column for IsIdentifier = true, ordered by SeqNo
+    const colResp = await apiClient.get('/api/v1/models/AD_Column', {
+      params: {
+        '$filter': `AD_Table_ID eq ${tableId} and IsIdentifier eq true and IsActive eq true`,
+        '$select': 'ColumnName,SeqNo',
+        '$orderby': 'SeqNo',
+        '$top': 1,
+      },
+    })
+    const cols = colResp.data.records || []
+    const result = cols.length > 0 ? cols[0].ColumnName : 'Name'
+    identifierCache.set(tableName, result)
+    return result
+  } catch {
+    identifierCache.set(tableName, 'Name')
+    return 'Name'
+  }
+}
+
 // ========== Default Value Resolution ==========
 
 export interface AuthContext {

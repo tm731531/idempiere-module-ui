@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DynamicField from '@/components/DynamicField.vue'
 
-vi.mock('@/api/metadata', () => ({ fetchRefListItems: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/api/metadata', () => ({
+  fetchRefListItems: vi.fn().mockResolvedValue([]),
+  fetchIdentifierColumn: vi.fn().mockResolvedValue('Name'),
+}))
 vi.mock('@/i18n/fieldLabels', () => ({
   getFieldLabel: (columnName: string, fallback: string) => {
     const map: Record<string, string> = { C_BPartner_ID: '客戶', M_Warehouse_ID: '倉庫' }
@@ -14,7 +17,7 @@ vi.mock('@/stores/auth', () => ({
 }))
 vi.mock('@/api/client', () => ({
   apiClient: {
-    get: vi.fn().mockResolvedValue({ data: { records: [{ id: 100 }], 'row-count': 1 } }),
+    get: vi.fn().mockResolvedValue({ data: { records: [{ id: 100, ColumnName: 'Name' }], 'row-count': 1 } }),
     post: vi.fn().mockResolvedValue({ data: { id: 200 } }),
   },
 }))

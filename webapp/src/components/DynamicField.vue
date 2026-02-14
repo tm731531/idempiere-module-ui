@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import type { FieldMeta, ColumnMeta } from '@/api/metadata'
-import { fetchRefListItems } from '@/api/metadata'
+import { fetchRefListItems, fetchIdentifierColumn } from '@/api/metadata'
 import { getFieldLabel } from '@/i18n/fieldLabels'
 import { useAuthStore } from '@/stores/auth'
 import { apiClient } from '@/api/client'
@@ -37,18 +37,8 @@ const resolvedTableName = computed(() => {
   return props.referenceTableName || ''
 })
 
-// Display field for SearchSelector — most tables use "Name"
-const displayFieldName = computed(() => {
-  const docNoTables = new Set([
-    'C_Order', 'C_Payment', 'M_InOut', 'M_Production', 'M_Movement',
-    'C_Invoice', 'M_Requisition', 'R_Request',
-  ])
-  const valueTables = new Set(['M_Locator'])
-
-  if (docNoTables.has(resolvedTableName.value)) return 'DocumentNo'
-  if (valueTables.has(resolvedTableName.value)) return 'Value'
-  return 'Name'
-})
+// Display field for SearchSelector — resolved from AD_Column.IsIdentifier
+const displayFieldName = ref('Name')
 
 const isFkField = computed(() =>
   [18, 19, 30].includes(props.column.referenceId) && resolvedTableName.value
@@ -131,6 +121,9 @@ function onSelectChange(event: Event) {
 onMounted(async () => {
   if (props.column.referenceId === 17 && props.column.referenceValueId) {
     refListOptions.value = await fetchRefListItems(props.column.referenceValueId)
+  }
+  if (isFkField.value) {
+    displayFieldName.value = await fetchIdentifierColumn(resolvedTableName.value)
   }
   if (enableQuickCreate.value) {
     await loadQuickCreateDefaults()

@@ -32,7 +32,13 @@ const resolvedTableName = computed(() => {
     return cn.endsWith('_ID') ? cn.slice(0, -3) : cn
   }
   // For Ref 18/30, use prop from parent (resolved in metadata.ts)
-  return props.referenceTableName || ''
+  // Fallback: if no referenceTableName, derive from column name (same as Ref 19)
+  if (props.referenceTableName) return props.referenceTableName
+  if (props.column.referenceId === 30 || props.column.referenceId === 18) {
+    const cn = props.column.columnName
+    return cn.endsWith('_ID') ? cn.slice(0, -3) : ''
+  }
+  return ''
 })
 
 // Display field for SearchSelector — resolved from AD_Column.IsIdentifier

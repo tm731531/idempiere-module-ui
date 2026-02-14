@@ -174,6 +174,19 @@ async function handleQuickCreate(): Promise<void> {
   }
 }
 
+async function resolveCurrentLabel(): Promise<void> {
+  if (props.modelValue === null || props.modelValue === undefined) return
+  try {
+    const resp = await apiClient.get(`/api/v1/models/${props.tableName}/${props.modelValue}`, {
+      params: { '$select': `${idColumn.value},${props.displayField}` },
+    })
+    searchText.value = resp.data[props.displayField] || ''
+  } catch {
+    // If resolution fails, show the ID as fallback
+    searchText.value = `#${props.modelValue}`
+  }
+}
+
 async function initialize(): Promise<void> {
   idColumn.value = getIdColumn(props.tableName)
   mode.value = 'loading'
@@ -184,9 +197,12 @@ async function initialize(): Promise<void> {
       await loadAllOptions()
     } else {
       mode.value = 'search'
+      // Resolve existing value to display label
+      await resolveCurrentLabel()
     }
   } catch {
     mode.value = 'search'
+    await resolveCurrentLabel()
   }
 }
 
@@ -201,11 +217,14 @@ watch(() => props.displayField, (newVal, oldVal) => {
   }
 })
 
-// Sync display text when modelValue changes externally in dropdown mode
+// Sync display text when modelValue changes externally in search mode
 watch(() => props.modelValue, (newVal) => {
-  if (mode.value === 'dropdown') return
-  if (newVal === null) {
+  if (mode.value !== 'search') return
+  if (newVal === null || newVal === undefined) {
     searchText.value = ''
+  } else if (typeof newVal === 'number' && newVal > 0 && !searchText.value) {
+    // Value set externally (e.g. record loaded) — resolve ID to display name
+    resolveCurrentLabel()
   }
 })
 </script>

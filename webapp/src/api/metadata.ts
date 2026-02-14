@@ -366,7 +366,7 @@ export async function fetchFieldDefinitions(tabId: number): Promise<FieldDefinit
     }
   }
 
-  // Ref 18 (Table) and 30 (Search): resolve via AD_Ref_Table
+  // Ref 18 (Table) and 30 (Search): resolve via AD_Ref_Table if referenceValueId exists
   const fkDefs = defs.filter(d =>
     [18, 30].includes(d.column.referenceId) && d.column.referenceValueId
   )
@@ -374,6 +374,16 @@ export async function fetchFieldDefinitions(tabId: number): Promise<FieldDefinit
     await Promise.all(fkDefs.map(async (d) => {
       d.referenceTableName = await fetchReferenceTableName(d.column.referenceValueId!)
     }))
+  }
+
+  // Ref 18/30 without referenceValueId: fallback to column name derivation
+  for (const d of defs) {
+    if ([18, 30].includes(d.column.referenceId) && !d.referenceTableName) {
+      const cn = d.column.columnName
+      if (cn.endsWith('_ID')) {
+        d.referenceTableName = cn.slice(0, -3)
+      }
+    }
   }
 
   return defs

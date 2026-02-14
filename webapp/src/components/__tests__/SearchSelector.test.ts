@@ -96,4 +96,56 @@ describe('SearchSelector', () => {
     expect(hasIsActive).toBe(true)
     expect(hasCustomFilter).toBe(true)
   })
+
+  it('resolves existing ID to display name in search mode', async () => {
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({ data: { 'row-count': 100 } })  // count → search mode
+      .mockResolvedValueOnce({ data: { C_BPartner_ID: 42, Name: '張三' } })  // resolveCurrentLabel
+
+    const w = mount(SearchSelector, {
+      props: { modelValue: 42, tableName: 'C_BPartner', displayField: 'Name', searchField: 'Name' },
+    })
+
+    await new Promise(r => setTimeout(r, 50))
+    await w.vm.$nextTick()
+
+    const input = w.find('input[type="text"]')
+    expect(input.exists()).toBe(true)
+    expect((input.element as HTMLInputElement).value).toBe('張三')
+  })
+
+  it('does not resolve label when modelValue is null in search mode', async () => {
+    vi.mocked(apiClient.get).mockReset()
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({ data: { 'row-count': 100 } })  // count → search mode
+
+    const w = mount(SearchSelector, {
+      props: { modelValue: null, tableName: 'C_BPartner', displayField: 'Name', searchField: 'Name' },
+    })
+
+    await new Promise(r => setTimeout(r, 50))
+    await w.vm.$nextTick()
+
+    // Only 1 API call (count), no resolve call for null modelValue
+    const getCalls = vi.mocked(apiClient.get).mock.calls
+    expect(getCalls.length).toBe(1)
+    const input = w.find('input[type="text"]')
+    expect((input.element as HTMLInputElement).value).toBe('')
+  })
+
+  it('shows fallback when label resolution fails in search mode', async () => {
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({ data: { 'row-count': 100 } })  // count → search mode
+      .mockRejectedValueOnce(new Error('not found'))  // resolveCurrentLabel fails
+
+    const w = mount(SearchSelector, {
+      props: { modelValue: 99, tableName: 'C_BPartner', displayField: 'Name', searchField: 'Name' },
+    })
+
+    await new Promise(r => setTimeout(r, 50))
+    await w.vm.$nextTick()
+
+    const input = w.find('input[type="text"]')
+    expect((input.element as HTMLInputElement).value).toBe('#99')
+  })
 })

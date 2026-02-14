@@ -8,21 +8,21 @@ const props = defineProps<{
   modelValue: Record<string, any>
   disabled?: boolean
   columnFilters?: Record<string, string>
-  promoteMandatory?: string[]
+  highlightColumns?: string[]
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: Record<string, any>]
 }>()
 
-const promoteSet = computed(() => new Set(props.promoteMandatory || []))
+const highlightSet = computed(() => new Set(props.highlightColumns || []))
 
 const mandatoryFields = computed(() =>
-  props.fieldDefs.filter(d => d.column.isMandatory || promoteSet.value.has(d.column.columnName))
+  props.fieldDefs.filter(d => d.column.isMandatory)
 )
 
 const optionalFields = computed(() =>
-  props.fieldDefs.filter(d => !d.column.isMandatory && !promoteSet.value.has(d.column.columnName))
+  props.fieldDefs.filter(d => !d.column.isMandatory)
 )
 
 const showOptional = ref(false)
@@ -74,6 +74,7 @@ function onFieldUpdate(columnName: string, value: any) {
           <DynamicField
             v-for="def in optionalFields"
             :key="def.column.columnName"
+            :class="{ 'highlight-field': highlightSet.has(def.column.columnName) }"
             :field="def.field"
             :column="def.column"
             :model-value="modelValue[def.column.columnName]"
@@ -153,6 +154,13 @@ function onFieldUpdate(columnName: string, value: any) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+}
+
+.highlight-field {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  padding: 8px;
 }
 
 @media (max-width: 640px) {

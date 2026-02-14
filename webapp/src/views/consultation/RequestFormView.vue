@@ -16,7 +16,7 @@
         :modelValue="formData"
         :disabled="readOnly"
         :columnFilters="columnFilters"
-        :promoteMandatory="promoteMandatory"
+        :highlightColumns="highlightColumns"
         @update:modelValue="formData = $event"
       />
 
@@ -108,7 +108,7 @@ const {
 })
 
 const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
-const promoteMandatory = ['C_BPartner_ID']
+const highlightColumns = ['C_BPartner_ID']
 
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -129,10 +129,6 @@ async function handleSubmit() {
 
   if (!payload.R_RequestType_ID) {
     errorMsg.value = '請選擇諮詢類型'
-    return
-  }
-  if (!payload.C_BPartner_ID) {
-    errorMsg.value = '請選擇諮詢客戶'
     return
   }
   if (!payload.Summary || !String(payload.Summary).trim()) {

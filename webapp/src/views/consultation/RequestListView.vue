@@ -25,8 +25,8 @@
         @click="goToEdit(r.id)"
       >
         <div class="card-main">
-          <div class="card-customer">{{ getCustomerName(r) }}</div>
-          <div class="card-summary">{{ r.Summary }}</div>
+          <div class="card-summary-title">{{ r.Summary }}</div>
+          <div v-if="getCustomerName(r)" class="card-customer">{{ getCustomerName(r) }}</div>
         </div>
         <div class="card-meta">
           <span class="card-status">{{ getStatusName(r) }}</span>
@@ -84,12 +84,12 @@ function switchTab(tab: TabKey) {
 function getCustomerName(r: any): string {
   const bp = r.C_BPartner_ID
   if (bp && typeof bp === 'object') {
-    return bp.Name || bp.identifier || '未指定客戶'
+    return bp.Name || bp.identifier || ''
   }
   if (typeof bp === 'number' && bp > 0) {
     return `客戶 #${bp}`
   }
-  return '未指定客戶'
+  return ''
 }
 
 function getStatusName(r: any): string {
@@ -183,18 +183,18 @@ onMounted(() => {
   margin-bottom: 0.5rem;
 }
 
-.card-customer {
+.card-summary-title {
   font-weight: 500;
   font-size: 1rem;
-}
-
-.card-summary {
-  color: #64748b;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.card-customer {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
 }
 
 .card-meta {

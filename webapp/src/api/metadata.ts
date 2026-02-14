@@ -67,23 +67,28 @@ export interface AuthContext {
   clientId: number
 }
 
+// Reference types where the DB value is always a string (List, String, Text, Memo)
+const STRING_REF_TYPES = new Set([10, 14, 17, 38])
+
 /**
  * Resolve AD_Column.DefaultValue context variables to actual values.
  * - Simple: 'N', '0', 'DR'
  * - Context: '@#Date@' → today, '@AD_Org_ID@' → orgId
  * - SQL: '@SQL=...' → undefined (server handles)
+ *
+ * @param referenceId - AD_Reference_ID from AD_Column, used to determine
+ *   whether numeric-looking defaults (e.g. '5') should stay as strings
+ *   (List/String fields) or be converted to numbers (Integer/FK fields).
  */
-export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any {
+export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext, referenceId?: number): any {
   if (!defaultExpr) return undefined
 
   // Skip SQL defaults
   if (defaultExpr.startsWith('@SQL=')) return undefined
 
-  // Skip parent-context defaults like @C_BPartner_Location_ID@, @C_Currency_ID@
-  // These reference parent record fields, not session context
+  // Context variables: @#AD_Client_ID@, @AD_Org_ID@, etc.
   if (/^@[#A-Za-z_]+@$/.test(defaultExpr)) {
     const varName = defaultExpr.slice(1, -1)
-    // Session context variables (prefixed with # or known names)
     const contextMap: Record<string, any> = {
       '#Date': new Date().toISOString().split('T')[0],
       'AD_Org_ID': ctx.organizationId,
@@ -96,15 +101,13 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any 
       '#IsSOTrx': true,
     }
     if (varName in contextMap) return contextMap[varName]
-    // Unknown context variable — skip
+    // Unknown context variable — skip, let server handle
     return undefined
   }
 
-  // Simple literals
+  // Boolean literals
   if (defaultExpr === 'Y') return true
   if (defaultExpr === 'N') return false
-  if (/^-?\d+$/.test(defaultExpr)) return parseInt(defaultExpr, 10)
-  if (/^-?\d+\.\d+$/.test(defaultExpr)) return parseFloat(defaultExpr)
 
   // Date keywords — server-side SQL tokens, resolve to current date/time
   if (defaultExpr === 'SYSDATE' || defaultExpr === 'CURRENT_TIMESTAMP') {
@@ -112,6 +115,14 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any 
   }
   if (defaultExpr === 'CURRENT_DATE') {
     return new Date().toISOString().split('T')[0]
+  }
+
+  // Numeric literals — but only convert if the field is NOT a string-type reference
+  // e.g. PriorityUser (List ref 17) has default '5' which must stay as string '5'
+  const isStringField = referenceId !== undefined && STRING_REF_TYPES.has(referenceId)
+  if (!isStringField) {
+    if (/^-?\d+$/.test(defaultExpr)) return parseInt(defaultExpr, 10)
+    if (/^-?\d+\.\d+$/.test(defaultExpr)) return parseFloat(defaultExpr)
   }
 
   return defaultExpr

@@ -42,6 +42,15 @@ describe('metadata API', () => {
     expect(resolveDefaultValue('DR', ctx)).toBe('DR')
   })
 
+  it('keeps numeric default as string for List reference (ref 17)', async () => {
+    const { resolveDefaultValue } = await import('@/api/metadata')
+    const ctx = { organizationId: 1, warehouseId: 1, clientId: 1 }
+    // PriorityUser default '5' must stay as string for List fields
+    expect(resolveDefaultValue('5', ctx, 17)).toBe('5')
+    // But Integer field (ref 11) should convert to number
+    expect(resolveDefaultValue('5', ctx, 11)).toBe(5)
+  })
+
   it('should fetch AD_Column details', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: {

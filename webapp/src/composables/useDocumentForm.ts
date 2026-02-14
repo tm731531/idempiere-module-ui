@@ -79,7 +79,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
     }
     for (const def of fieldDefs.value) {
       if (def.column.defaultValue) {
-        const resolved = resolveDefaultValue(def.column.defaultValue, ctx)
+        const resolved = resolveDefaultValue(def.column.defaultValue, ctx, def.column.referenceId)
         if (resolved !== undefined) {
           data[def.column.columnName] = resolved
         }

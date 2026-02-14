@@ -132,12 +132,27 @@ export function useDocumentForm(options: DocumentFormOptions) {
     }
   }
 
-  // Extract payload for API submission (non-null values only)
+  // Build a set of updateable column names from metadata
+  const updateableColumns = computed(() => {
+    const s = new Set<string>()
+    for (const def of fieldDefs.value) {
+      if (def.column.isUpdateable && !SYSTEM_COLUMNS.has(def.column.columnName)) {
+        s.add(def.column.columnName)
+      }
+    }
+    return s
+  })
+
+  // Extract payload for API submission
+  // Only includes updateable, non-system columns with non-null values
   function getFormPayload(): Record<string, any> {
     const payload: Record<string, any> = {}
+    const allowed = updateableColumns.value
     for (const [key, value] of Object.entries(formData.value)) {
       if (value !== null && value !== undefined && value !== '') {
-        payload[key] = value
+        if (allowed.has(key)) {
+          payload[key] = value
+        }
       }
     }
     return payload

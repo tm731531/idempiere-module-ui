@@ -45,8 +45,46 @@ if [ "$1" = "--deploy" ]; then
     echo "[4/4] Deploying to $DEPLOY_JAR ..."
     cp "$OUTPUT_JAR" "$DEPLOY_JAR"
     echo "Deployed successfully."
+
+    # Auto-update via Felix Web Console (bundle ID stays the same)
+    FELIX_BASE="https://localhost:8443/osgi"
+    BUNDLE_SYM="org.idempiere.ui.aesthetics"
+
     echo ""
-    echo "To activate, use Felix Web Console or restart iDempiere."
+    echo "[5/5] Activating via Felix Web Console..."
+
+    # Login
+    CSRF=$(curl -ks -c /tmp/felix-deploy -b /tmp/felix-deploy "$FELIX_BASE/login.jsp" | grep -oP 'name="csrfToken"\s+value="\K[^"]+')
+    curl -ks -c /tmp/felix-deploy -b /tmp/felix-deploy -L \
+        -d "username=SuperUser&password=System&csrfToken=$CSRF&returnUrl=/osgi/system/console/bundles" \
+        "$FELIX_BASE/login" -o /dev/null
+
+    # Find bundle ID by symbolic name
+    BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
+        python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
+
+    if [ -n "$BUNDLE_ID" ]; then
+        # Update existing bundle in-place (keeps same bundle ID)
+        HTTP_CODE=$(curl -ks -b /tmp/felix-deploy -X POST \
+            -F "action=update" \
+            -F "bundlefile=@$DEPLOY_JAR" \
+            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID" -o /dev/null -w "%{http_code}")
+        if [ "$HTTP_CODE" = "200" ]; then
+            echo "Bundle $BUNDLE_ID updated and active."
+        else
+            echo "WARNING: Update returned HTTP $HTTP_CODE"
+        fi
+    else
+        # First install — no existing bundle found
+        curl -ks -b /tmp/felix-deploy -X POST \
+            -F "action=install" \
+            -F "bundlefile=@$DEPLOY_JAR" \
+            -F "bundlestart=start" \
+            "$FELIX_BASE/system/console/bundles" -o /dev/null
+        echo "Bundle installed and started (first deploy)."
+    fi
+
+    rm -f /tmp/felix-deploy
 else
     echo "[4/4] Skipping deploy (use --deploy flag)"
 fi

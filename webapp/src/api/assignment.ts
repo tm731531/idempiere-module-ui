@@ -15,7 +15,12 @@ export async function listAssignments(
   dateTo: Date,
   resourceId?: number,
 ): Promise<any[]> {
-  let filter = `AssignDateFrom ge '${toIdempiereDateTime(dateFrom)}' and AssignDateTo le '${toIdempiereDateTime(dateTo)}'`
+  // Use AssignDateFrom for both bounds — mixing AssignDateFrom/AssignDateTo
+  // in filter causes incorrect results due to iDempiere UTC conversion mismatch
+  const nextDay = new Date(dateTo)
+  nextDay.setDate(nextDay.getDate() + 1)
+  nextDay.setHours(0, 0, 0, 0)
+  let filter = `AssignDateFrom ge '${toIdempiereDateTime(dateFrom)}' and AssignDateFrom lt '${toIdempiereDateTime(nextDay)}'`
   if (resourceId) filter += ` and S_Resource_ID eq ${resourceId}`
 
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {

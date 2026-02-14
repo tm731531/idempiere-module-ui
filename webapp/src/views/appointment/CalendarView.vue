@@ -144,6 +144,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { listResources } from '@/api/resource'
 import { listAssignments } from '@/api/assignment'
+import { parseIdempiereDateTime } from '@/api/utils'
 import AppointmentForm from './AppointmentForm.vue'
 
 // ========== View Mode ==========
@@ -158,6 +159,11 @@ const viewMode = ref<ViewMode>('week')
 const currentDate = ref(new Date())
 
 function switchView(mode: ViewMode) {
+  // When switching from week to day, preserve the selected day
+  if (viewMode.value === 'week' && mode === 'day' && selectedDay.value) {
+    const [y, m, d] = selectedDay.value.split('-').map(Number)
+    currentDate.value = new Date(y!, m! - 1, d!)
+  }
   viewMode.value = mode
   loadAssignments()
 }
@@ -322,11 +328,11 @@ const weekDays = computed(() => {
 // ========== Time Slots ==========
 const timeSlots = computed(() => {
   const slots: string[] = []
-  for (let h = 9; h < 18; h++) {
+  for (let h = 7; h < 21; h++) {
     slots.push(`${String(h).padStart(2, '0')}:00`)
     slots.push(`${String(h).padStart(2, '0')}:30`)
   }
-  slots.push('18:00')
+  slots.push('21:00')
   return slots
 })
 
@@ -378,7 +384,7 @@ function getAppointmentsAt(slot: string): any[] {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
     if (!selectedResourceIds.has(aResId)) return false
 
-    const from = new Date(a.AssignDateFrom)
+    const from = parseIdempiereDateTime(a.AssignDateFrom)
     if (formatDateFull(from) !== selectedDay.value) return false
 
     return from.getHours() === slotHour && from.getMinutes() === slotMin
@@ -386,8 +392,8 @@ function getAppointmentsAt(slot: string): any[] {
 }
 
 function formatApptTime(appt: any): string {
-  const from = new Date(appt.AssignDateFrom)
-  const to = new Date(appt.AssignDateTo)
+  const from = parseIdempiereDateTime(appt.AssignDateFrom)
+  const to = parseIdempiereDateTime(appt.AssignDateTo)
   const fH = String(from.getHours()).padStart(2, '0')
   const fM = String(from.getMinutes()).padStart(2, '0')
   const tH = String(to.getHours()).padStart(2, '0')
@@ -436,7 +442,7 @@ const monthCells = computed(() => {
   for (const a of assignments.value) {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
     if (!selectedResourceIds.has(aResId)) continue
-    const dateStr = formatDateFull(new Date(a.AssignDateFrom))
+    const dateStr = formatDateFull(parseIdempiereDateTime(a.AssignDateFrom))
     const cell = cells.find(c => c.date === dateStr)
     if (cell) cell.count++
   }
@@ -458,7 +464,7 @@ const yearMonths = computed(() => {
     for (const a of assignments.value) {
       const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
       if (!selectedResourceIds.has(aResId)) continue
-      const dateStr = formatDateFull(new Date(a.AssignDateFrom))
+      const dateStr = formatDateFull(parseIdempiereDateTime(a.AssignDateFrom))
       if (dateStr >= monthStart && dateStr <= monthEnd) count++
     }
     return {

@@ -60,7 +60,7 @@ onMounted(async () => {
 })
 
 function handleEdit() {
-  // Placeholder for future edit mode
+  router.push({ name: 'customer-edit', params: { id: route.params.id } })
 }
 
 function goBack() {

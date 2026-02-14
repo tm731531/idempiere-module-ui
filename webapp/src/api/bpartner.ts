@@ -92,3 +92,10 @@ export async function searchCustomers(query: string): Promise<any[]> {
 export async function getCustomerDetail(id: number): Promise<any> {
   return (await apiClient.get(`/api/v1/models/C_BPartner/${id}`)).data
 }
+
+export async function updateCustomer(id: number, data: Partial<CustomerCreateData>): Promise<void> {
+  const payload: Record<string, any> = {}
+  if (data.name !== undefined) payload.Name = data.name
+  if (data.taxId !== undefined) payload.TaxID = data.taxId
+  await apiClient.put(`/api/v1/models/C_BPartner/${id}`, payload)
+}

@@ -2,61 +2,69 @@
   <div class="customer-form-page">
     <div class="form-header">
       <button class="back-btn" @click="goBack">返回</button>
-      <h2>新增客戶</h2>
+      <h2>{{ isEdit ? '編輯客戶' : '新增客戶' }}</h2>
     </div>
 
-    <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
+    <div v-if="loadingDetail" class="loading-state">載入中...</div>
 
-    <form @submit.prevent="handleSubmit">
-      <div class="form-group">
-        <label>姓名 <span class="required">*</span></label>
-        <input v-model="form.name" type="text" required />
-        <span v-if="nameError" class="field-error">{{ nameError }}</span>
-      </div>
+    <template v-else>
+      <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
 
-      <div class="form-group">
-        <label>身分證/統編</label>
-        <input v-model="form.taxId" type="text" />
-      </div>
+      <form @submit.prevent="handleSubmit">
+        <div class="form-group">
+          <label>姓名 <span class="required">*</span></label>
+          <input v-model="form.name" type="text" required />
+          <span v-if="nameError" class="field-error">{{ nameError }}</span>
+        </div>
 
-      <div class="form-group">
-        <label>電話</label>
-        <input v-model="form.phone" type="tel" />
-      </div>
+        <div class="form-group">
+          <label>身分證/統編</label>
+          <input v-model="form.taxId" type="text" />
+        </div>
 
-      <div class="form-group">
-        <label>Email</label>
-        <input v-model="form.email" type="email" />
-      </div>
+        <div class="form-group">
+          <label>電話</label>
+          <input v-model="form.phone" type="tel" />
+        </div>
 
-      <div class="form-group">
-        <label>地址</label>
-        <input v-model="form.address" type="text" />
-      </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input v-model="form.email" type="email" />
+        </div>
 
-      <div class="form-group">
-        <label>城市</label>
-        <input v-model="form.city" type="text" />
-      </div>
+        <div class="form-group">
+          <label>地址</label>
+          <input v-model="form.address" type="text" />
+        </div>
 
-      <div class="form-actions">
-        <button type="button" class="cancel-btn" @click="goBack">取消</button>
-        <button type="submit" :disabled="submitting">
-          {{ submitting ? '儲存中...' : '儲存' }}
-        </button>
-      </div>
-    </form>
+        <div class="form-group">
+          <label>城市</label>
+          <input v-model="form.city" type="text" />
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" @click="goBack">取消</button>
+          <button type="submit" :disabled="submitting">
+            {{ submitting ? '儲存中...' : '儲存' }}
+          </button>
+        </div>
+      </form>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { createCustomer } from '@/api/bpartner'
+import { createCustomer, getCustomerDetail, updateCustomer } from '@/api/bpartner'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+
+const editId = computed(() => Number(route.params.id) || 0)
+const isEdit = computed(() => editId.value > 0)
 
 const form = reactive({
   name: '',
@@ -68,8 +76,25 @@ const form = reactive({
 })
 
 const submitting = ref(false)
+const loadingDetail = ref(false)
 const errorMsg = ref('')
 const nameError = ref('')
+
+onMounted(async () => {
+  if (isEdit.value) {
+    loadingDetail.value = true
+    try {
+      const data = await getCustomerDetail(editId.value)
+      form.name = data.Name || ''
+      form.taxId = data.TaxID || ''
+      // Phone/Email are on AD_User (contact), not C_BPartner - skip for now
+    } catch {
+      errorMsg.value = '載入客戶資料失敗'
+    } finally {
+      loadingDetail.value = false
+    }
+  }
+})
 
 function validate(): boolean {
   nameError.value = ''
@@ -86,21 +111,29 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const orgId = authStore.context?.organizationId ?? 0
-    const result = await createCustomer(
-      {
+    if (isEdit.value) {
+      await updateCustomer(editId.value, {
         name: form.name.trim(),
         taxId: form.taxId.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        email: form.email.trim() || undefined,
-        address: form.address.trim() || undefined,
-        city: form.city.trim() || undefined,
-      },
-      orgId,
-    )
-    router.push({ name: 'customer-detail', params: { id: result.bpartnerId } })
+      })
+      router.push({ name: 'customer-detail', params: { id: editId.value } })
+    } else {
+      const orgId = authStore.context?.organizationId ?? 0
+      const result = await createCustomer(
+        {
+          name: form.name.trim(),
+          taxId: form.taxId.trim() || undefined,
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          address: form.address.trim() || undefined,
+          city: form.city.trim() || undefined,
+        },
+        orgId,
+      )
+      router.push({ name: 'customer-detail', params: { id: result.bpartnerId } })
+    }
   } catch {
-    errorMsg.value = '建立客戶失敗，請稍後再試'
+    errorMsg.value = isEdit.value ? '更新客戶失敗' : '建立客戶失敗，請稍後再試'
   } finally {
     submitting.value = false
   }
@@ -128,6 +161,12 @@ function goBack() {
 .form-header h2 {
   font-size: 1.25rem;
   margin: 0;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
 }
 
 .form-error {

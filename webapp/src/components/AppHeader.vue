@@ -21,6 +21,7 @@ const titleMap: Record<string, string> = {
   'customer-list': '客戶管理',
   'customer-new': '新增客戶',
   'customer-detail': '客戶資料',
+  'customer-edit': '編輯客戶',
   'consultation-list': '諮詢記錄',
   'consultation-new': '新增諮詢',
   'consultation-edit': '編輯諮詢',
@@ -39,6 +40,8 @@ const titleMap: Record<string, string> = {
   'shipment-new': '新增出入庫',
   'shipment-detail': '出入庫明細',
   'field-config': '欄位設定',
+  'table-list': 'Table/Column 管理',
+  'table-columns': 'Column 詳情',
 }
 
 const showHeader = computed(() => {

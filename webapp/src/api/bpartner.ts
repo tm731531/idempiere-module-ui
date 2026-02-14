@@ -93,9 +93,34 @@ export async function getCustomerDetail(id: number): Promise<any> {
   return (await apiClient.get(`/api/v1/models/C_BPartner/${id}`)).data
 }
 
-export async function updateCustomer(id: number, data: Partial<CustomerCreateData>): Promise<void> {
+/** Get the first AD_User (contact) linked to a C_BPartner */
+export async function getCustomerContact(bpartnerId: number): Promise<any | null> {
+  const resp = await apiClient.get('/api/v1/models/AD_User', {
+    params: {
+      '$filter': `C_BPartner_ID eq ${bpartnerId} and IsActive eq true`,
+      '$select': 'AD_User_ID,Name,Phone,EMail',
+      '$top': '1',
+    },
+  })
+  const records = resp.data.records || []
+  return records.length > 0 ? records[0] : null
+}
+
+export async function updateCustomer(id: number, data: { name?: string; taxId?: string }): Promise<any> {
   const payload: Record<string, any> = {}
   if (data.name !== undefined) payload.Name = data.name
   if (data.taxId !== undefined) payload.TaxID = data.taxId
-  await apiClient.put(`/api/v1/models/C_BPartner/${id}`, payload)
+  if (Object.keys(payload).length === 0) return null
+  const resp = await apiClient.put(`/api/v1/models/C_BPartner/${id}`, payload)
+  return resp.data
+}
+
+/** Update AD_User contact record (phone, email) */
+export async function updateCustomerContact(userId: number, data: { phone?: string; email?: string; name?: string }): Promise<any> {
+  const payload: Record<string, any> = {}
+  if (data.name !== undefined) payload.Name = data.name
+  if (data.phone !== undefined) payload.Phone = data.phone
+  if (data.email !== undefined) payload.EMail = data.email
+  const resp = await apiClient.put(`/api/v1/models/AD_User/${userId}`, payload)
+  return resp.data
 }

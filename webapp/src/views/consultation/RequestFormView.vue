@@ -23,16 +23,34 @@
 
       <div class="form-group">
         <label>諮詢類型 <span class="required">*</span></label>
-        <select v-model="form.R_RequestType_ID" required class="form-select">
-          <option value="">-- 請選擇 --</option>
-          <option
-            v-for="rt in requestTypes"
-            :key="rt.id"
-            :value="rt.id"
-          >
-            {{ rt.Name }}
-          </option>
-        </select>
+        <div class="select-with-add">
+          <select v-model="form.R_RequestType_ID" required class="form-select">
+            <option value="">-- 請選擇 --</option>
+            <option
+              v-for="rt in requestTypes"
+              :key="rt.id"
+              :value="rt.id"
+            >
+              {{ rt.Name }}
+            </option>
+          </select>
+          <button type="button" class="btn-add-type" @click="showAddType = true">+</button>
+        </div>
+        <!-- Inline add request type -->
+        <div v-if="showAddType" class="add-type-row">
+          <input
+            v-model="newTypeName"
+            type="text"
+            class="add-type-input"
+            placeholder="輸入新類型名稱"
+            @keyup.enter="handleAddType"
+          />
+          <button type="button" class="btn-confirm-add" :disabled="addingType" @click="handleAddType">
+            {{ addingType ? '...' : '新增' }}
+          </button>
+          <button type="button" class="btn-cancel-add" @click="showAddType = false; newTypeName = ''">取消</button>
+        </div>
+        <div v-if="addTypeError" class="field-error">{{ addTypeError }}</div>
       </div>
 
       <div v-if="isEdit" class="form-group">
@@ -111,6 +129,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { apiClient } from '@/api/client'
 import { useAttachment } from '@/composables/useAttachment'
 import SearchSelector from '@/components/SearchSelector.vue'
 import {
@@ -145,6 +164,12 @@ const pageLoading = ref(false)
 const pageError = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
+
+// Add request type inline
+const showAddType = ref(false)
+const newTypeName = ref('')
+const addingType = ref(false)
+const addTypeError = ref('')
 
 const {
   attachments,
@@ -250,6 +275,29 @@ async function handleRemoveAttachment(fileName: string) {
   await remove(requestId.value, fileName)
 }
 
+async function handleAddType() {
+  const name = newTypeName.value.trim()
+  if (!name) return
+  addingType.value = true
+  addTypeError.value = ''
+  try {
+    const orgId = authStore.context?.organizationId ?? 0
+    const resp = await apiClient.post('/api/v1/models/R_RequestType', {
+      Name: name,
+      AD_Org_ID: orgId,
+    })
+    const newId = resp.data.id
+    requestTypes.value.push({ id: newId, Name: name })
+    form.R_RequestType_ID = newId
+    showAddType.value = false
+    newTypeName.value = ''
+  } catch {
+    addTypeError.value = '新增類型失敗'
+  } finally {
+    addingType.value = false
+  }
+}
+
 function goBack() {
   router.push({ name: 'consultation-list' })
 }
@@ -306,6 +354,74 @@ onMounted(() => {
 
 .required {
   color: var(--color-error);
+}
+
+.select-with-add {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.select-with-add .form-select {
+  flex: 1;
+}
+
+.btn-add-type {
+  width: 44px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: white;
+  color: var(--color-primary);
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-add-type:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.add-type-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.add-type-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  min-height: var(--min-touch);
+}
+
+.btn-confirm-add {
+  padding: 0.5rem 1rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  min-height: var(--min-touch);
+}
+
+.btn-confirm-add:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cancel-add {
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  min-height: var(--min-touch);
 }
 
 .form-select,

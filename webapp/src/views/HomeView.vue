@@ -42,25 +42,29 @@ interface ModuleCard {
   desc: string
   route: string
   pageKey: string | null
-  adminOnly: boolean
+  systemOnly?: boolean  // only show when logged into System client (id=0)
+  businessOnly?: boolean  // only show when NOT in System client
 }
 
+const isSystemClient = computed(() => auth.context?.clientId === 0)
+
 const allCards: ModuleCard[] = [
-  { label: '客戶管理', desc: '管理客戶資料', route: '/customer', pageKey: 'customer', adminOnly: false },
-  { label: '諮詢記錄', desc: '諮詢與評估記錄', route: '/consultation', pageKey: 'consultation', adminOnly: false },
-  { label: '預約管理', desc: '預約行事曆', route: '/appointment', pageKey: 'appointment', adminOnly: false },
-  { label: '訂單管理', desc: '銷售訂單', route: '/order', pageKey: 'order', adminOnly: false },
-  { label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', adminOnly: false },
-  { label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', adminOnly: false },
-  { label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', adminOnly: false },
-  { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, adminOnly: false },
+  { label: '客戶管理', desc: '管理客戶資料', route: '/customer', pageKey: 'customer', businessOnly: true },
+  { label: '諮詢記錄', desc: '諮詢與評估記錄', route: '/consultation', pageKey: 'consultation', businessOnly: true },
+  { label: '預約管理', desc: '預約行事曆', route: '/appointment', pageKey: 'appointment', businessOnly: true },
+  { label: '訂單管理', desc: '銷售訂單', route: '/order', pageKey: 'order', businessOnly: true },
+  { label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', businessOnly: true },
+  { label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', businessOnly: true },
+  { label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', businessOnly: true },
+  { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, businessOnly: true },
+  { label: 'Table/Column', desc: 'AD 資料字典管理', route: '/admin/tables', pageKey: null, systemOnly: true },
 ]
 
 const visibleCards = computed(() => {
   return allCards.filter(card => {
-    if (card.pageKey) {
-      return canAccess(card.pageKey)
-    }
+    if (card.systemOnly && !isSystemClient.value) return false
+    if (card.businessOnly && isSystemClient.value) return false
+    if (card.pageKey) return canAccess(card.pageKey)
     return true
   })
 })

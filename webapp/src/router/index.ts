@@ -40,6 +40,7 @@ const router = createRouter({
         { path: '', name: 'customer-list', component: () => import('@/views/customer/CustomerListView.vue') },
         { path: 'new', name: 'customer-new', component: () => import('@/views/customer/CustomerFormView.vue'), meta: { requiresAuth: true, pageKey: 'customer' } },
         { path: ':id', name: 'customer-detail', component: () => import('@/views/customer/CustomerDetailView.vue'), meta: { requiresAuth: true, pageKey: 'customer' } },
+        { path: ':id/edit', name: 'customer-edit', component: () => import('@/views/customer/CustomerFormView.vue'), meta: { requiresAuth: true, pageKey: 'customer' } },
       ],
     },
     {
@@ -82,6 +83,18 @@ const router = createRouter({
       path: '/admin/field-config',
       name: 'field-config',
       component: () => import('@/views/admin/FieldConfigView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/tables',
+      name: 'table-list',
+      component: () => import('@/views/admin/TableListView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/admin/tables/:tableId',
+      name: 'table-columns',
+      component: () => import('@/views/admin/ColumnListView.vue'),
       meta: { requiresAuth: true },
     },
     {

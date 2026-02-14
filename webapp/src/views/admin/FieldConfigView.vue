@@ -95,14 +95,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { usePermission } from '@/composables/usePermission'
 import { apiClient } from '@/api/client'
 import { clearMetadataCache } from '@/composables/useMetadata'
 
 const router = useRouter()
-const auth = useAuthStore()
-const { canAccessFieldConfig } = usePermission()
 
 const accessDenied = ref(false)
 
@@ -139,26 +135,6 @@ const saveError = ref('')
 
 // Load windows on mount
 onMounted(async () => {
-  // Check permission
-  const roleId = auth.context?.roleId || 0
-  let userLevel = ''
-  if (roleId) {
-    try {
-      const resp = await apiClient.get(`/api/v1/models/AD_Role/${roleId}`, {
-        params: { '$select': 'AD_Role_ID,UserLevel' },
-      })
-      const ul = resp.data?.UserLevel
-      userLevel = typeof ul === 'object' && ul !== null ? ul.id : (ul || '')
-    } catch {
-      // cannot determine level
-    }
-  }
-
-  if (!canAccessFieldConfig(userLevel)) {
-    accessDenied.value = true
-    return
-  }
-
   await loadWindows()
 })
 

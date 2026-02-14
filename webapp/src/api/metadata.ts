@@ -107,6 +107,92 @@ export async function fetchIdentifierColumn(tableName: string): Promise<string> 
   }
 }
 
+// ========== QuickCreate Eligibility ==========
+
+const quickCreateCache = new Map<string, { eligible: boolean; mandatoryDefaults: Record<string, any> }>()
+
+// Standard columns that are auto-filled by the system on create
+const AUTO_FILLED_COLUMNS = new Set([
+  'AD_Client_ID', 'AD_Org_ID', 'IsActive',
+  'Created', 'CreatedBy', 'Updated', 'UpdatedBy',
+])
+
+/**
+ * Determine if a table supports inline QuickCreate by checking its mandatory columns.
+ * A table is eligible if all mandatory columns (except auto-filled system columns and
+ * the table's own PK) either have default values or are just 'Name'/'Value'.
+ *
+ * Returns { eligible, mandatoryDefaults } where mandatoryDefaults contains the
+ * default values for mandatory columns that aren't 'Name' (to be sent as payload).
+ */
+export async function checkQuickCreateEligibility(tableName: string): Promise<{ eligible: boolean; mandatoryDefaults: Record<string, any> }> {
+  if (quickCreateCache.has(tableName)) return quickCreateCache.get(tableName)!
+
+  try {
+    // Get table ID
+    const tableResp = await apiClient.get('/api/v1/models/AD_Table', {
+      params: {
+        '$filter': `TableName eq '${tableName}'`,
+        '$select': 'AD_Table_ID',
+        '$top': 1,
+      },
+    })
+    const tables = tableResp.data.records || []
+    if (tables.length === 0) {
+      const result = { eligible: false, mandatoryDefaults: {} }
+      quickCreateCache.set(tableName, result)
+      return result
+    }
+    const tableId = tables[0].id
+    const pkColumn = `${tableName}_ID`
+
+    // Get all mandatory columns for this table
+    const colResp = await apiClient.get('/api/v1/models/AD_Column', {
+      params: {
+        '$filter': `AD_Table_ID eq ${tableId} and IsMandatory eq true and IsActive eq true`,
+        '$select': 'ColumnName,DefaultValue,AD_Reference_ID',
+        '$top': 100,
+      },
+    })
+    const cols = colResp.data.records || []
+
+    const mandatoryDefaults: Record<string, any> = {}
+    let eligible = true
+
+    for (const col of cols) {
+      const cn = col.ColumnName
+      const refId = col.AD_Reference_ID?.id || col.AD_Reference_ID
+
+      // Skip auto-filled system columns and PK
+      if (AUTO_FILLED_COLUMNS.has(cn) || cn === pkColumn) continue
+
+      // 'Name' or 'Value' — user provides via QuickCreate input
+      if (cn === 'Name' || cn === 'Value') continue
+
+      // Has a default value — resolve and include in defaults
+      if (col.DefaultValue) {
+        const resolved = resolveDefaultValue(col.DefaultValue, { organizationId: 0, warehouseId: 0, clientId: 0 }, refId)
+        if (resolved !== undefined) {
+          mandatoryDefaults[cn] = resolved
+          continue
+        }
+      }
+
+      // Mandatory column without default and not Name/Value — not eligible
+      eligible = false
+      break
+    }
+
+    const result = { eligible, mandatoryDefaults }
+    quickCreateCache.set(tableName, result)
+    return result
+  } catch {
+    const result = { eligible: false, mandatoryDefaults: {} }
+    quickCreateCache.set(tableName, result)
+    return result
+  }
+}
+
 // ========== Default Value Resolution ==========
 
 export interface AuthContext {

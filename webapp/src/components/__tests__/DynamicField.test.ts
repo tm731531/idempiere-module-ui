@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import DynamicField from '@/components/DynamicField.vue'
+import { checkQuickCreateEligibility } from '@/api/metadata'
 
 vi.mock('@/api/metadata', () => ({
   fetchRefListItems: vi.fn().mockResolvedValue([]),
   fetchIdentifierColumn: vi.fn().mockResolvedValue('Name'),
+  checkQuickCreateEligibility: vi.fn().mockResolvedValue({ eligible: false, mandatoryDefaults: {} }),
 }))
 vi.mock('@/i18n/fieldLabels', () => ({
   getFieldLabel: (columnName: string, fallback: string) => {
@@ -60,21 +62,41 @@ describe('DynamicField', () => {
     expect(w.find('.field-label').text()).toContain('Some Field')
   })
 
-  it('enables QuickCreate for R_RequestType FK field', () => {
+  it('enables QuickCreate when AD metadata says eligible', async () => {
+    vi.mocked(checkQuickCreateEligibility).mockResolvedValue({
+      eligible: true,
+      mandatoryDefaults: { IsDefault: false },
+    })
+
     const field = { ...baseField, name: 'Request Type' }
     const column = { ...baseColumn, columnName: 'R_RequestType_ID', referenceId: 19 }
     const w = mount(DynamicField, { props: { field, column, modelValue: null, disabled: false } })
+    await flushPromises()
     const selector = w.findComponent({ name: 'SearchSelector' })
     expect(selector.exists()).toBe(true)
     expect(selector.props('quickCreate')).toBe(true)
+    expect(selector.props('quickCreateDefaults')).toEqual({ IsDefault: false })
   })
 
-  it('does not enable QuickCreate for non-configurable FK field', () => {
+  it('does not enable QuickCreate when AD metadata says ineligible', async () => {
+    vi.mocked(checkQuickCreateEligibility).mockResolvedValue({
+      eligible: false,
+      mandatoryDefaults: {},
+    })
+
     const field = { ...baseField, name: 'Warehouse' }
     const column = { ...baseColumn, columnName: 'M_Warehouse_ID', referenceId: 19 }
     const w = mount(DynamicField, { props: { field, column, modelValue: null, disabled: false } })
+    await flushPromises()
     const selector = w.findComponent({ name: 'SearchSelector' })
     expect(selector.exists()).toBe(true)
     expect(selector.props('quickCreate')).toBe(false)
+  })
+
+  it('renders datetime-local input for referenceId=16', () => {
+    const column = { ...baseColumn, referenceId: 16 }
+    const w = mount(DynamicField, { props: { field: baseField, column, modelValue: '', disabled: false } })
+    const input = w.find('input[type="datetime-local"]')
+    expect(input.exists()).toBe(true)
   })
 })

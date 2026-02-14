@@ -8,18 +8,21 @@ const props = defineProps<{
   modelValue: Record<string, any>
   disabled?: boolean
   columnFilters?: Record<string, string>
+  promoteMandatory?: string[]
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: Record<string, any>]
 }>()
 
+const promoteSet = computed(() => new Set(props.promoteMandatory || []))
+
 const mandatoryFields = computed(() =>
-  props.fieldDefs.filter(d => d.column.isMandatory)
+  props.fieldDefs.filter(d => d.column.isMandatory || promoteSet.value.has(d.column.columnName))
 )
 
 const optionalFields = computed(() =>
-  props.fieldDefs.filter(d => !d.column.isMandatory)
+  props.fieldDefs.filter(d => !d.column.isMandatory && !promoteSet.value.has(d.column.columnName))
 )
 
 const showOptional = ref(false)

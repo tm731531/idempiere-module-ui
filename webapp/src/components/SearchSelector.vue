@@ -174,8 +174,9 @@ async function handleQuickCreate(): Promise<void> {
   }
 }
 
-onMounted(async () => {
+async function initialize(): Promise<void> {
   idColumn.value = getIdColumn(props.tableName)
+  mode.value = 'loading'
   try {
     const count = await countRecords()
     if (count <= 20) {
@@ -185,8 +186,18 @@ onMounted(async () => {
       mode.value = 'search'
     }
   } catch {
-    // Fallback to search mode on error
     mode.value = 'search'
+  }
+}
+
+onMounted(() => {
+  initialize()
+})
+
+// Re-initialize when displayField changes (resolved asynchronously by DynamicField)
+watch(() => props.displayField, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal && mode.value !== 'loading') {
+    initialize()
   }
 })
 

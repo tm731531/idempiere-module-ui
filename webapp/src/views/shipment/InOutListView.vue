@@ -36,7 +36,7 @@
       </div>
     </div>
 
-    <button class="fab" @click="goToNew">新增</button>
+    <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增出入庫</button>
   </div>
 </template>
 
@@ -84,8 +84,12 @@ function switchTab(tab: TabKey) {
 }
 
 function getCustomerName(io: any): string {
-  if (io.C_BPartner_ID && typeof io.C_BPartner_ID === 'object') {
-    return io.C_BPartner_ID.identifier || '未指定客戶'
+  const bp = io.C_BPartner_ID
+  if (bp && typeof bp === 'object') {
+    return bp.identifier || bp.name || '未指定客戶'
+  }
+  if (typeof bp === 'number' && bp > 0) {
+    return `客戶 #${bp}`
   }
   return '未指定客戶'
 }

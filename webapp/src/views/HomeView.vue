@@ -7,8 +7,8 @@
         <span class="role-badge">{{ auth.context?.roleName || '' }}</span>
       </div>
       <div class="header-actions">
-        <button class="btn-secondary" @click="handleSwitchContext">切換</button>
-        <button class="btn-secondary btn-logout" @click="handleLogout">登出</button>
+        <button class="btn-secondary" @click="handleSwitchContext"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M4 4l17 17"/></svg> 切換</button>
+        <button class="btn-secondary btn-logout" @click="handleLogout"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg> 登出</button>
       </div>
     </header>
 
@@ -28,17 +28,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePermission } from '@/composables/usePermission'
-import { apiClient } from '@/api/client'
 
 const auth = useAuthStore()
 const router = useRouter()
-const { canAccess, canAccessFieldConfig, loadPermissions } = usePermission()
-
-const userLevel = ref('')
+const { canAccess, loadPermissions } = usePermission()
 
 interface ModuleCard {
   label: string
@@ -56,15 +53,11 @@ const allCards: ModuleCard[] = [
   { label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', adminOnly: false },
   { label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', adminOnly: false },
   { label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', adminOnly: false },
-  { label: '行事曆', desc: '週曆檢視', route: '/appointment', pageKey: 'calendar', adminOnly: false },
-  { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, adminOnly: true },
+  { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, adminOnly: false },
 ]
 
 const visibleCards = computed(() => {
   return allCards.filter(card => {
-    if (card.adminOnly) {
-      return canAccessFieldConfig(userLevel.value)
-    }
     if (card.pageKey) {
       return canAccess(card.pageKey)
     }
@@ -90,17 +83,6 @@ onMounted(async () => {
   const roleId = auth.context?.roleId || 0
   if (roleId) {
     await loadPermissions(roleId)
-    // Fetch UserLevel from AD_Role for admin checks
-    try {
-      const resp = await apiClient.get(`/api/v1/models/AD_Role/${roleId}`, {
-        params: { '$select': 'AD_Role_ID,UserLevel' },
-      })
-      const ul = resp.data?.UserLevel
-      // UserLevel can be a list-type object or a string
-      userLevel.value = typeof ul === 'object' && ul !== null ? ul.id : (ul || '')
-    } catch {
-      // On error, keep userLevel empty (no admin access)
-    }
   }
 })
 </script>

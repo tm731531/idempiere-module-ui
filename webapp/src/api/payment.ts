@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import { lookupDocTypeId } from './lookup'
+import { lookupDocTypeId, lookupDefaultBankAccountId, lookupSOCurrencyId } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
 export interface PaymentData {
@@ -38,19 +38,29 @@ export async function getPayment(id: number): Promise<any> {
 }
 
 export async function createPayment(data: PaymentData): Promise<any> {
-  const docTypeId = await lookupDocTypeId('ARR')  // AR Receipt
+  const [docTypeId, bankAccountId, currencyId] = await Promise.all([
+    lookupDocTypeId('ARR'),  // AR Receipt
+    lookupDefaultBankAccountId(),
+    lookupSOCurrencyId(),
+  ])
 
-  const resp = await apiClient.post('/api/v1/models/C_Payment', {
+  const payload: Record<string, any> = {
     AD_Org_ID: data.AD_Org_ID,
     C_DocType_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
+    C_BankAccount_ID: bankAccountId,
+    C_Currency_ID: currencyId,
     PayAmt: data.PayAmt,
     TenderType: data.TenderType,
     DateTrx: toIdempiereDateTime(new Date()),
     DateAcct: toIdempiereDateTime(new Date()),
     IsReceipt: true,
-    C_Order_ID: data.C_Order_ID || undefined,
     Description: data.Description || '',
-  })
+  }
+  if (data.C_Order_ID) {
+    payload.C_Order_ID = data.C_Order_ID
+  }
+
+  const resp = await apiClient.post('/api/v1/models/C_Payment', payload)
   return resp.data
 }

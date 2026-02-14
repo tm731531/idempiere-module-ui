@@ -7,6 +7,8 @@ vi.mock('@/api/client', () => ({
 vi.mock('@/api/lookup', () => ({
   lookupDocTypeId: vi.fn().mockResolvedValue(200),
   lookupDefaultPaymentTermId: vi.fn().mockResolvedValue(201),
+  lookupDefaultBankAccountId: vi.fn().mockResolvedValue(300),
+  lookupSOCurrencyId: vi.fn().mockResolvedValue(301),
 }))
 
 describe('payment API', () => {

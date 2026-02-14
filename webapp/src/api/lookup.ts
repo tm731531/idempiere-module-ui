@@ -264,3 +264,40 @@ export async function lookupSalesPriceListId(): Promise<number> {
   }
   return id
 }
+
+export async function lookupSOCurrencyId(): Promise<number> {
+  if (cache['C_Currency_SO'] !== undefined) return cache['C_Currency_SO']
+  await lookupSalesPriceListId()
+  return cache['C_Currency_SO'] || 0
+}
+
+export async function lookupBPartnerLocationId(bpartnerId: number): Promise<number> {
+  const resp = await apiClient.get('/api/v1/models/C_BPartner_Location', {
+    params: {
+      '$filter': `C_BPartner_ID eq ${bpartnerId} and IsActive eq true`,
+      '$select': 'C_BPartner_Location_ID',
+      '$top': '1',
+    },
+  })
+  const records = resp.data.records || []
+  if (records.length === 0) {
+    throw new Error('此客戶沒有地址，請先編輯客戶資料新增地址')
+  }
+  return records[0].id
+}
+
+export async function lookupDefaultBankAccountId(): Promise<number> {
+  if (cache['C_BankAccount'] !== undefined) return cache['C_BankAccount']
+  const resp = await apiClient.get('/api/v1/models/C_BankAccount', {
+    params: {
+      '$filter': 'IsActive eq true',
+      '$select': 'C_BankAccount_ID,Name,IsDefault',
+      '$orderby': 'IsDefault desc, Name asc',
+      '$top': '1',
+    },
+  })
+  const records = resp.data.records || []
+  const id = records[0]?.id || 0
+  cache['C_BankAccount'] = id
+  return id
+}

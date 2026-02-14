@@ -3,6 +3,7 @@
     登入已過期，請重新登入
     <button @click="handleRelogin">重新登入</button>
   </div>
+  <AppHeader />
   <router-view />
 </template>
 
@@ -10,6 +11,7 @@
 import { sessionState, clearSessionExpired } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
+import AppHeader from '@/components/AppHeader.vue'
 
 const auth = useAuthStore()
 const router = useRouter()

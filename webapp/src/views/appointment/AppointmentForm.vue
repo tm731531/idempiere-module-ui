@@ -109,7 +109,7 @@ const errorMsg = ref('')
 const showConflictWarning = ref(false)
 
 onMounted(() => {
-  if (props.initialResourceId) {
+  if (props.initialResourceId !== undefined && props.initialResourceId !== 0) {
     form.resourceId = props.initialResourceId
   }
   if (props.initialDate && props.initialTime) {

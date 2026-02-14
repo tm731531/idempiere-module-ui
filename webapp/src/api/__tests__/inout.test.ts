@@ -6,6 +6,7 @@ vi.mock('@/api/client', () => ({
 }))
 vi.mock('@/api/lookup', () => ({
   lookupDocTypeId: vi.fn().mockResolvedValue(300),
+  lookupBPartnerLocationId: vi.fn().mockResolvedValue(301),
 }))
 
 describe('inout API', () => {

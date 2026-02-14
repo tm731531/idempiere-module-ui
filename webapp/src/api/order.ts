@@ -5,6 +5,8 @@ import {
   lookupDefaultPaymentTermId,
   lookupDefaultTaxId,
   lookupCurrentUserId,
+  lookupBPartnerLocationId,
+  lookupSOCurrencyId,
 } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
@@ -48,19 +50,24 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
   }
 
   // Parallel lookups for mandatory references
-  const [docTypeId, priceListId, paymentTermId, userId] = await Promise.all([
+  const [docTypeId, priceListId, paymentTermId, userId, bpLocationId, currencyId] = await Promise.all([
     lookupDocTypeId('SOO'),
     lookupSalesPriceListId(),
     lookupDefaultPaymentTermId(),
     lookupCurrentUserId(data.username || ''),
+    lookupBPartnerLocationId(data.C_BPartner_ID),
+    lookupSOCurrencyId(),
   ])
 
   const resp = await apiClient.post('/api/v1/models/C_Order', {
     AD_Org_ID: data.AD_Org_ID,
     C_DocTypeTarget_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
+    C_BPartner_Location_ID: bpLocationId,
+    Bill_Location_ID: bpLocationId,
     M_PriceList_ID: priceListId,
     C_PaymentTerm_ID: paymentTermId,
+    C_Currency_ID: currencyId,
     M_Warehouse_ID: data.M_Warehouse_ID,
     DateOrdered: toIdempiereDateTime(new Date()),
     DatePromised: toIdempiereDateTime(new Date()),

@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEBAPP_DIR="$SCRIPT_DIR/webapp"
 BUNDLE_DIR="$SCRIPT_DIR/osgi-bundle"
-IDEMPIERE_HOME="${IDEMPIERE_HOME:-/opt/idempiere-server/x86_64}"
+IDEMPIERE_HOME="${IDEMPIERE_HOME:-/home/tom/idempiere-server}"
 
 BUILD_TIMESTAMP="$(date +%Y%m%d%H%M)"
 JAR_NAME="org.idempiere.ui.aesthetics_1.0.0.${BUILD_TIMESTAMP}.jar"

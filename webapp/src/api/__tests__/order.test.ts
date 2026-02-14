@@ -17,6 +17,8 @@ vi.mock('@/api/lookup', () => ({
   lookupDefaultPaymentTermId: vi.fn().mockResolvedValue(102),
   lookupDefaultTaxId: vi.fn().mockResolvedValue(103),
   lookupCurrentUserId: vi.fn().mockResolvedValue(104),
+  lookupBPartnerLocationId: vi.fn().mockResolvedValue(105),
+  lookupSOCurrencyId: vi.fn().mockResolvedValue(106),
 }))
 
 describe('order API', () => {

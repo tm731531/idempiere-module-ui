@@ -196,7 +196,7 @@ function getBlockHeight(appt: any): number {
 
 // Slot click handler
 function onSlotClick(resource: any, slot: string) {
-  selectedResourceId.value = resource.S_Resource_ID
+  selectedResourceId.value = resource.S_Resource_ID || resource.id
   selectedDate.value = selectedWeekDay.value
   selectedTime.value = slot
   showForm.value = true

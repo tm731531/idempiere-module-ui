@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import { lookupDocTypeId } from './lookup'
+import { lookupDocTypeId, lookupBPartnerLocationId } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
 export interface InOutData {
@@ -40,12 +40,16 @@ export async function createInOut(data: InOutData): Promise<any> {
   if (!data.M_Warehouse_ID) throw new Error('請先選擇倉庫（M_Warehouse_ID 為必填）')
 
   const docBaseType = data.IsSOTrx ? 'MMS' : 'MMR'  // Material Movement Shipment vs Receipt
-  const docTypeId = await lookupDocTypeId(docBaseType)
+  const [docTypeId, bpLocationId] = await Promise.all([
+    lookupDocTypeId(docBaseType),
+    lookupBPartnerLocationId(data.C_BPartner_ID),
+  ])
 
   const resp = await apiClient.post('/api/v1/models/M_InOut', {
     AD_Org_ID: data.AD_Org_ID,
     C_DocType_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
+    C_BPartner_Location_ID: bpLocationId,
     M_Warehouse_ID: data.M_Warehouse_ID,
     MovementDate: toIdempiereDateTime(new Date()),
     DateAcct: toIdempiereDateTime(new Date()),

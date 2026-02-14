@@ -69,6 +69,11 @@
             :key="att.name"
             class="attachment-item"
           >
+            <img
+              v-if="thumbnailUrls.get(att.name)"
+              :src="thumbnailUrls.get(att.name)"
+              class="attachment-thumb"
+            />
             <span class="attachment-name">{{ att.name }}</span>
             <button
               type="button"
@@ -145,6 +150,7 @@ const {
   attachments,
   uploading,
   error: attachError,
+  thumbnailUrls,
   loadAttachments,
   upload,
   remove,
@@ -341,6 +347,14 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   border-radius: 6px;
   min-height: var(--min-touch);
+}
+
+.attachment-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 
 .attachment-name {

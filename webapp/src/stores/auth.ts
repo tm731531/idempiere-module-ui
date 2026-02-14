@@ -319,23 +319,17 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Switch context: keep token but re-select client/role/org/warehouse.
-   * If clients list is empty (after page refresh), falls back to full re-login.
+   * Switch context: go back to credentials step for a fresh token.
+   * The old token may become stale after context changes, so always re-authenticate.
    */
   function switchContext(): void {
     context.value = null
     user.value = null
     loginError.value = ''
+    loginStep.value = 'credentials'
     localStorage.removeItem('auth_context')
     localStorage.removeItem('auth_user')
     clearLookupCache()
-
-    if (availableClients.value.length > 0) {
-      loginStep.value = 'client'
-    } else {
-      // No cached clients → must re-authenticate
-      logout()
-    }
   }
 
   function logout() {

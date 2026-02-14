@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <button class="fab" @click="goToNew">新增療程</button>
+    <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增療程</button>
   </div>
 </template>
 

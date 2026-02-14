@@ -115,6 +115,17 @@ export async function updateCustomer(id: number, data: { name?: string; taxId?: 
   return resp.data
 }
 
+/** Create a new AD_User contact for a C_BPartner */
+export async function createContact(bpartnerId: number, data: { name: string; phone?: string; email?: string }): Promise<any> {
+  const resp = await apiClient.post('/api/v1/models/AD_User', {
+    C_BPartner_ID: bpartnerId,
+    Name: data.name,
+    Phone: data.phone || '',
+    EMail: data.email || '',
+  })
+  return resp.data
+}
+
 /** Update AD_User contact record (phone, email) */
 export async function updateCustomerContact(userId: number, data: { phone?: string; email?: string; name?: string }): Promise<any> {
   const payload: Record<string, any> = {}

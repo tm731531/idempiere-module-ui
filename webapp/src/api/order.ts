@@ -7,6 +7,7 @@ import {
   lookupCurrentUserId,
   lookupBPartnerLocationId,
   lookupSOCurrencyId,
+  lookupEachUomId,
 } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
@@ -59,8 +60,10 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     lookupSOCurrencyId(),
   ])
 
+  const now = toIdempiereDateTime(new Date())
   const resp = await apiClient.post('/api/v1/models/C_Order', {
     AD_Org_ID: data.AD_Org_ID,
+    C_DocType_ID: 0,
     C_DocTypeTarget_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
     C_BPartner_Location_ID: bpLocationId,
@@ -69,10 +72,17 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     C_PaymentTerm_ID: paymentTermId,
     C_Currency_ID: currencyId,
     M_Warehouse_ID: data.M_Warehouse_ID,
-    DateOrdered: toIdempiereDateTime(new Date()),
-    DatePromised: toIdempiereDateTime(new Date()),
+    DateOrdered: now,
+    DateAcct: now,
+    DatePromised: now,
     SalesRep_ID: userId,
     IsSOTrx: true,
+    DeliveryRule: 'F',
+    DeliveryViaRule: 'P',
+    FreightCostRule: 'I',
+    InvoiceRule: 'I',
+    PaymentRule: 'B',
+    PriorityRule: '5',
     Description: data.Description || '',
   })
   return resp.data

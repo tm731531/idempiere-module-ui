@@ -11,30 +11,156 @@ export interface ColumnMeta {
   isMandatory: boolean; defaultValue: string; isUpdateable: boolean
 }
 
-export interface FieldDefinition { field: FieldMeta; column: ColumnMeta }
+export interface FieldDefinition {
+  field: FieldMeta
+  column: ColumnMeta
+  referenceTableName?: string  // Resolved table name for Ref 18/19/30
+}
+
+// ========== FK Table Name Resolution ==========
+
+const refTableCache = new Map<number, string>()
+
+/**
+ * For Reference 18 (Table) or 30 (Search), resolve the related table name
+ * by querying AD_Ref_Table → AD_Table.
+ */
+export async function fetchReferenceTableName(referenceValueId: number): Promise<string> {
+  if (refTableCache.has(referenceValueId)) return refTableCache.get(referenceValueId)!
+
+  try {
+    const resp = await apiClient.get('/api/v1/models/AD_Ref_Table', {
+      params: {
+        '$filter': `AD_Reference_ID eq ${referenceValueId}`,
+        '$select': 'AD_Table_ID',
+        '$top': 1,
+      },
+    })
+    const records = resp.data.records || []
+    if (records.length > 0) {
+      const tableId = records[0].AD_Table_ID?.id || records[0].AD_Table_ID
+      if (tableId) {
+        const tResp = await apiClient.get(`/api/v1/models/AD_Table/${tableId}`, {
+          params: { '$select': 'TableName' },
+        })
+        const tableName = tResp.data.TableName || ''
+        refTableCache.set(referenceValueId, tableName)
+        return tableName
+      }
+    }
+  } catch {
+    // Silently fall back to empty
+  }
+  refTableCache.set(referenceValueId, '')
+  return ''
+}
+
+export function clearRefTableCache(): void {
+  refTableCache.clear()
+}
+
+// ========== Default Value Resolution ==========
+
+export interface AuthContext {
+  organizationId: number
+  warehouseId: number
+  clientId: number
+}
+
+/**
+ * Resolve AD_Column.DefaultValue context variables to actual values.
+ * - Simple: 'N', '0', 'DR'
+ * - Context: '@#Date@' → today, '@AD_Org_ID@' → orgId
+ * - SQL: '@SQL=...' → undefined (server handles)
+ */
+export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any {
+  if (!defaultExpr) return undefined
+
+  // Skip SQL defaults
+  if (defaultExpr.startsWith('@SQL=')) return undefined
+
+  // Skip parent-context defaults like @C_BPartner_Location_ID@, @C_Currency_ID@
+  // These reference parent record fields, not session context
+  if (/^@[A-Za-z_]+@$/.test(defaultExpr)) {
+    const varName = defaultExpr.slice(1, -1)
+    // Session context variables (prefixed with # or known names)
+    const contextMap: Record<string, any> = {
+      '#Date': new Date().toISOString().split('T')[0],
+      'AD_Org_ID': ctx.organizationId,
+      '#AD_Org_ID': ctx.organizationId,
+      'M_Warehouse_ID': ctx.warehouseId,
+      '#M_Warehouse_ID': ctx.warehouseId,
+      'AD_Client_ID': ctx.clientId,
+      '#AD_Client_ID': ctx.clientId,
+      'IsSOTrx': true,
+      '#IsSOTrx': true,
+    }
+    if (varName in contextMap) return contextMap[varName]
+    // Unknown context variable — skip
+    return undefined
+  }
+
+  // Simple literals
+  if (defaultExpr === 'Y') return true
+  if (defaultExpr === 'N') return false
+  if (/^-?\d+$/.test(defaultExpr)) return parseInt(defaultExpr, 10)
+  if (/^-?\d+\.\d+$/.test(defaultExpr)) return parseFloat(defaultExpr)
+
+  return defaultExpr
+}
+
+// ========== Field & Column Fetching ==========
 
 export async function fetchFieldsForTab(tabId: number): Promise<FieldMeta[]> {
   const resp = await apiClient.get('/api/v1/models/AD_Field', {
     params: {
       '$filter': `AD_Tab_ID eq ${tabId} and IsActive eq true and IsDisplayed eq true`,
-      '$select': 'AD_Field_ID,Name,SeqNo,IsDisplayed,IsReadOnly,FieldGroup,AD_Column_ID',
+      '$select': 'AD_Field_ID,Name,SeqNo,IsDisplayed,IsReadOnly,AD_FieldGroup_ID,AD_Column_ID',
       '$orderby': 'SeqNo', '$top': 200,
     },
   })
   return (resp.data.records || []).map((r: any) => ({
     id: r.id, name: r.Name, seqNo: r.SeqNo, isDisplayed: r.IsDisplayed,
-    isReadOnly: r.IsReadOnly, fieldGroup: r.FieldGroup || '',
+    isReadOnly: r.IsReadOnly,
+    fieldGroup: r.AD_FieldGroup_ID?.identifier || '',
     columnId: r.AD_Column_ID?.id || r.AD_Column_ID,
   }))
 }
 
+/**
+ * Fetch a single column by ID.
+ */
 export async function fetchColumn(columnId: number): Promise<ColumnMeta> {
   const resp = await apiClient.get(`/api/v1/models/AD_Column/${columnId}`, {
     params: { '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable' },
   })
   const r = resp.data
+  return mapColumnRecord(r)
+}
+
+/**
+ * Batch fetch multiple columns in a single request using OR filter.
+ */
+export async function fetchColumnsBatch(columnIds: number[]): Promise<ColumnMeta[]> {
+  if (columnIds.length === 0) return []
+
+  // Build filter: AD_Column_ID eq 1 or AD_Column_ID eq 2 or ...
+  const filter = columnIds.map(id => `AD_Column_ID eq ${id}`).join(' or ')
+  const resp = await apiClient.get('/api/v1/models/AD_Column', {
+    params: {
+      '$filter': filter,
+      '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable',
+      '$top': columnIds.length,
+    },
+  })
+  const records = resp.data.records || []
+  return records.map(mapColumnRecord)
+}
+
+function mapColumnRecord(r: any): ColumnMeta {
   return {
-    id: r.id, columnName: r.ColumnName,
+    id: r.id ?? (r.AD_Column_ID?.id || r.AD_Column_ID),
+    columnName: r.ColumnName,
     referenceId: r.AD_Reference_ID?.id || r.AD_Reference_ID,
     referenceValueId: r.AD_Reference_Value_ID?.id || r.AD_Reference_Value_ID || null,
     fieldLength: r.FieldLength || 0,
@@ -54,8 +180,48 @@ export async function fetchRefListItems(referenceValueId: number): Promise<{ val
   return (resp.data.records || []).map((r: any) => ({ value: r.Value, name: r.Name }))
 }
 
+/**
+ * Fetch complete field definitions for a tab.
+ * Uses batch column fetch + resolves FK table names for Ref 18/19/30.
+ */
 export async function fetchFieldDefinitions(tabId: number): Promise<FieldDefinition[]> {
   const fields = await fetchFieldsForTab(tabId)
-  const columns = await Promise.all(fields.map(f => fetchColumn(f.columnId)))
-  return fields.map((field, i) => ({ field, column: columns[i]! }))
+
+  // Batch fetch all columns in one request
+  const columnIds = fields.map(f => f.columnId)
+  const columns = await fetchColumnsBatch(columnIds)
+
+  // Build column lookup by ID
+  const columnMap = new Map<number, ColumnMeta>()
+  for (const col of columns) {
+    columnMap.set(col.id, col)
+  }
+
+  const defs: FieldDefinition[] = fields
+    .filter(f => columnMap.has(f.columnId))
+    .map(field => ({
+      field,
+      column: columnMap.get(field.columnId)!,
+    }))
+
+  // Resolve FK table names
+  // Ref 19 (TableDirect): derive from column name
+  for (const d of defs) {
+    if (d.column.referenceId === 19) {
+      const cn = d.column.columnName
+      d.referenceTableName = cn.endsWith('_ID') ? cn.slice(0, -3) : cn
+    }
+  }
+
+  // Ref 18 (Table) and 30 (Search): resolve via AD_Ref_Table
+  const fkDefs = defs.filter(d =>
+    [18, 30].includes(d.column.referenceId) && d.column.referenceValueId
+  )
+  if (fkDefs.length > 0) {
+    await Promise.all(fkDefs.map(async (d) => {
+      d.referenceTableName = await fetchReferenceTableName(d.column.referenceValueId!)
+    }))
+  }
+
+  return defs
 }

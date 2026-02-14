@@ -69,7 +69,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { createCustomer, getCustomerDetail, getCustomerContact, updateCustomer, updateCustomerContact } from '@/api/bpartner'
+import { createCustomer, createContact, getCustomerDetail, getCustomerContact, updateCustomer, updateCustomerContact } from '@/api/bpartner'
 
 const router = useRouter()
 const route = useRoute()
@@ -140,6 +140,13 @@ async function handleSubmit() {
       // Update AD_User contact (phone, email)
       if (contactUserId.value) {
         await updateCustomerContact(contactUserId.value, {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+        })
+      } else if (form.phone.trim() || form.email.trim()) {
+        // No contact exists yet — create one
+        await createContact(editId.value, {
           name: form.name.trim(),
           phone: form.phone.trim(),
           email: form.email.trim(),

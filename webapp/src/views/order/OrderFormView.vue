@@ -11,79 +11,26 @@
 
     <template v-else>
       <!-- Order Header -->
-      <div class="form-section">
-        <div v-if="!isCreate && order" class="doc-info">
-          <span class="doc-docno">{{ order.DocumentNo }}</span>
-          <StatusBadge :status="docStatus" />
-        </div>
-
-        <!-- 基本資訊 -->
-        <h3 class="section-title">基本資訊</h3>
-
-        <div class="form-group">
-          <label>客戶 <span class="required">*</span></label>
-          <SearchSelector
-            v-model="form.C_BPartner_ID"
-            tableName="C_BPartner"
-            displayField="Name"
-            searchField="Name"
-            filter="IsCustomer eq true"
-            :disabled="readOnly"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>倉庫 <span class="required">*</span></label>
-          <select v-model="form.M_Warehouse_ID" class="form-input" :disabled="readOnly">
-            <option :value="0">-- 請選擇 --</option>
-            <option v-for="wh in warehouses" :key="wh.id" :value="wh.id">
-              {{ wh.name }}
-            </option>
-          </select>
-        </div>
-
-        <div class="inline-fields">
-          <div class="form-group">
-            <label>訂單日期</label>
-            <input
-              v-model="form.DateOrdered"
-              type="date"
-              class="form-input"
-              :disabled="readOnly"
-            />
-          </div>
-          <div class="form-group">
-            <label>預計交貨日</label>
-            <input
-              v-model="form.DatePromised"
-              type="date"
-              class="form-input"
-              :disabled="readOnly"
-            />
-          </div>
-        </div>
+      <div v-if="!isCreate && order" class="doc-info">
+        <span class="doc-docno">{{ order.DocumentNo }}</span>
+        <StatusBadge :status="docStatus" />
       </div>
 
-      <!-- 備註 -->
-      <div class="form-section">
-        <h3 class="section-title">備註</h3>
-        <div class="form-group">
-          <textarea
-            v-model="form.Description"
-            rows="2"
-            class="form-textarea"
-            placeholder="選填備註..."
-            :disabled="readOnly"
-          ></textarea>
-        </div>
-      </div>
+      <!-- Dynamic form from AD metadata -->
+      <DynamicForm
+        :fieldDefs="visibleFieldDefs"
+        :modelValue="formData"
+        :disabled="readOnly"
+        :columnFilters="columnFilters"
+        @update:modelValue="formData = $event"
+      />
 
       <!-- Save header button (create mode) -->
       <div v-if="isCreate" class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
         <button
           type="button"
-          :disabled="saving || !form.C_BPartner_ID || !form.M_Warehouse_ID"
+          :disabled="saving"
           @click="handleCreateOrder"
         >
           {{ saving ? '建立中...' : '建立訂單' }}
@@ -197,11 +144,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDocumentForm } from '@/composables/useDocumentForm'
+import DynamicForm from '@/components/DynamicForm.vue'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DocActionBar from '@/components/DocActionBar.vue'
-import { toDateString } from '@/api/utils'
-import { lookupWarehouses } from '@/api/lookup'
 import {
   getOrder,
   getOrderLines,
@@ -218,34 +165,40 @@ const orderId = computed(() => {
   const id = route.params.id
   return id ? Number(id) : null
 })
-const isCreate = computed(() => orderId.value === null)
 
-// Order data
+// Order data (for DocumentNo display and totals reload)
 const order = ref<any>(null)
-const lines = ref<any[]>([])
-const docStatus = ref('DR')
-const readOnly = computed(() => docStatus.value !== 'DR' && !isCreate.value)
 
-// Warehouses
-const warehouses = ref<{ id: number; name: string }[]>([])
+const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
 
-// Form state
-const form = reactive({
-  C_BPartner_ID: null as number | null,
-  M_Warehouse_ID: 0,
-  DateOrdered: toDateString(new Date()),
-  DatePromised: toDateString(new Date()),
-  Description: '',
+const {
+  visibleFieldDefs,
+  formData,
+  docStatus,
+  pageLoading,
+  pageError,
+  isCreate,
+  readOnly,
+  load,
+  getFormPayload,
+} = useDocumentForm({
+  tabId: 186,  // C_Order
+  recordId: orderId,
+  loadRecord: async (id) => {
+    const data = await getOrder(id)
+    order.value = data
+    return data
+  },
+  columnFilters,
 })
 
 // Page state
-const pageLoading = ref(false)
-const pageError = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
 const linesLoading = ref(false)
 
-// Add line state
+// Lines state
+const lines = ref<any[]>([])
 const showAddLine = ref(false)
 const addingLine = ref(false)
 const newLine = reactive({
@@ -266,46 +219,6 @@ function formatAmount(val: any): string {
   return Number(val).toLocaleString()
 }
 
-async function loadWarehouses() {
-  const orgId = authStore.context?.organizationId ?? 0
-  warehouses.value = await lookupWarehouses(orgId)
-  // Pre-select from context or first available
-  const contextWh = authStore.context?.warehouseId
-  if (contextWh && warehouses.value.some(w => w.id === contextWh)) {
-    form.M_Warehouse_ID = contextWh
-  } else if (warehouses.value.length === 1 && warehouses.value[0]) {
-    form.M_Warehouse_ID = warehouses.value[0].id
-  }
-}
-
-async function loadOrder() {
-  if (!orderId.value) return
-  pageLoading.value = true
-  pageError.value = ''
-  try {
-    const data = await getOrder(orderId.value)
-    order.value = data
-
-    if (data.DocStatus && typeof data.DocStatus === 'object') {
-      docStatus.value = data.DocStatus.id || 'DR'
-    } else {
-      docStatus.value = data.DocStatus || 'DR'
-    }
-
-    form.C_BPartner_ID = data.C_BPartner_ID?.id ?? null
-    form.M_Warehouse_ID = data.M_Warehouse_ID?.id ?? data.M_Warehouse_ID ?? 0
-    form.Description = data.Description || ''
-    if (data.DateOrdered) form.DateOrdered = toDateString(new Date(data.DateOrdered))
-    if (data.DatePromised) form.DatePromised = toDateString(new Date(data.DatePromised))
-
-    await loadLines()
-  } catch {
-    pageError.value = '載入訂單失敗'
-  } finally {
-    pageLoading.value = false
-  }
-}
-
 async function loadLines() {
   if (!orderId.value) return
   linesLoading.value = true
@@ -319,11 +232,13 @@ async function loadLines() {
 }
 
 async function handleCreateOrder() {
-  if (!form.C_BPartner_ID) {
+  const payload = getFormPayload()
+
+  if (!payload.C_BPartner_ID) {
     errorMsg.value = '請選擇客戶'
     return
   }
-  if (!form.M_Warehouse_ID) {
+  if (!payload.M_Warehouse_ID) {
     errorMsg.value = '請選擇倉庫'
     return
   }
@@ -331,15 +246,9 @@ async function handleCreateOrder() {
   saving.value = true
   errorMsg.value = ''
   try {
-    const orgId = authStore.context?.organizationId ?? 0
-    const username = authStore.user?.name || ''
-    const result = await createOrder({
-      C_BPartner_ID: form.C_BPartner_ID,
-      AD_Org_ID: orgId,
-      M_Warehouse_ID: form.M_Warehouse_ID,
-      Description: form.Description,
-      username,
-    })
+    payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+    payload.username = authStore.user?.name || ''
+    const result = await createOrder(payload as any)
     router.replace({ name: 'order-detail', params: { id: result.id } })
   } catch (e: unknown) {
     const err = e as { message?: string }
@@ -415,10 +324,9 @@ function goBack() {
 }
 
 onMounted(async () => {
-  if (isCreate.value) {
-    await loadWarehouses()
-  } else {
-    await Promise.all([loadWarehouses(), loadOrder()])
+  await load()
+  if (!isCreate.value && orderId.value) {
+    await loadLines()
   }
 })
 </script>
@@ -458,10 +366,6 @@ onMounted(async () => {
   font-size: 0.875rem;
 }
 
-.form-section {
-  margin-bottom: 1.5rem;
-}
-
 .doc-info {
   display: flex;
   align-items: center;
@@ -472,6 +376,10 @@ onMounted(async () => {
 .doc-docno {
   font-size: 1.125rem;
   font-weight: 600;
+}
+
+.form-section {
+  margin-top: 1.5rem;
 }
 
 .section-title {
@@ -497,7 +405,6 @@ onMounted(async () => {
   color: var(--color-error);
 }
 
-.form-textarea,
 .form-input {
   width: 100%;
   padding: 0.75rem;
@@ -508,11 +415,6 @@ onMounted(async () => {
   font-family: inherit;
 }
 
-.form-textarea {
-  resize: vertical;
-}
-
-.form-textarea:disabled,
 .form-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;

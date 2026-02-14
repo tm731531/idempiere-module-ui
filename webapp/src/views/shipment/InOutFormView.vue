@@ -10,74 +10,23 @@
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
 
     <template v-else>
-      <div class="form-section">
-        <div v-if="!isCreate && inout" class="doc-info">
-          <span class="doc-docno">{{ inout.DocumentNo }}</span>
-          <StatusBadge :status="docStatus" />
-        </div>
-
-        <h3 class="section-title">基本資訊</h3>
-
-        <div class="form-group">
-          <label>類型 <span class="required">*</span></label>
-          <div class="type-toggle">
-            <button type="button" :class="['toggle-btn', { active: form.IsSOTrx }]" :disabled="readOnly" @click="form.IsSOTrx = true">出貨</button>
-            <button type="button" :class="['toggle-btn', { active: !form.IsSOTrx }]" :disabled="readOnly" @click="form.IsSOTrx = false">收貨</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>{{ form.IsSOTrx ? '客戶' : '供應商' }} <span class="required">*</span></label>
-          <SearchSelector
-            v-model="form.C_BPartner_ID"
-            tableName="C_BPartner"
-            displayField="Name"
-            searchField="Name"
-            :filter="form.IsSOTrx ? 'IsCustomer eq true' : 'IsVendor eq true'"
-            :disabled="readOnly"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>倉庫 <span class="required">*</span></label>
-          <select v-model="form.M_Warehouse_ID" class="form-input" :disabled="readOnly" @change="onWarehouseChange">
-            <option :value="0">-- 請選擇 --</option>
-            <option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>移動日期</label>
-          <input v-model="form.MovementDate" type="date" class="form-input" :disabled="readOnly" />
-        </div>
+      <div v-if="!isCreate && recordData" class="doc-info">
+        <span class="doc-docno">{{ recordData.DocumentNo }}</span>
+        <StatusBadge :status="docStatus" />
       </div>
 
-      <!-- 關聯單據 -->
-      <div class="form-section">
-        <h3 class="section-title">關聯單據</h3>
-        <div class="form-group">
-          <label>來源訂單</label>
-          <SearchSelector
-            v-model="form.C_Order_ID"
-            tableName="C_Order"
-            displayField="DocumentNo"
-            searchField="DocumentNo"
-            :disabled="readOnly"
-          />
-        </div>
-      </div>
-
-      <!-- 備註 -->
-      <div class="form-section">
-        <h3 class="section-title">備註</h3>
-        <div class="form-group">
-          <textarea v-model="form.Description" rows="2" class="form-textarea" placeholder="選填備註..." :disabled="readOnly"></textarea>
-        </div>
-      </div>
+      <!-- Dynamic form from AD metadata -->
+      <DynamicForm
+        :fieldDefs="visibleFieldDefs"
+        :modelValue="formData"
+        :disabled="readOnly"
+        :columnFilters="columnFilters"
+        @update:modelValue="formData = $event"
+      />
 
       <div v-if="isCreate" class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
-        <button type="button" :disabled="saving || !form.C_BPartner_ID || !form.M_Warehouse_ID" @click="handleCreateInOut">
+        <button type="button" :disabled="saving" @click="handleCreateInOut">
           {{ saving ? '建立中...' : '建立單據' }}
         </button>
       </div>
@@ -147,14 +96,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDocumentForm } from '@/composables/useDocumentForm'
+import DynamicForm from '@/components/DynamicForm.vue'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DocActionBar from '@/components/DocActionBar.vue'
-import { toDateString } from '@/api/utils'
-import { lookupWarehouses, lookupLocators } from '@/api/lookup'
+import { lookupLocators } from '@/api/lookup'
 import { getInOut, getInOutLines, createInOut, addInOutLine, deleteInOutLine } from '@/api/inout'
 
 const router = useRouter()
@@ -165,30 +115,60 @@ const inoutId = computed(() => {
   const id = route.params.id
   return id ? Number(id) : null
 })
-const isCreate = computed(() => inoutId.value === null)
 
-const inout = ref<any>(null)
-const lines = ref<any[]>([])
-const docStatus = ref('DR')
-const readOnly = computed(() => docStatus.value !== 'DR' && !isCreate.value)
-
-const warehouses = ref<{ id: number; name: string }[]>([])
-const locators = ref<{ id: number; name: string }[]>([])
-
-const form = reactive({
-  C_BPartner_ID: null as number | null,
-  M_Warehouse_ID: 0,
-  IsSOTrx: true,
-  C_Order_ID: null as number | null,
-  MovementDate: toDateString(new Date()),
-  Description: '',
+const {
+  visibleFieldDefs,
+  formData,
+  recordData,
+  pageLoading,
+  pageError,
+  readOnly,
+  isCreate,
+  docStatus,
+  load,
+  getFormPayload,
+} = useDocumentForm({
+  tabId: 257,  // M_InOut
+  recordId: inoutId,
+  loadRecord: (id) => getInOut(id),
 })
 
-const pageLoading = ref(false)
-const pageError = ref('')
+// Dynamic columnFilters: C_BPartner_ID filter depends on IsSOTrx
+const columnFilters = computed(() => ({
+  C_BPartner_ID: formData.value.IsSOTrx === false
+    ? 'IsVendor eq true'
+    : 'IsCustomer eq true',
+}))
+
+// --- Locators (for add-line form) ---
+const locators = ref<{ id: number; name: string }[]>([])
+
+async function loadLocatorsForWarehouse(whId: number) {
+  if (!whId) { locators.value = []; return }
+  locators.value = await lookupLocators(whId)
+  if (locators.value.length === 1 && locators.value[0]) {
+    newLine.M_Locator_ID = locators.value[0].id
+  }
+}
+
+// Reload locators when M_Warehouse_ID changes in formData
+watch(
+  () => formData.value.M_Warehouse_ID,
+  (newWhId) => {
+    if (newWhId) {
+      loadLocatorsForWarehouse(newWhId)
+    } else {
+      locators.value = []
+    }
+  },
+)
+
+// --- Lines management ---
+const lines = ref<any[]>([])
+const linesLoading = ref(false)
+
 const saving = ref(false)
 const errorMsg = ref('')
-const linesLoading = ref(false)
 
 const showAddLine = ref(false)
 const addingLine = ref(false)
@@ -206,63 +186,6 @@ function getProductName(line: any): string {
   return '未知產品'
 }
 
-async function loadWarehouses() {
-  const orgId = authStore.context?.organizationId ?? 0
-  warehouses.value = await lookupWarehouses(orgId)
-  const contextWh = authStore.context?.warehouseId
-  if (contextWh && warehouses.value.some(w => w.id === contextWh)) {
-    form.M_Warehouse_ID = contextWh
-    await loadLocatorsForWarehouse(contextWh)
-  } else if (warehouses.value.length === 1 && warehouses.value[0]) {
-    form.M_Warehouse_ID = warehouses.value[0].id
-    await loadLocatorsForWarehouse(warehouses.value[0].id)
-  }
-}
-
-async function loadLocatorsForWarehouse(whId: number) {
-  if (!whId) { locators.value = []; return }
-  locators.value = await lookupLocators(whId)
-  if (locators.value.length === 1 && locators.value[0]) {
-    newLine.M_Locator_ID = locators.value[0].id
-  }
-}
-
-async function onWarehouseChange() {
-  await loadLocatorsForWarehouse(form.M_Warehouse_ID)
-}
-
-async function loadInOut() {
-  if (!inoutId.value) return
-  pageLoading.value = true
-  pageError.value = ''
-  try {
-    const data = await getInOut(inoutId.value)
-    inout.value = data
-
-    if (data.DocStatus && typeof data.DocStatus === 'object') {
-      docStatus.value = data.DocStatus.id || 'DR'
-    } else {
-      docStatus.value = data.DocStatus || 'DR'
-    }
-
-    form.C_BPartner_ID = data.C_BPartner_ID?.id ?? null
-    form.M_Warehouse_ID = data.M_Warehouse_ID?.id ?? data.M_Warehouse_ID ?? 0
-    let isSOTrx = data.IsSOTrx
-    if (isSOTrx && typeof isSOTrx === 'object') isSOTrx = isSOTrx.id
-    form.IsSOTrx = isSOTrx !== false
-    form.C_Order_ID = data.C_Order_ID?.id ?? null
-    form.Description = data.Description || ''
-    if (data.MovementDate) form.MovementDate = toDateString(new Date(data.MovementDate))
-
-    if (form.M_Warehouse_ID) await loadLocatorsForWarehouse(form.M_Warehouse_ID)
-    await loadLines()
-  } catch {
-    pageError.value = '載入單據失敗'
-  } finally {
-    pageLoading.value = false
-  }
-}
-
 async function loadLines() {
   if (!inoutId.value) return
   linesLoading.value = true
@@ -272,22 +195,23 @@ async function loadLines() {
 }
 
 async function handleCreateInOut() {
-  if (!form.C_BPartner_ID) { errorMsg.value = form.IsSOTrx ? '請選擇客戶' : '請選擇供應商'; return }
-  if (!form.M_Warehouse_ID) { errorMsg.value = '請選擇倉庫'; return }
+  const payload = getFormPayload()
+
+  if (!payload.C_BPartner_ID) {
+    errorMsg.value = payload.IsSOTrx === false ? '請選擇供應商' : '請選擇客戶'
+    return
+  }
+  if (!payload.M_Warehouse_ID) {
+    errorMsg.value = '請選擇倉庫'
+    return
+  }
 
   saving.value = true
   errorMsg.value = ''
   try {
     const orgId = authStore.context?.organizationId ?? 0
-    const result = await createInOut({
-      C_BPartner_ID: form.C_BPartner_ID,
-      M_Warehouse_ID: form.M_Warehouse_ID,
-      AD_Org_ID: orgId,
-      IsSOTrx: form.IsSOTrx,
-      C_Order_ID: form.C_Order_ID || undefined,
-      MovementDate: form.MovementDate || undefined,
-      Description: form.Description,
-    })
+    payload.AD_Org_ID = orgId
+    const result = await createInOut(payload as any)
     router.replace({ name: 'shipment-detail', params: { id: result.id } })
   } catch (e: unknown) {
     const err = e as { message?: string }
@@ -333,7 +257,6 @@ async function onCompleted() {
   if (!inoutId.value) return
   try {
     const data = await getInOut(inoutId.value)
-    inout.value = data
     if (data.DocStatus && typeof data.DocStatus === 'object') docStatus.value = data.DocStatus.id || 'CO'
     else docStatus.value = data.DocStatus || 'CO'
   } catch { docStatus.value = 'CO' }
@@ -343,8 +266,10 @@ function onDocActionError(message: string) { errorMsg.value = message }
 function goBack() { router.push({ name: 'shipment-list' }) }
 
 onMounted(async () => {
-  if (isCreate.value) await loadWarehouses()
-  else await Promise.all([loadWarehouses(), loadInOut()])
+  await load()
+  if (!isCreate.value && inoutId.value) {
+    await loadLines()
+  }
 })
 </script>
 
@@ -361,13 +286,8 @@ onMounted(async () => {
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; }
 .required { color: var(--color-error); }
-.type-toggle { display: flex; gap: 0; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
-.toggle-btn { flex: 1; padding: 0.5rem; border: none; background: transparent; font-size: 0.875rem; min-height: var(--min-touch); cursor: pointer; }
-.toggle-btn.active { background: var(--color-primary); color: white; }
-.toggle-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.form-textarea, .form-input { width: 100%; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); font-family: inherit; }
-.form-textarea { resize: vertical; }
-.form-textarea:disabled, .form-input:disabled { opacity: 0.6; cursor: not-allowed; background: #f8fafc; }
+.form-input { width: 100%; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); font-family: inherit; }
+.form-input:disabled { opacity: 0.6; cursor: not-allowed; background: #f8fafc; }
 .inline-fields { display: flex; gap: 0.75rem; }
 .inline-fields .form-group { flex: 1; }
 .form-actions { display: flex; gap: 0.75rem; margin-top: 1rem; margin-bottom: 1.5rem; }

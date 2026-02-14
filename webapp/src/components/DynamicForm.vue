@@ -1,60 +1,28 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { ref, computed } from 'vue'
 import type { FieldDefinition } from '@/api/metadata'
 import DynamicField from './DynamicField.vue'
 
 const props = defineProps<{
   fieldDefs: FieldDefinition[]
   modelValue: Record<string, any>
+  disabled?: boolean
+  columnFilters?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: Record<string, any>]
 }>()
 
-const grouped = computed(() => {
-  const groups = new Map<string, FieldDefinition[]>()
-  for (const def of props.fieldDefs) {
-    const g = def.field.fieldGroup || '其他'
-    if (!groups.has(g)) groups.set(g, [])
-    groups.get(g)!.push(def)
-  }
-  return groups
-})
+const mandatoryFields = computed(() =>
+  props.fieldDefs.filter(d => d.column.isMandatory)
+)
 
-const groupNames = computed(() => Array.from(grouped.value.keys()))
+const optionalFields = computed(() =>
+  props.fieldDefs.filter(d => !d.column.isMandatory)
+)
 
-const expandedGroups = reactive(new Set<string>())
-
-const autoExpandedGroups = computed(() => {
-  const result = new Set<string>()
-  const names = groupNames.value
-  if (names.length > 0) {
-    result.add(names[0]!)
-  }
-  for (const [groupName, defs] of grouped.value) {
-    if (defs.some(d => d.column.isMandatory)) {
-      result.add(groupName)
-    }
-  }
-  return result
-})
-
-function isExpanded(groupName: string): boolean {
-  if (expandedGroups.has(groupName)) return true
-  if (expandedGroups.has(`collapsed:${groupName}`)) return false
-  return autoExpandedGroups.value.has(groupName)
-}
-
-function toggleGroup(groupName: string) {
-  if (isExpanded(groupName)) {
-    expandedGroups.delete(groupName)
-    expandedGroups.add(`collapsed:${groupName}`)
-  } else {
-    expandedGroups.delete(`collapsed:${groupName}`)
-    expandedGroups.add(groupName)
-  }
-}
+const showOptional = ref(false)
 
 function onFieldUpdate(columnName: string, value: any) {
   const merged = { ...props.modelValue, [columnName]: value }
@@ -64,29 +32,51 @@ function onFieldUpdate(columnName: string, value: any) {
 
 <template>
   <div class="dynamic-form">
-    <div
-      v-for="groupName in groupNames"
-      :key="groupName"
-      class="form-section"
-    >
-      <button
-        type="button"
-        class="section-header"
-        @click="toggleGroup(groupName)"
-      >
-        <span class="collapse-indicator">{{ isExpanded(groupName) ? '\u25BC' : '\u25B6' }}</span>
-        {{ groupName }}
-      </button>
-
-      <div v-if="isExpanded(groupName)" class="section-content">
+    <!-- Mandatory fields: always visible -->
+    <div v-if="mandatoryFields.length > 0" class="form-section">
+      <div class="section-header-static">
+        必填欄位
+      </div>
+      <div class="section-content">
         <div class="form-grid">
           <DynamicField
-            v-for="def in grouped.get(groupName)"
+            v-for="def in mandatoryFields"
             :key="def.column.columnName"
             :field="def.field"
             :column="def.column"
             :model-value="modelValue[def.column.columnName]"
-            :disabled="def.field.isReadOnly"
+            :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
+            :referenceTableName="def.referenceTableName"
+            :filter="columnFilters?.[def.column.columnName]"
+            @update:model-value="onFieldUpdate(def.column.columnName, $event)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Optional fields: collapsed by default -->
+    <div v-if="optionalFields.length > 0" class="form-section optional-section">
+      <button
+        type="button"
+        class="section-header"
+        @click="showOptional = !showOptional"
+      >
+        <span class="collapse-indicator">{{ showOptional ? '\u25BC' : '\u25B6' }}</span>
+        更多欄位
+        <span class="field-count">({{ optionalFields.length }})</span>
+      </button>
+
+      <div v-if="showOptional" class="section-content">
+        <div class="form-grid">
+          <DynamicField
+            v-for="def in optionalFields"
+            :key="def.column.columnName"
+            :field="def.field"
+            :column="def.column"
+            :model-value="modelValue[def.column.columnName]"
+            :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
+            :referenceTableName="def.referenceTableName"
+            :filter="columnFilters?.[def.column.columnName]"
             @update:model-value="onFieldUpdate(def.column.columnName, $event)"
           />
         </div>
@@ -106,6 +96,14 @@ function onFieldUpdate(columnName: string, value: any) {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.section-header-static {
+  padding: 12px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .section-header {
@@ -134,9 +132,18 @@ function onFieldUpdate(columnName: string, value: any) {
   flex-shrink: 0;
 }
 
+.field-count {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.optional-section {
+  border-style: dashed;
+}
+
 .section-content {
   padding: 16px;
-  border-top: 1px solid var(--color-border);
 }
 
 .form-grid {

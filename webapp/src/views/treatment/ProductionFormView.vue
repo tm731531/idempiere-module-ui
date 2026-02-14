@@ -10,69 +10,28 @@
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
 
     <template v-else>
-      <div class="form-section">
-        <div v-if="!isCreate && production" class="doc-info">
-          <span class="doc-docno">{{ production.DocumentNo }}</span>
-          <StatusBadge :status="docStatus" />
-        </div>
-
-        <h3 class="section-title">基本資訊</h3>
-
-        <div class="form-group">
-          <label>療程項目 <span class="required">*</span></label>
-          <SearchSelector
-            v-model="form.M_Product_ID"
-            tableName="M_Product"
-            displayField="Name"
-            searchField="Name"
-            :disabled="readOnly"
-          />
-        </div>
-
-        <div class="inline-fields">
-          <div class="form-group">
-            <label>數量 <span class="required">*</span></label>
-            <input v-model.number="form.ProductionQty" type="number" min="1" class="form-input" :disabled="readOnly" />
-          </div>
-          <div class="form-group">
-            <label>日期</label>
-            <input v-model="form.MovementDateStr" type="date" class="form-input" :disabled="readOnly" />
-          </div>
-        </div>
+      <div v-if="!isCreate && recordData" class="doc-info">
+        <span class="doc-docno">{{ recordData.DocumentNo }}</span>
+        <StatusBadge :status="docStatus" />
       </div>
 
-      <!-- 客戶資訊 -->
-      <div class="form-section">
-        <h3 class="section-title">客戶資訊</h3>
-        <div class="form-group">
-          <label>客戶</label>
-          <SearchSelector
-            v-model="form.C_BPartner_ID"
-            tableName="C_BPartner"
-            displayField="Name"
-            searchField="Name"
-            filter="IsCustomer eq true"
-            :disabled="readOnly"
-          />
-        </div>
-      </div>
-
-      <!-- 備註 -->
-      <div class="form-section">
-        <h3 class="section-title">備註</h3>
-        <div class="form-group">
-          <textarea v-model="form.Description" rows="2" class="form-textarea" placeholder="選填備註..." :disabled="readOnly"></textarea>
-        </div>
-      </div>
+      <!-- Dynamic form from AD metadata -->
+      <DynamicForm
+        :fieldDefs="visibleFieldDefs"
+        :modelValue="formData"
+        :disabled="readOnly"
+        :columnFilters="columnFilters"
+        @update:modelValue="formData = $event"
+      />
 
       <div v-if="isCreate" class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
-        <button type="button" :disabled="saving || !form.M_Product_ID" @click="handleCreateProduction">
+        <button type="button" :disabled="saving || !isValid" @click="handleCreateProduction">
           {{ saving ? '建立中...' : '建立療程' }}
         </button>
       </div>
 
-      <!-- Production Lines -->
+      <!-- Production Lines (only when production exists) -->
       <div v-if="!isCreate && productionId" class="form-section">
         <h3 class="section-title">耗材明細</h3>
 
@@ -133,11 +92,18 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDocumentForm } from '@/composables/useDocumentForm'
+import DynamicForm from '@/components/DynamicForm.vue'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DocActionBar from '@/components/DocActionBar.vue'
-import { toDateString } from '@/api/utils'
-import { getProduction, getProductionLines, createProduction, addProductionLine, deleteProductionLine } from '@/api/production'
+import {
+  getProduction,
+  getProductionLines,
+  createProduction,
+  addProductionLine,
+  deleteProductionLine,
+} from '@/api/production'
 
 const router = useRouter()
 const route = useRoute()
@@ -147,27 +113,34 @@ const productionId = computed(() => {
   const id = route.params.id
   return id ? Number(id) : null
 })
-const isCreate = computed(() => productionId.value === null)
 
-const production = ref<any>(null)
-const lines = ref<any[]>([])
-const docStatus = ref('DR')
-const readOnly = computed(() => docStatus.value !== 'DR' && !isCreate.value)
+const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
 
-const form = reactive({
-  M_Product_ID: null as number | null,
-  C_BPartner_ID: null as number | null,
-  ProductionQty: 1,
-  MovementDateStr: toDateString(new Date()),
-  Description: '',
+const {
+  visibleFieldDefs,
+  formData,
+  recordData,
+  docStatus,
+  pageLoading,
+  pageError,
+  readOnly,
+  isCreate,
+  isValid,
+  load,
+  getFormPayload,
+} = useDocumentForm({
+  tabId: 319,  // M_Production
+  recordId: productionId,
+  loadRecord: (id) => getProduction(id),
+  columnFilters,
 })
 
-const pageLoading = ref(false)
-const pageError = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
-const linesLoading = ref(false)
 
+// Lines state
+const lines = ref<any[]>([])
+const linesLoading = ref(false)
 const showAddLine = ref(false)
 const addingLine = ref(false)
 const newLine = reactive({
@@ -183,33 +156,19 @@ function getProductName(line: any): string {
   return '未知產品'
 }
 
-async function loadProduction() {
-  if (!productionId.value) return
-  pageLoading.value = true
-  pageError.value = ''
+async function handleCreateProduction() {
+  saving.value = true
+  errorMsg.value = ''
   try {
-    const data = await getProduction(productionId.value)
-    production.value = data
-
-    if (data.DocStatus && typeof data.DocStatus === 'object') {
-      docStatus.value = data.DocStatus.id || 'DR'
-    } else {
-      docStatus.value = data.DocStatus || 'DR'
-    }
-
-    form.M_Product_ID = data.M_Product_ID?.id ?? null
-    form.C_BPartner_ID = data.C_BPartner_ID?.id ?? null
-    form.ProductionQty = data.ProductionQty || 1
-    form.Description = data.Description || ''
-    if (data.MovementDate) {
-      form.MovementDateStr = toDateString(new Date(data.MovementDate))
-    }
-
-    await loadLines()
-  } catch {
-    pageError.value = '載入療程失敗'
+    const payload = getFormPayload()
+    payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+    const result = await createProduction(payload as any)
+    router.replace({ name: 'treatment-detail', params: { id: result.id } })
+  } catch (e: unknown) {
+    const err = e as { message?: string }
+    errorMsg.value = err.message || '建立療程失敗'
   } finally {
-    pageLoading.value = false
+    saving.value = false
   }
 }
 
@@ -219,33 +178,6 @@ async function loadLines() {
   try { lines.value = await getProductionLines(productionId.value) }
   catch { lines.value = [] }
   finally { linesLoading.value = false }
-}
-
-async function handleCreateProduction() {
-  if (!form.M_Product_ID) { errorMsg.value = '請選擇療程項目'; return }
-
-  saving.value = true
-  errorMsg.value = ''
-  try {
-    const orgId = authStore.context?.organizationId ?? 0
-    const movementDate = form.MovementDateStr
-      ? new Date(form.MovementDateStr + 'T00:00:00')
-      : new Date()
-
-    const result = await createProduction({
-      M_Product_ID: form.M_Product_ID,
-      ProductionQty: form.ProductionQty,
-      MovementDate: movementDate,
-      AD_Org_ID: orgId,
-      Description: form.Description,
-    })
-    router.replace({ name: 'treatment-detail', params: { id: result.id } })
-  } catch (e: unknown) {
-    const err = e as { message?: string }
-    errorMsg.value = err.message || '建立療程失敗'
-  } finally {
-    saving.value = false
-  }
 }
 
 async function handleAddLine() {
@@ -282,7 +214,6 @@ async function onCompleted() {
   if (!productionId.value) return
   try {
     const data = await getProduction(productionId.value)
-    production.value = data
     if (data.DocStatus && typeof data.DocStatus === 'object') docStatus.value = data.DocStatus.id || 'CO'
     else docStatus.value = data.DocStatus || 'CO'
   } catch { docStatus.value = 'CO' }
@@ -291,8 +222,11 @@ async function onCompleted() {
 function onDocActionError(message: string) { errorMsg.value = message }
 function goBack() { router.push({ name: 'treatment-list' }) }
 
-onMounted(() => {
-  if (!isCreate.value) loadProduction()
+onMounted(async () => {
+  await load()
+  if (!isCreate.value && productionId.value) {
+    await loadLines()
+  }
 })
 </script>
 
@@ -309,12 +243,10 @@ onMounted(() => {
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; }
 .required { color: var(--color-error); }
-.form-textarea, .form-input { width: 100%; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); font-family: inherit; }
-.form-textarea { resize: vertical; }
-.form-textarea:disabled, .form-input:disabled { opacity: 0.6; cursor: not-allowed; background: #f8fafc; }
+.form-input { width: 100%; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); font-family: inherit; }
 .inline-fields { display: flex; gap: 0.75rem; }
 .inline-fields .form-group { flex: 1; }
-.form-actions { display: flex; gap: 0.75rem; margin-top: 1rem; margin-bottom: 1.5rem; }
+.form-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; margin-bottom: 1.5rem; }
 .form-actions button { flex: 1; padding: 0.75rem; border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); cursor: pointer; background: var(--color-primary); color: white; border: none; }
 .form-actions button:hover:not(:disabled) { background: var(--color-primary-hover); }
 .form-actions button:disabled { opacity: 0.6; cursor: not-allowed; }

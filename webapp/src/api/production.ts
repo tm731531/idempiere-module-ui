@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { lookupDocTypeId, lookupLocators } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
 export interface ProductionData {

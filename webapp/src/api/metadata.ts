@@ -81,7 +81,7 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any 
 
   // Skip parent-context defaults like @C_BPartner_Location_ID@, @C_Currency_ID@
   // These reference parent record fields, not session context
-  if (/^@[A-Za-z_]+@$/.test(defaultExpr)) {
+  if (/^@[#A-Za-z_]+@$/.test(defaultExpr)) {
     const varName = defaultExpr.slice(1, -1)
     // Session context variables (prefixed with # or known names)
     const contextMap: Record<string, any> = {
@@ -105,6 +105,14 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext): any 
   if (defaultExpr === 'N') return false
   if (/^-?\d+$/.test(defaultExpr)) return parseInt(defaultExpr, 10)
   if (/^-?\d+\.\d+$/.test(defaultExpr)) return parseFloat(defaultExpr)
+
+  // Date keywords — server-side SQL tokens, resolve to current date/time
+  if (defaultExpr === 'SYSDATE' || defaultExpr === 'CURRENT_TIMESTAMP') {
+    return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+  }
+  if (defaultExpr === 'CURRENT_DATE') {
+    return new Date().toISOString().split('T')[0]
+  }
 
   return defaultExpr
 }

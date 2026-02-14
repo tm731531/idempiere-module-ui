@@ -25,6 +25,23 @@ describe('metadata API', () => {
     expect(fields[0]!.name).toBe('DocumentNo')
   })
 
+  it('resolves SYSDATE to current datetime', async () => {
+    const { resolveDefaultValue } = await import('@/api/metadata')
+    const ctx = { organizationId: 1, warehouseId: 1, clientId: 1 }
+    const result = resolveDefaultValue('SYSDATE', ctx)
+    // Should be ISO datetime without milliseconds
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+  })
+
+  it('resolves simple literals', async () => {
+    const { resolveDefaultValue } = await import('@/api/metadata')
+    const ctx = { organizationId: 1, warehouseId: 1, clientId: 1 }
+    expect(resolveDefaultValue('Y', ctx)).toBe(true)
+    expect(resolveDefaultValue('N', ctx)).toBe(false)
+    expect(resolveDefaultValue('0', ctx)).toBe(0)
+    expect(resolveDefaultValue('DR', ctx)).toBe('DR')
+  })
+
   it('should fetch AD_Column details', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: {

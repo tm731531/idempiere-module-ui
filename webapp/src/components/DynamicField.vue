@@ -2,6 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import type { FieldMeta, ColumnMeta } from '@/api/metadata'
 import { fetchRefListItems } from '@/api/metadata'
+import { getFieldLabel } from '@/i18n/fieldLabels'
+import { useAuthStore } from '@/stores/auth'
+import { apiClient } from '@/api/client'
 import SearchSelector from './SearchSelector.vue'
 
 const props = defineProps<{
@@ -38,7 +41,7 @@ const resolvedTableName = computed(() => {
 const displayFieldName = computed(() => {
   const docNoTables = new Set([
     'C_Order', 'C_Payment', 'M_InOut', 'M_Production', 'M_Movement',
-    'C_Invoice', 'M_Requisition',
+    'C_Invoice', 'M_Requisition', 'R_Request',
   ])
   const valueTables = new Set(['M_Locator'])
 
@@ -50,6 +53,60 @@ const displayFieldName = computed(() => {
 const isFkField = computed(() =>
   [18, 19, 30].includes(props.column.referenceId) && resolvedTableName.value
 )
+
+// QuickCreate: tables where inline creation is allowed
+const quickCreateTables = new Set([
+  'R_RequestType', 'R_Category', 'R_Group', 'R_Resolution',
+  'C_BP_Group',
+])
+
+const enableQuickCreate = computed(() =>
+  !!(isFkField.value && quickCreateTables.has(resolvedTableName.value))
+)
+
+const quickCreateDefaults = ref<Record<string, any>>({})
+
+const authStore = useAuthStore()
+
+// R_RequestType needs R_StatusCategory_ID — find or create one
+async function getStatusCategoryId(): Promise<number> {
+  const resp = await apiClient.get('/api/v1/models/R_StatusCategory', {
+    params: { '$filter': 'IsActive eq true', '$select': 'R_StatusCategory_ID', '$top': '1' },
+  })
+  const records = resp.data.records || []
+  if (records.length > 0) return records[0].id
+  const orgId = authStore.context?.organizationId ?? 0
+  const createResp = await apiClient.post('/api/v1/models/R_StatusCategory', {
+    AD_Org_ID: orgId, Name: 'Default', IsDefault: true,
+  })
+  return createResp.data.id
+}
+
+// Build table-specific defaults for QuickCreate
+async function loadQuickCreateDefaults(): Promise<void> {
+  if (!enableQuickCreate.value) return
+  const table = resolvedTableName.value
+  if (table === 'R_RequestType') {
+    const catId = await getStatusCategoryId()
+    quickCreateDefaults.value = {
+      R_StatusCategory_ID: catId,
+      ConfidentialType: 'C',
+      DueDateTolerance: 7,
+      IsDefault: false,
+      IsSelfService: true,
+      IsEMailWhenDue: false,
+      IsEMailWhenOverdue: false,
+      IsAutoChangeRequest: false,
+      IsConfidentialInfo: false,
+      IsIndexed: false,
+    }
+  } else if (table === 'C_BP_Group') {
+    quickCreateDefaults.value = { IsDefault: false, IsConfidentialInfo: false }
+  }
+  // R_Category, R_Group, R_Resolution: no extra defaults needed
+}
+
+const label = computed(() => getFieldLabel(props.column.columnName, props.field.name))
 
 function onInput(event: Event) {
   const target = event.target as HTMLInputElement
@@ -75,13 +132,16 @@ onMounted(async () => {
   if (props.column.referenceId === 17 && props.column.referenceValueId) {
     refListOptions.value = await fetchRefListItems(props.column.referenceValueId)
   }
+  if (enableQuickCreate.value) {
+    await loadQuickCreateDefaults()
+  }
 })
 </script>
 
 <template>
   <div v-if="!isHidden" class="field-wrapper">
     <label class="field-label">
-      {{ field.name }}
+      {{ label }}
       <span v-if="column.isMandatory" class="required">*</span>
     </label>
 
@@ -94,6 +154,8 @@ onMounted(async () => {
       :searchField="displayFieldName"
       :filter="filter"
       :disabled="disabled"
+      :quickCreate="enableQuickCreate"
+      :quickCreateDefaults="quickCreateDefaults"
       @update:modelValue="emit('update:modelValue', $event)"
     />
 

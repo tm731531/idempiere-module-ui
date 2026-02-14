@@ -1,0 +1,203 @@
+/**
+ * Chinese labels for AD column names.
+ * Used by DynamicField to display user-friendly labels instead of English AD_Field.Name.
+ */
+const labels: Record<string, string> = {
+  // Common
+  Name: '名稱',
+  Description: '說明',
+  Summary: '摘要',
+  DocumentNo: '單據編號',
+  DocStatus: '單據狀態',
+  DateOrdered: '訂單日期',
+  DatePromised: '預計交貨日',
+  DateTrx: '交易日期',
+  DateAcct: '帳務日期',
+  DateReceived: '收貨日期',
+  MovementDate: '異動日期',
+
+  // Business Partner
+  C_BPartner_ID: '客戶',
+  C_BPartner_Location_ID: '客戶地址',
+  Bill_BPartner_ID: '帳單對象',
+  Bill_Location_ID: '帳單地址',
+  Bill_User_ID: '帳單聯絡人',
+  AD_User_ID: '聯絡人',
+
+  // Organization & Warehouse
+  AD_Org_ID: '組織',
+  AD_OrgTrx_ID: '交易組織',
+  M_Warehouse_ID: '倉庫',
+
+  // Document Types
+  C_DocType_ID: '單據類型',
+  C_DocTypeTarget_ID: '目標單據類型',
+
+  // Pricing
+  M_PriceList_ID: '價目表',
+  C_Currency_ID: '幣別',
+  C_PaymentTerm_ID: '付款條件',
+  GrandTotal: '總金額',
+  TotalLines: '明細合計',
+  PayAmt: '付款金額',
+  ChargeAmt: '費用金額',
+  FreightAmt: '運費',
+  TaxAmt: '稅額',
+  DiscountAmt: '折扣金額',
+  WriteOffAmt: '沖銷金額',
+  OverUnderAmt: '溢付/短付',
+  RequestAmt: '請求金額',
+  ConvertedAmt: '換算金額',
+
+  // Sales
+  SalesRep_ID: '業務員',
+  IsReceipt: '收款',
+  C_Order_ID: '關聯訂單',
+  C_Invoice_ID: '關聯發票',
+  C_Payment_ID: '關聯付款',
+  M_InOut_ID: '關聯出入庫',
+  POReference: '訂單參考',
+  PONum: 'PO 號碼',
+
+  // Delivery
+  DeliveryRule: '交貨規則',
+  DeliveryViaRule: '交貨方式',
+  FreightCostRule: '運費規則',
+  InvoiceRule: '開票規則',
+  M_Shipper_ID: '承運商',
+  M_FreightCategory_ID: '運費類別',
+  NoPackages: '包裹數',
+  TrackingNo: '追蹤編號',
+  IsDropShip: '直運',
+  IsInTransit: '在途中',
+  MovementType: '異動類型',
+  PickDate: '揀貨日期',
+  ShipDate: '出貨日期',
+
+  // Product
+  M_Product_ID: '產品',
+  M_ProductSpent_ID: '使用產品',
+  QtyInvoiced: '已開票數量',
+  QtyPlan: '計劃數量',
+  QtySpent: '使用數量',
+
+  // Payment
+  TenderType: '付款方式',
+  PaymentRule: '付款規則',
+  CreditCardType: '信用卡類型',
+  CreditCardNumber: '卡號',
+  CreditCardExpMM: '到期月',
+  CreditCardExpYY: '到期年',
+  CreditCardVV: '驗證碼',
+  AccountNo: '帳號',
+  RoutingNo: '路由號碼',
+  CheckNo: '支票號碼',
+  IBAN: 'IBAN',
+  SwiftCode: 'Swift 代碼',
+  Micr: 'Micr',
+  IsOnline: '線上交易',
+  IsAllocated: '已分配',
+  IsReconciled: '已對帳',
+  IsPrepayment: '預付款',
+  IsOverUnderPayment: '溢付/短付',
+  IsVoided: '已作廢',
+  R_PnRef: '交易參考號',
+  R_AuthCode: '授權碼',
+  R_RespMsg: '回應訊息',
+  R_Result: '交易結果',
+  R_VoidMsg: '作廢訊息',
+  Orig_TrxID: '原始交易 ID',
+  TrxType: '交易類型',
+
+  // Request (Consultation)
+  R_RequestType_ID: '諮詢類型',
+  R_Category_ID: '分類',
+  R_Group_ID: '群組',
+  R_Status_ID: '狀態',
+  R_Resolution_ID: '處理結果',
+  R_RequestRelated_ID: '相關諮詢',
+  R_StandardResponse_ID: '標準回覆',
+  R_MailText_ID: '郵件範本',
+  Priority: '優先順序',
+  PriorityUser: '使用者重要性',
+  PriorityRule: '優先規則',
+  DueType: '到期類型',
+  ConfidentialType: '保密等級',
+  ConfidentialTypeEntry: '項目保密等級',
+  IsEscalated: '已升級',
+  IsInDispute: '爭議中',
+  TaskStatus: '任務狀態',
+  DateLastAction: '最後處理日',
+  DateNextAction: '下次處理日',
+  DateLastAlert: '最後提醒日',
+  CloseDate: '結案日期',
+  StartDate: '開始日期',
+  EndTime: '結束時間',
+  StartTime: '開始時間',
+  LastResult: '最後結果',
+  Result: '結果',
+  Record_ID: '記錄 ID',
+  AD_Table_ID: '表格',
+  AD_Role_ID: '角色',
+
+  // Production
+  IsCreated: '已建立',
+
+  // Project
+  C_Project_ID: '專案',
+  C_Campaign_ID: '行銷活動',
+  C_Activity_ID: '活動',
+  C_Charge_ID: '費用項目',
+  C_BankAccount_ID: '銀行帳戶',
+  C_ConversionType_ID: '匯率類型',
+  C_PaymentProcessor_ID: '付款處理器',
+
+  // Shipping
+  DropShip_BPartner_ID: '直運對象',
+  DropShip_Location_ID: '直運地址',
+  DropShip_User_ID: '直運聯絡人',
+  ReturnBPartner_ID: '退貨對象',
+  ReturnLocation_ID: '退貨地址',
+  ReturnUser_ID: '退貨聯絡人',
+  IsAlternateReturnAddress: '替代退貨地址',
+  ShipperAccount: '承運商帳號',
+
+  // Other flags
+  IsDiscountPrinted: '列印折扣',
+  IsPayScheduleValid: '付款計畫有效',
+  IsOverrideCurrencyRate: '覆蓋匯率',
+  IsPriviledgedRate: '特殊匯率',
+  CurrencyRate: '匯率',
+
+  // Misc
+  A_Name: '帳戶名',
+  A_Street: '帳戶地址',
+  A_City: '帳戶城市',
+  A_State: '帳戶州/省',
+  A_Zip: '帳戶郵遞區號',
+  A_Country: '帳戶國家',
+  A_EMail: '帳戶 Email',
+  A_Ident_DL: '駕照號碼',
+  A_Ident_SSN: '身分證號',
+  A_Asset_ID: '資產',
+  FOB: '交貨條件',
+  Insurance: '保險',
+  PromotionCode: '促銷代碼',
+  Link_Order_ID: '關聯訂單',
+  QuotationOrder_ID: '報價單',
+  C_OrderSource_ID: '訂單來源',
+  M_RMA_ID: '退貨授權',
+  C_InvoiceRequest_ID: '發票請求',
+  C_CashPlanLine_ID: '現金計畫',
+  C_POSTenderType_ID: 'POS 付款方式',
+  M_FixChangeNotice_ID: '修復通知',
+  User1_ID: '使用者欄位 1',
+  User2_ID: '使用者欄位 2',
+}
+
+/**
+ * Get Chinese label for a column name. Falls back to AD_Field.Name if no mapping exists.
+ */
+export function getFieldLabel(columnName: string, fallback: string): string {
+  return labels[columnName] || fallback
+}

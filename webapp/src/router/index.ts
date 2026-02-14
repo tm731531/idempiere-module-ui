@@ -80,6 +80,12 @@ const router = createRouter({
       ],
     },
     {
+      path: '/admin/reference-data',
+      name: 'reference-data',
+      component: () => import('@/views/admin/ReferenceDataView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/field-config',
       name: 'field-config',
       component: () => import('@/views/admin/FieldConfigView.vue'),

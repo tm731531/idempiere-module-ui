@@ -6,8 +6,12 @@ import { apiClient } from '@/api/client'
 vi.mock('@/api/client', () => ({
   apiClient: {
     get: vi.fn(),
+    post: vi.fn(),
     defaults: { headers: { common: {} } },
   },
+}))
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ context: { organizationId: 1 } }),
 }))
 
 describe('SearchSelector', () => {
@@ -45,7 +49,7 @@ describe('SearchSelector', () => {
     expect(w.find('input[type="text"]').exists()).toBe(true)
   })
 
-  it('shows quick-create button when enabled', async () => {
+  it('shows inline-create toggle when quickCreate enabled', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { 'row-count': 100 } })
 
     const w = mount(SearchSelector, {
@@ -55,6 +59,41 @@ describe('SearchSelector', () => {
     await new Promise(r => setTimeout(r, 50))
     await w.vm.$nextTick()
 
-    expect(w.find('.quick-create-btn').exists()).toBe(true)
+    expect(w.find('.inline-create-toggle').exists()).toBe(true)
+  })
+
+  it('includes IsActive filter in count query', async () => {
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({ data: { 'row-count': 3 } })
+      .mockResolvedValueOnce({ data: { records: [] } })
+
+    mount(SearchSelector, {
+      props: { modelValue: null, tableName: 'C_BPartner', displayField: 'Name', searchField: 'Name' },
+    })
+
+    await new Promise(r => setTimeout(r, 50))
+
+    const countCall = vi.mocked(apiClient.get).mock.calls[0]!
+    expect(countCall[1]?.params?.['$filter']).toContain('IsActive eq true')
+  })
+
+  it('combines IsActive with custom filter', async () => {
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({ data: { 'row-count': 3 } })
+      .mockResolvedValueOnce({ data: { records: [] } })
+
+    const w = mount(SearchSelector, {
+      props: { modelValue: null, tableName: 'C_BPartner', displayField: 'Name', searchField: 'Name', filter: 'IsCustomer eq true' },
+    })
+
+    await new Promise(r => setTimeout(r, 50))
+    await w.vm.$nextTick()
+
+    // Check the loadAllOptions call (second call) which also uses buildFilter
+    const calls = vi.mocked(apiClient.get).mock.calls
+    const hasIsActive = calls.some(c => c[1]?.params?.['$filter']?.includes('IsActive eq true'))
+    const hasCustomFilter = calls.some(c => c[1]?.params?.['$filter']?.includes('IsCustomer eq true'))
+    expect(hasIsActive).toBe(true)
+    expect(hasCustomFilter).toBe(true)
   })
 })

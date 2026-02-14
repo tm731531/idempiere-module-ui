@@ -84,7 +84,7 @@ function switchTab(tab: TabKey) {
 function getCustomerName(r: any): string {
   const bp = r.C_BPartner_ID
   if (bp && typeof bp === 'object') {
-    return bp.identifier || bp.name || '未指定客戶'
+    return bp.Name || bp.identifier || '未指定客戶'
   }
   if (typeof bp === 'number' && bp > 0) {
     return `客戶 #${bp}`

@@ -3,7 +3,7 @@ import { apiClient } from '@/api/client'
 
 const ALL_BUSINESS_PAGES = [
   'customer', 'appointment', 'consultation', 'order', 'treatment',
-  'payment', 'shipment', 'calendar',
+  'payment', 'shipment', 'product', 'calendar',
 ]
 
 const allowedPages = ref<string[]>([...ALL_BUSINESS_PAGES])

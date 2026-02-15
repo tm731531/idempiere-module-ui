@@ -138,6 +138,52 @@ export async function lookupEachUomId(): Promise<number> {
   return id
 }
 
+/**
+ * Lookup default Tax Category (first active, prefer 'Standard').
+ */
+export async function lookupDefaultTaxCategoryId(): Promise<number> {
+  if (cache['C_TaxCategory_Default'] !== undefined) return cache['C_TaxCategory_Default']
+
+  const resp = await apiClient.get('/api/v1/models/C_TaxCategory', {
+    params: {
+      '$filter': 'IsActive eq true',
+      '$select': 'C_TaxCategory_ID,Name',
+      '$orderby': 'Name',
+      '$top': '50',
+    },
+  })
+
+  const records = resp.data.records || []
+  // Prefer 'Standard', fallback to first
+  const standard = records.find((r: any) => r.Name === 'Standard')
+  const id = standard?.id || records[0]?.id || 0
+  cache['C_TaxCategory_Default'] = id
+  return id
+}
+
+/**
+ * Lookup default Product Category (first active, prefer 'Standard').
+ */
+export async function lookupDefaultProductCategoryId(): Promise<number> {
+  if (cache['M_Product_Category_Default'] !== undefined) return cache['M_Product_Category_Default']
+
+  const resp = await apiClient.get('/api/v1/models/M_Product_Category', {
+    params: {
+      '$filter': 'IsActive eq true',
+      '$select': 'M_Product_Category_ID,Name',
+      '$orderby': 'Name',
+      '$top': '50',
+    },
+  })
+
+  const records = resp.data.records || []
+  // Prefer 'Standard', fallback to first
+  const standard = records.find((r: any) => r.Name === 'Standard')
+  const id = standard?.id || records[0]?.id || 0
+  cache['M_Product_Category_Default'] = id
+  return id
+}
+
 // ========== Purchase Order Lookups ==========
 
 /**

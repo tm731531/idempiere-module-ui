@@ -51,6 +51,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentForm } from '@/composables/useDocumentForm'
 import { apiClient } from '@/api/client'
 import { getProduct } from '@/api/product'
+import { lookupEachUomId, lookupDefaultTaxCategoryId, lookupDefaultProductCategoryId } from '@/api/lookup'
 import DynamicForm from '@/components/DynamicForm.vue'
 
 const router = useRouter()
@@ -88,6 +89,8 @@ const {
     'M_PartType_ID', 'Classification', 'VersionNo', 'SKU',
     'SalesRep_ID', 'CustomsTariffNumber',
     'LowLevel', 'M_AttributeSetInstance_ID',
+    // Default to false, hide from form
+    'IsSummary', 'IsInvoicePrintDetails', 'IsPickListPrintDetails', 'IsWebStoreFeatured',
   ],
 })
 
@@ -102,6 +105,10 @@ async function handleCreate() {
   try {
     const payload = getFormPayload()
     payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+    // Auto-fill Value (Search Key) from Name if not provided
+    if (!payload.Value && payload.Name) {
+      payload.Value = payload.Name
+    }
     const resp = await apiClient.post('/api/v1/models/M_Product', payload)
     router.replace({ name: 'product-detail', params: { id: resp.data.id } })
   } catch (e: unknown) {
@@ -139,6 +146,25 @@ function goBack() {
 
 onMounted(async () => {
   await load()
+
+  // Apply defaults for create mode (dynamically queried, never hardcoded)
+  if (isCreate.value) {
+    const [uomId, taxCatId, prodCatId] = await Promise.all([
+      lookupEachUomId(),
+      lookupDefaultTaxCategoryId(),
+      lookupDefaultProductCategoryId(),
+    ])
+    formData.value = {
+      ...formData.value,
+      C_UOM_ID: formData.value.C_UOM_ID || uomId,
+      C_TaxCategory_ID: formData.value.C_TaxCategory_ID || taxCatId,
+      M_Product_Category_ID: formData.value.M_Product_Category_ID || prodCatId,
+      IsSummary: formData.value.IsSummary ?? false,
+      IsInvoicePrintDetails: formData.value.IsInvoicePrintDetails ?? false,
+      IsPickListPrintDetails: formData.value.IsPickListPrintDetails ?? false,
+      IsWebStoreFeatured: formData.value.IsWebStoreFeatured ?? false,
+    }
+  }
 })
 </script>
 

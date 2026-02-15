@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   quickCreate?: boolean
   quickCreateDefaults?: Record<string, any>
   disabled?: boolean
+  initialLabel?: string
 }>(), {
   quickCreate: false,
   disabled: false,
@@ -176,6 +177,11 @@ async function handleQuickCreate(): Promise<void> {
 
 async function resolveCurrentLabel(): Promise<void> {
   if (props.modelValue === null || props.modelValue === undefined) return
+  // Use initialLabel from record load if available (avoids extra API call)
+  if (props.initialLabel) {
+    searchText.value = props.initialLabel
+    return
+  }
   try {
     const resp = await apiClient.get(`/api/v1/models/${props.tableName}/${props.modelValue}`, {
       params: { '$select': `${idColumn.value},${props.displayField}` },
@@ -352,8 +358,11 @@ watch(() => props.modelValue, (newVal) => {
 }
 
 .selector-input:disabled {
-  opacity: 0.6;
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
   cursor: not-allowed;
+  opacity: 1;
 }
 
 .inline-create-toggle {

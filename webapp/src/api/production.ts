@@ -5,7 +5,7 @@ import { toIdempiereDateTime } from './utils'
 export interface ProductionData {
   M_Product_ID: number
   ProductionQty: number
-  MovementDate: Date
+  MovementDate: Date | string
   AD_Org_ID: number
   M_Locator_ID?: number
   Description?: string
@@ -37,11 +37,20 @@ export async function getProduction(id: number): Promise<any> {
 }
 
 export async function createProduction(data: ProductionData): Promise<any> {
+  // MovementDate may be a Date object, an ISO string from DynamicForm, or missing
+  let movementDate: string
+  if (data.MovementDate instanceof Date) {
+    movementDate = toIdempiereDateTime(data.MovementDate)
+  } else if (data.MovementDate) {
+    movementDate = data.MovementDate
+  } else {
+    movementDate = toIdempiereDateTime(new Date())
+  }
   const resp = await apiClient.post('/api/v1/models/M_Production', {
     AD_Org_ID: data.AD_Org_ID,
     M_Product_ID: data.M_Product_ID,
     ProductionQty: data.ProductionQty,
-    MovementDate: toIdempiereDateTime(data.MovementDate),
+    MovementDate: movementDate,
     M_Locator_ID: data.M_Locator_ID || undefined,
     Description: data.Description || '',
   })

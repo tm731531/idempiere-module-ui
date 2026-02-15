@@ -17,6 +17,7 @@ const SYSTEM_COLUMNS = new Set([
   'ProcessedOn', 'IsApproved', 'IsGenerated', 'IsSelfService',
   'IsSelected', 'IsTransferred', 'IsInvoiced', 'IsDelivered',
   'IsCreditApproved', 'IsPrinted', 'SendEMail', 'DocumentNo',
+  'IsCreated',
 ])
 
 export function useDocumentForm(options: DocumentFormOptions) {
@@ -25,6 +26,8 @@ export function useDocumentForm(options: DocumentFormOptions) {
 
   const formData = ref<Record<string, any>>({})
   const recordData = ref<Record<string, any> | null>(null)
+  // FK identifier labels extracted from record load — used by SearchSelector for initial display
+  const fkLabels = ref<Record<string, string>>({})
   const pageLoading = ref(false)
   const pageError = ref('')
   const docStatus = ref('DR')
@@ -91,14 +94,25 @@ export function useDocumentForm(options: DocumentFormOptions) {
   // Populate form from existing record
   function populateFromRecord(record: Record<string, any>) {
     const data: Record<string, any> = {}
+    const labels: Record<string, string> = {}
     for (const def of fieldDefs.value) {
       const cn = def.column.columnName
       const rawVal = record[cn]
       // iDempiere REST returns FK and List fields as {id, identifier} objects
       if (rawVal !== null && rawVal !== undefined && typeof rawVal === 'object' && 'id' in rawVal) {
         data[cn] = rawVal.id
+        if (rawVal.identifier) labels[cn] = rawVal.identifier
       } else {
         data[cn] = rawVal ?? null
+      }
+    }
+    fkLabels.value = labels
+    // Also include hidden boolean/context columns (e.g. IsSOTrx) that AD_Val_Rule may reference.
+    // These are not in fieldDefs (IsDisplayed=false) but are needed for validation rule context.
+    for (const [key, rawVal] of Object.entries(record)) {
+      if (key in data) continue  // already handled above
+      if (typeof rawVal === 'boolean') {
+        data[key] = rawVal
       }
     }
     // Extract DocStatus
@@ -180,6 +194,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
     metaError,
     formData,
     recordData,
+    fkLabels,
     docStatus,
     pageLoading,
     pageError,

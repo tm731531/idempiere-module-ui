@@ -109,20 +109,20 @@ describe('sqlWhereToODataFilter', () => {
     expect(result).toContain("DocBaseType eq 'SOO'")
   })
 
-  it('strips COALESCE wrapper', async () => {
+  it('strips COALESCE wrapper and converts <> to neq', async () => {
     const { sqlWhereToODataFilter } = await import('@/api/metadata')
     const result = sqlWhereToODataFilter("COALESCE(DocSubTypeSO,' ')<>'RM'", {})
-    expect(result).toContain("DocSubTypeSO ne 'RM'")
+    expect(result).toBe("DocSubTypeSO neq 'RM'")
   })
 
-  it('converts full C_DocTypeTarget validation rule', async () => {
+  it('converts full C_DocTypeTarget validation rule with neq', async () => {
     const { sqlWhereToODataFilter } = await import('@/api/metadata')
     const sql = "C_DocType.DocBaseType IN ('SOO','POO') AND C_DocType.IsSOTrx='@IsSOTrx@' AND COALESCE(C_DocType.DocSubTypeSO,' ')<>'RM' AND C_DocType.AD_Client_ID=@#AD_Client_ID@"
     const result = sqlWhereToODataFilter(sql, { IsSOTrx: true, AD_Client_ID: 11 })
     expect(result).toContain("DocBaseType eq 'SOO'")
     expect(result).toContain("DocBaseType eq 'POO'")
     expect(result).toContain('IsSOTrx eq true')
-    expect(result).toContain("DocSubTypeSO ne 'RM'")
+    expect(result).toContain("DocSubTypeSO neq 'RM'")
     expect(result).toContain('AD_Client_ID eq 11')
   })
 
@@ -159,5 +159,34 @@ describe('sqlWhereToODataFilter', () => {
     const { sqlWhereToODataFilter } = await import('@/api/metadata')
     const sql = "IsSOTrx='@IsSOTrx@'"
     expect(sqlWhereToODataFilter(sql, {})).toBeNull()
+  })
+
+  it('converts C_BPartner validation rule with literal Y/N', async () => {
+    const { sqlWhereToODataFilter } = await import('@/api/metadata')
+    const sql = "C_BPartner.IsActive='Y' AND C_BPartner.IsSummary='N'"
+    const result = sqlWhereToODataFilter(sql, {})
+    expect(result).toBe('IsActive eq true and IsSummary eq false')
+  })
+
+  it('resolves C_PaymentTerm_ID rule with boolean context tautology (SO)', async () => {
+    const { sqlWhereToODataFilter } = await import('@/api/metadata')
+    const sql = "C_PaymentTerm.PaymentTermUsage = 'B' OR (C_PaymentTerm.PaymentTermUsage = 'S' AND '@IsSOTrx@'='Y') OR (C_PaymentTerm.PaymentTermUsage = 'P' AND '@IsSOTrx@'='N')"
+    const result = sqlWhereToODataFilter(sql, { IsSOTrx: true })
+    expect(result).not.toBeNull()
+    expect(result).not.toContain("'Y'")
+    expect(result).not.toContain("'N'")
+    expect(result).toContain("PaymentTermUsage eq 'B'")
+    expect(result).toContain("PaymentTermUsage eq 'S'")
+  })
+
+  it('resolves C_PaymentTerm_ID rule with boolean context tautology (PO)', async () => {
+    const { sqlWhereToODataFilter } = await import('@/api/metadata')
+    const sql = "C_PaymentTerm.PaymentTermUsage = 'B' OR (C_PaymentTerm.PaymentTermUsage = 'S' AND '@IsSOTrx@'='Y') OR (C_PaymentTerm.PaymentTermUsage = 'P' AND '@IsSOTrx@'='N')"
+    const result = sqlWhereToODataFilter(sql, { IsSOTrx: false })
+    expect(result).not.toBeNull()
+    expect(result).not.toContain("'Y'")
+    expect(result).not.toContain("'N'")
+    expect(result).toContain("PaymentTermUsage eq 'B'")
+    expect(result).toContain("PaymentTermUsage eq 'P'")
   })
 })

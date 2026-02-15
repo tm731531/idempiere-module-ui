@@ -56,6 +56,7 @@ const allCards: ModuleCard[] = [
   { label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', businessOnly: true },
   { label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', businessOnly: true },
   { label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', businessOnly: true },
+  { label: '商品管理', desc: '管理商品與療程項目', route: '/product', pageKey: 'product', businessOnly: true },
   { label: '基礎資料', desc: '管理稅率、服務人員、儲位等設定', route: '/admin/reference-data', pageKey: null, businessOnly: true },
   { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, businessOnly: true },
   { label: 'Table/Column', desc: 'AD 資料字典管理', route: '/admin/tables', pageKey: null, systemOnly: true },

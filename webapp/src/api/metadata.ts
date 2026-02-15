@@ -329,6 +329,12 @@ export function sqlWhereToODataFilter(
     return `'${val}'`
   })
 
+  // 3b. Resolve boolean literal comparisons left by context variable substitution
+  // e.g. '@IsSOTrx@'='Y' with IsSOTrx=true → 'Y'='Y' (tautology) or 'N'='Y' (contradiction)
+  odata = odata.replace(/'([YN])'\s*=\s*'([YN])'/g, (_, left: string, right: string) =>
+    left === right ? '1=1' : '1=0',
+  )
+
   // 4. Convert IN('a','b') → (Column eq 'a' or Column eq 'b')
   odata = odata.replace(
     /(\w+)\s+IN\s*\(([^)]+)\)/gi,
@@ -338,8 +344,8 @@ export function sqlWhereToODataFilter(
     },
   )
 
-  // 5. Convert <> to ne
-  odata = odata.replace(/<>/g, ' ne ')
+  // 5. Convert <> to neq (iDempiere REST uses 'neq', NOT 'ne')
+  odata = odata.replace(/<>/g, ' neq ')
 
   // 6. Convert = to eq (but not in context of <= >= or already-processed 'eq')
   odata = odata.replace(/(?<![<>!])=(?!=)/g, ' eq ')
@@ -352,13 +358,34 @@ export function sqlWhereToODataFilter(
   // iDempiere SQL uses ='Y'/='N' but REST OData expects eq true/eq false
   odata = odata.replace(/\beq\s+'Y'/g, 'eq true')
   odata = odata.replace(/\beq\s+'N'/g, 'eq false')
-  odata = odata.replace(/\bne\s+'Y'/g, 'ne true')
-  odata = odata.replace(/\bne\s+'N'/g, 'ne false')
+  odata = odata.replace(/\bneq\s+'Y'/g, 'neq true')
+  odata = odata.replace(/\bneq\s+'N'/g, 'neq false')
 
-  // 9. Clean up whitespace
+  // 10. Simplify boolean tautologies (1 eq 1) and contradictions (1 eq 0)
+  // These arise from resolved context comparisons like '@IsSOTrx@'='Y' → '1 eq 1'
+  // Tautology in AND: drop the clause. Contradiction in AND: whole filter is null.
+  // Tautology in OR: whole group is always true. Contradiction in OR: drop the branch.
+  // For simplicity, handle the common AND-connected case and OR-connected case.
+  if (odata.includes('1 eq 0')) {
+    // Split by OR first, drop branches containing contradiction
+    const orParts = odata.split(/\bor\b/gi).map(p => p.trim())
+    const filtered = orParts.filter(p => !p.includes('1 eq 0'))
+    if (filtered.length === 0) return null
+    odata = filtered.join(' or ')
+  }
+  // Drop tautology clauses from AND chains
+  if (odata.includes('1 eq 1')) {
+    const parts = odata.split(/\band\b/gi).map(p => p.trim())
+    const filtered = parts.filter(p => !p.includes('1 eq 1'))
+    odata = filtered.length > 0 ? filtered.join(' and ') : parts[0]! // keep at least something
+  }
+  // Clean up parentheses around now-simplified expressions
+  odata = odata.replace(/\(\s*(\w+\s+eq\s+\S+)\s*\)/g, '$1')
+
+  // 11. Clean up whitespace
   odata = odata.replace(/\s+/g, ' ').trim()
 
-  return odata
+  return odata || null
 }
 
 // ========== Field & Column Fetching ==========

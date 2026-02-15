@@ -2,7 +2,7 @@
   <div class="order-form-page">
     <div class="form-header">
       <button class="back-btn" @click="goBack">返回</button>
-      <h2>{{ isCreate ? '新增訂單' : '訂單明細' }}</h2>
+      <h2>{{ headerTitle }}</h2>
     </div>
 
     <div v-if="pageLoading" class="loading-state">載入中...</div>
@@ -16,12 +16,35 @@
         <StatusBadge :status="docStatus" />
       </div>
 
+      <!-- IsSOTrx toggle (create mode) / badge (edit mode) -->
+      <div class="sotrx-section">
+        <label class="sotrx-label">訂單類型</label>
+        <div v-if="isCreate" class="sotrx-toggle">
+          <button
+            type="button"
+            :class="['sotrx-btn', { active: isSOTrx }]"
+            :disabled="switchingSOTrx"
+            @click="setIsSOTrx(true)"
+          >銷售訂單</button>
+          <button
+            type="button"
+            :class="['sotrx-btn', { active: !isSOTrx }]"
+            :disabled="switchingSOTrx"
+            @click="setIsSOTrx(false)"
+          >採購訂單</button>
+        </div>
+        <span v-else :class="['sotrx-badge', isSOTrx ? 'so' : 'po']">
+          {{ isSOTrx ? '銷售訂單' : '採購訂單' }}
+        </span>
+      </div>
+
       <!-- Dynamic form from AD metadata -->
       <DynamicForm
         :fieldDefs="visibleFieldDefs"
         :modelValue="formData"
         :disabled="readOnly"
         :columnFilters="columnFilters"
+        :fkLabels="fkLabels"
         @update:modelValue="formData = $event"
       />
 
@@ -75,7 +98,26 @@
           <div v-for="line in lines" :key="line.id">
             <!-- Editing this line -->
             <div v-if="editingLineId === line.id" class="line-edit-form">
-              <div class="line-product">{{ getProductName(line) }}</div>
+              <div class="form-group">
+                <label>產品</label>
+                <select
+                  v-if="!productsLoading && priceListProducts.length > 0"
+                  class="form-input"
+                  :value="editLine.M_Product_ID ?? ''"
+                  @change="onEditProductSelect"
+                >
+                  <option value="">-- 請選擇產品 --</option>
+                  <option
+                    v-for="p in priceListProducts"
+                    :key="p.productId"
+                    :value="p.productId"
+                  >
+                    {{ p.productName }} (${{ p.priceStd }})
+                  </option>
+                </select>
+                <div v-else-if="productsLoading" class="loading-state">載入產品中...</div>
+                <div v-else class="line-product">{{ getProductName(line) }}</div>
+              </div>
               <div class="inline-fields">
                 <div class="form-group">
                   <label>數量</label>
@@ -113,7 +155,7 @@
                 <button type="button" class="cancel-btn" @click="cancelEditLine">取消</button>
                 <button
                   type="button"
-                  :disabled="savingLine"
+                  :disabled="savingLine || !editLine.M_Product_ID"
                   @click="handleUpdateLine"
                 >
                   {{ savingLine ? '儲存中...' : '儲存' }}
@@ -266,6 +308,8 @@ import {
   lookupPriceListInfo,
   lookupOrgWarehouse,
   lookupDefaultSODocTypeId,
+  lookupSalesPriceListId,
+  lookupPurchasePriceListId,
   lookupProductsOnPriceList,
   lookupTaxes,
   createTax,
@@ -302,6 +346,7 @@ const order = ref<any>(null)
 const {
   visibleFieldDefs,
   formData,
+  fkLabels,
   docStatus,
   pageLoading,
   pageError,
@@ -320,12 +365,80 @@ const {
   },
 })
 
-// View-specific column filters (AD_Val_Rule is auto-applied by DynamicForm)
-const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
+// View-specific column filters — reactive based on IsSOTrx
+const columnFilters = computed(() => ({
+  C_BPartner_ID: isSOTrx.value ? 'IsCustomer eq true' : 'IsVendor eq true',
+}))
 
 // ========== Callouts (mirrors iDempiere CalloutOrder) ==========
 
 const isSOTrx = computed(() => formData.value.IsSOTrx ?? true)
+const switchingSOTrx = ref(false)
+
+const headerTitle = computed(() => {
+  if (!isCreate.value) return '訂單明細'
+  return isSOTrx.value ? '新增銷售訂單' : '新增採購訂單'
+})
+
+/** Toggle IsSOTrx with cascade: DocType, PriceList, PaymentTerm, etc. */
+async function setIsSOTrx(value: boolean) {
+  if (formData.value.IsSOTrx === value) return
+  switchingSOTrx.value = true
+  try {
+    const updates: Record<string, any> = { IsSOTrx: value }
+    const clientId = authStore.context?.clientId ?? 0
+
+    // 1. Reset DocType (SOO ↔ POO)
+    const docTypeId = await lookupDefaultSODocTypeId(value, clientId)
+    if (docTypeId) {
+      updates.C_DocTypeTarget_ID = docTypeId
+      // Inline apply docType callout defaults
+      try {
+        const info = await lookupDocTypeInfo(docTypeId)
+        const sub = info.docSubTypeSO || ''
+        if (sub === 'WP') {
+          updates.DeliveryRule = 'F'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'B'  // B=Cash
+        } else if (sub === 'PR') {
+          updates.DeliveryRule = 'R'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'P'  // P=On Credit
+        } else if (sub === 'WI') {
+          updates.InvoiceRule = 'I'; updates.PaymentRule = 'P'; updates.DeliveryRule = 'A'  // P=On Credit
+        } else {
+          updates.DeliveryRule = 'A'; updates.InvoiceRule = 'D'; updates.PaymentRule = 'P'  // P=On Credit
+        }
+      } catch { /* use form defaults */ }
+    }
+
+    // 2. If BP is selected → re-apply SO/PO corresponding fields
+    const bpId = formData.value.C_BPartner_ID
+    if (bpId) {
+      try {
+        const bpInfo = await lookupBPartnerOrderInfo(bpId)
+        const pl = value ? bpInfo.priceListId : bpInfo.poPriceListId
+        if (pl) updates.M_PriceList_ID = pl
+        const pt = value ? bpInfo.paymentTermId : bpInfo.poPaymentTermId
+        if (pt) updates.C_PaymentTerm_ID = pt
+        const pr = value ? bpInfo.paymentRule : bpInfo.paymentRulePO
+        if (pr) updates.PaymentRule = pr
+      } catch { /* use defaults */ }
+    }
+
+    // 3. Fallback price list if not set by BP
+    if (!updates.M_PriceList_ID) {
+      try {
+        updates.M_PriceList_ID = value
+          ? await lookupSalesPriceListId()
+          : await lookupPurchasePriceListId()
+      } catch { /* skip */ }
+    }
+
+    // 4. SalesRep — clear for PO (server falls back to current user)
+    if (!value) updates.SalesRep_ID = null
+
+    formData.value = { ...formData.value, ...updates }
+  } finally {
+    switchingSOTrx.value = false
+  }
+}
 
 // --- CalloutOrder.bPartner: C_BPartner_ID changes ---
 watch(() => formData.value.C_BPartner_ID, async (newBpId) => {
@@ -377,30 +490,33 @@ watch(() => formData.value.C_DocTypeTarget_ID, async (newDocTypeId) => {
       // POS Order
       updates.DeliveryRule = 'F'   // Force
       updates.InvoiceRule = 'I'    // Immediate
-      updates.PaymentRule = 'C'    // Cash
+      updates.PaymentRule = 'B'    // B=Cash
     } else if (sub === 'PR') {
       // Prepay Order
       updates.DeliveryRule = 'R'   // After Payment
       updates.InvoiceRule = 'I'    // Immediate
-      updates.PaymentRule = 'B'    // On Credit
+      updates.PaymentRule = 'P'    // P=On Credit
     } else if (sub === 'WI') {
       // On Credit Order
       updates.InvoiceRule = 'I'    // Immediate
-      updates.PaymentRule = 'B'    // On Credit
+      updates.PaymentRule = 'P'    // P=On Credit
       updates.DeliveryRule = 'A'   // Availability
     } else {
       // Standard / Warehouse / blank
       updates.DeliveryRule = 'A'   // Availability
       updates.InvoiceRule = 'D'    // After Delivery
-      updates.PaymentRule = 'B'    // On Credit
+      updates.PaymentRule = 'P'    // P=On Credit
     }
     // Re-apply BP overrides if BPartner is set and not POS/Prepay
     const bpId = formData.value.C_BPartner_ID
     if (bpId && sub !== 'WP' && sub !== 'PR') {
       try {
         const bpInfo = await lookupBPartnerOrderInfo(bpId)
-        if (bpInfo.paymentRule) updates.PaymentRule = bpInfo.paymentRule
-        if (bpInfo.paymentTermId) updates.C_PaymentTerm_ID = bpInfo.paymentTermId
+        const soTrx = updates.IsSOTrx ?? isSOTrx.value
+        const pr = soTrx ? bpInfo.paymentRule : bpInfo.paymentRulePO
+        if (pr) updates.PaymentRule = pr
+        const pt = soTrx ? bpInfo.paymentTermId : bpInfo.poPaymentTermId
+        if (pt) updates.C_PaymentTerm_ID = pt
         if (bpInfo.invoiceRule) updates.InvoiceRule = bpInfo.invoiceRule
         if (bpInfo.deliveryRule) updates.DeliveryRule = bpInfo.deliveryRule
         if (bpInfo.freightCostRule) updates.FreightCostRule = bpInfo.freightCostRule
@@ -572,19 +688,31 @@ async function loadLines() {
 /** Reload lines + order header (totals) after line changes */
 async function reloadOrderAndLines() {
   if (!orderId.value) return
-  await loadLines()
-  // Use cache-busting timestamp to prevent browser HTTP caching
-  const resp = await apiClient.get(`/api/v1/models/C_Order/${orderId.value}`, {
-    params: { '$expand': 'C_BPartner_ID,C_DocType_ID', '_t': Date.now() },
-  })
-  order.value = resp.data
+  // Fetch lines and header in parallel — both use cache-busting timestamps
+  const [, headerResp] = await Promise.all([
+    loadLines(),
+    apiClient.get(`/api/v1/models/C_Order/${orderId.value}`, {
+      params: { '$expand': 'C_BPartner_ID,C_DocType_ID', '_t': Date.now() },
+    }),
+  ])
+  order.value = headerResp.data
+  // Sync server-calculated totals back to formData so DynamicForm fields update
+  const totals = headerResp.data
+  formData.value = {
+    ...formData.value,
+    TotalLines: totals.TotalLines ?? 0,
+    GrandTotal: totals.GrandTotal ?? 0,
+  }
 }
 
 async function handleCreateOrder() {
   const payload = getFormPayload()
 
+  // Inject IsSOTrx (hidden field, not in getFormPayload)
+  payload.IsSOTrx = formData.value.IsSOTrx ?? true
+
   if (!payload.C_BPartner_ID) {
-    errorMsg.value = '請選擇客戶'
+    errorMsg.value = isSOTrx.value ? '請選擇客戶' : '請選擇供應商'
     return
   }
   if (!payload.M_Warehouse_ID) {
@@ -663,6 +791,7 @@ function cancelAddLine() {
 const editingLineId = ref<number | null>(null)
 const savingLine = ref(false)
 const editLine = reactive({
+  M_Product_ID: null as number | null,
   QtyOrdered: 1,
   PriceEntered: 0,
   C_Tax_ID: null as number | null,
@@ -670,10 +799,26 @@ const editLine = reactive({
 
 function startEditLine(line: any) {
   editingLineId.value = line.id
+  const prodVal = line.M_Product_ID
+  editLine.M_Product_ID = prodVal && typeof prodVal === 'object' ? prodVal.id : (prodVal ?? null)
   editLine.QtyOrdered = line.QtyOrdered ?? 1
   editLine.PriceEntered = line.PriceEntered ?? 0
   const taxVal = line.C_Tax_ID
   editLine.C_Tax_ID = taxVal && typeof taxVal === 'object' ? taxVal.id : (taxVal ?? null)
+}
+
+function onEditProductSelect(event: Event) {
+  const productId = parseInt((event.target as HTMLSelectElement).value, 10)
+  if (!productId) {
+    editLine.M_Product_ID = null
+    return
+  }
+  editLine.M_Product_ID = productId
+  // Auto-fill price from price list
+  const product = priceListProducts.value.find(p => p.productId === productId)
+  if (product) {
+    editLine.PriceEntered = product.priceStd
+  }
 }
 
 function cancelEditLine() {
@@ -685,13 +830,19 @@ async function handleUpdateLine() {
   savingLine.value = true
   errorMsg.value = ''
   try {
-    await updateOrderLine(editingLineId.value, {
+    const payload: Record<string, any> = {
       QtyOrdered: editLine.QtyOrdered,
       QtyEntered: editLine.QtyOrdered,
       PriceEntered: editLine.PriceEntered,
       PriceActual: editLine.PriceEntered,
       C_Tax_ID: editLine.C_Tax_ID,
-    })
+    }
+    if (editLine.M_Product_ID) {
+      payload.M_Product_ID = editLine.M_Product_ID
+      const selectedProduct = priceListProducts.value.find(p => p.productId === editLine.M_Product_ID)
+      if (selectedProduct?.uomId) payload.C_UOM_ID = selectedProduct.uomId
+    }
+    await updateOrderLine(editingLineId.value, payload)
     editingLineId.value = null
     await reloadOrderAndLines()
   } catch (e: unknown) {
@@ -755,13 +906,13 @@ async function applyInitialCallouts() {
         const sub = info.docSubTypeSO || ''
         updates.IsSOTrx = info.isSOTrx
         if (sub === 'WP') {
-          updates.DeliveryRule = 'F'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'C'
+          updates.DeliveryRule = 'F'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'B'  // B=Cash
         } else if (sub === 'PR') {
-          updates.DeliveryRule = 'R'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'B'
+          updates.DeliveryRule = 'R'; updates.InvoiceRule = 'I'; updates.PaymentRule = 'P'  // P=On Credit
         } else if (sub === 'WI') {
-          updates.InvoiceRule = 'I'; updates.PaymentRule = 'B'; updates.DeliveryRule = 'A'
+          updates.InvoiceRule = 'I'; updates.PaymentRule = 'P'; updates.DeliveryRule = 'A'  // P=On Credit
         } else {
-          updates.DeliveryRule = 'A'; updates.InvoiceRule = 'D'; updates.PaymentRule = 'B'
+          updates.DeliveryRule = 'A'; updates.InvoiceRule = 'D'; updates.PaymentRule = 'P'  // P=On Credit
         }
       } catch { /* use form defaults */ }
     }
@@ -1106,6 +1257,68 @@ onMounted(async () => {
   border-radius: 8px;
   cursor: pointer;
   min-height: var(--min-touch);
+}
+
+.sotrx-section {
+  margin-bottom: 1rem;
+}
+
+.sotrx-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.375rem;
+}
+
+.sotrx-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sotrx-btn {
+  flex: 1;
+  padding: 0.625rem;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 36px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sotrx-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.sotrx-btn:not(.active):hover {
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.sotrx-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sotrx-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sotrx-badge.so {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.sotrx-badge.po {
+  background: #fefce8;
+  color: #ca8a04;
 }
 
 .selector-row {

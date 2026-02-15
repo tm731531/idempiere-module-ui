@@ -2,11 +2,13 @@ import { apiClient } from './client'
 import {
   lookupDocTypeId,
   lookupSalesPriceListId,
+  lookupPurchasePriceListId,
   lookupDefaultPaymentTermId,
   lookupDefaultTaxId,
   lookupCurrentUserId,
   lookupBPartnerLocationId,
   lookupSOCurrencyId,
+  lookupPOCurrencyId,
   lookupEachUomId,
   lookupPriceListInfo,
 } from './lookup'
@@ -48,7 +50,7 @@ export interface OrderLineData {
 
 export async function listOrders(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'C_Order_ID,DocumentNo,DocStatus,C_BPartner_ID,GrandTotal,DateOrdered',
+    '$select': 'C_Order_ID,DocumentNo,DocStatus,C_BPartner_ID,GrandTotal,DateOrdered,IsSOTrx',
     '$expand': 'C_BPartner_ID',
     '$orderby': 'DateOrdered desc',
     '$top': '100',
@@ -75,10 +77,12 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     throw new Error('請先選擇倉庫（M_Warehouse_ID 為必填）')
   }
 
+  const isSOTrx = data.IsSOTrx ?? true
+
   // Only lookup values not already provided by the form (callout may have pre-filled them)
   const [docTypeId, priceListId, paymentTermId, userId, bpLocationId] = await Promise.all([
-    data.C_DocTypeTarget_ID ? Promise.resolve(data.C_DocTypeTarget_ID) : lookupDocTypeId('SOO'),
-    data.M_PriceList_ID ? Promise.resolve(data.M_PriceList_ID) : lookupSalesPriceListId(),
+    data.C_DocTypeTarget_ID ? Promise.resolve(data.C_DocTypeTarget_ID) : lookupDocTypeId(isSOTrx ? 'SOO' : 'POO'),
+    data.M_PriceList_ID ? Promise.resolve(data.M_PriceList_ID) : (isSOTrx ? lookupSalesPriceListId() : lookupPurchasePriceListId()),
     data.C_PaymentTerm_ID ? Promise.resolve(data.C_PaymentTerm_ID) : lookupDefaultPaymentTermId(),
     data.SalesRep_ID ? Promise.resolve(data.SalesRep_ID) : lookupCurrentUserId(data.username || ''),
     data.C_BPartner_Location_ID ? Promise.resolve(data.C_BPartner_Location_ID) : lookupBPartnerLocationId(data.C_BPartner_ID),
@@ -91,7 +95,7 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     currencyId = plInfo.currencyId
   } catch { /* fallback below */ }
   if (!currencyId) {
-    currencyId = await lookupSOCurrencyId()
+    currencyId = isSOTrx ? await lookupSOCurrencyId() : await lookupPOCurrencyId()
   }
 
   const now = toIdempiereDateTime(new Date())
@@ -110,12 +114,12 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     DateAcct: data.DateAcct || now,
     DatePromised: data.DatePromised || now,
     SalesRep_ID: userId,
-    IsSOTrx: data.IsSOTrx ?? true,
+    IsSOTrx: isSOTrx,
     DeliveryRule: data.DeliveryRule || 'F',
     DeliveryViaRule: data.DeliveryViaRule || 'P',
     FreightCostRule: data.FreightCostRule || 'I',
     InvoiceRule: data.InvoiceRule || 'I',
-    PaymentRule: data.PaymentRule || 'B',
+    PaymentRule: data.PaymentRule || 'P',  // P=On Credit (default)
     PriorityRule: data.PriorityRule || '5',
     Description: data.Description || '',
   })
@@ -128,6 +132,7 @@ export async function getOrderLines(orderId: number): Promise<any[]> {
       '$filter': `C_Order_ID eq ${orderId}`,
       '$expand': 'M_Product_ID',
       '$orderby': 'Line',
+      '_t': Date.now(),
     },
   })
   return resp.data.records || []

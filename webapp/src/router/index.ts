@@ -71,6 +71,15 @@ const router = createRouter({
       ],
     },
     {
+      path: '/product',
+      meta: { requiresAuth: true, pageKey: 'product' },
+      children: [
+        { path: '', name: 'product-list', component: () => import('@/views/product/ProductListView.vue') },
+        { path: 'new', name: 'product-new', component: () => import('@/views/product/ProductFormView.vue'), meta: { requiresAuth: true, pageKey: 'product' } },
+        { path: ':id', name: 'product-detail', component: () => import('@/views/product/ProductFormView.vue'), meta: { requiresAuth: true, pageKey: 'product' } },
+      ],
+    },
+    {
       path: '/shipment',
       meta: { requiresAuth: true, pageKey: 'shipment' },
       children: [

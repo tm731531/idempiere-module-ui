@@ -11,6 +11,7 @@ const props = defineProps<{
   disabled?: boolean
   columnFilters?: Record<string, string>
   highlightColumns?: string[]
+  fkLabels?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +34,8 @@ const resolvedFilters = computed(() => {
     ctx.AD_Org_ID = authStore.context.organizationId ?? 0
     ctx.M_Warehouse_ID = authStore.context.warehouseId ?? 0
   }
+  // Provide well-known context defaults for hidden columns that AD_Val_Rule may reference
+  if (ctx.IsSOTrx === undefined) ctx.IsSOTrx = true
 
   // Auto-apply AD_Val_Rule for fields that have validationRuleSql
   for (const def of props.fieldDefs) {
@@ -88,6 +91,7 @@ function onFieldUpdate(columnName: string, value: any) {
             :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
             :referenceTableName="def.referenceTableName"
             :filter="resolvedFilters[def.column.columnName]"
+            :initialLabel="fkLabels?.[def.column.columnName]"
             @update:model-value="onFieldUpdate(def.column.columnName, $event)"
           />
         </div>
@@ -118,6 +122,7 @@ function onFieldUpdate(columnName: string, value: any) {
             :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
             :referenceTableName="def.referenceTableName"
             :filter="resolvedFilters[def.column.columnName]"
+            :initialLabel="fkLabels?.[def.column.columnName]"
             @update:model-value="onFieldUpdate(def.column.columnName, $event)"
           />
         </div>

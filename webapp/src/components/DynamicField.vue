@@ -12,6 +12,7 @@ const props = defineProps<{
   disabled: boolean
   referenceTableName?: string
   filter?: string
+  initialLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -26,8 +27,8 @@ const isHidden = computed(() =>
 
 // For FK reference fields (18/19/30), resolve the table name
 const resolvedTableName = computed(() => {
-  if (props.column.referenceId === 19) {
-    // TableDirect: derive from column name
+  if (props.column.referenceId === 19 || props.column.referenceId === 31) {
+    // TableDirect (19) / Locator (31): derive from column name
     const cn = props.column.columnName
     return cn.endsWith('_ID') ? cn.slice(0, -3) : cn
   }
@@ -46,7 +47,7 @@ const resolvedTableName = computed(() => {
 const displayFieldName = ref('')
 
 const isFkField = computed(() =>
-  [18, 19, 30].includes(props.column.referenceId) && resolvedTableName.value
+  [18, 19, 30, 31].includes(props.column.referenceId) && resolvedTableName.value
 )
 
 // QuickCreate: determined dynamically from AD metadata
@@ -115,6 +116,7 @@ onMounted(async () => {
       :disabled="disabled"
       :quickCreate="enableQuickCreate"
       :quickCreateDefaults="quickCreateDefaults"
+      :initialLabel="initialLabel"
       @update:modelValue="emit('update:modelValue', $event)"
     />
 
@@ -251,7 +253,14 @@ onMounted(async () => {
 .field-wrapper input:disabled,
 .field-wrapper textarea:disabled,
 .field-wrapper select:disabled {
-  opacity: 0.6;
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
   cursor: not-allowed;
+  opacity: 1;
+}
+
+.field-wrapper input[type="checkbox"]:disabled {
+  opacity: 0.5;
 }
 </style>

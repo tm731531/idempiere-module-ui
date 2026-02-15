@@ -29,6 +29,9 @@
           <div class="card-customer">{{ getCustomerName(o) }}</div>
         </div>
         <div class="card-meta">
+          <span :class="['sotrx-chip', o.IsSOTrx !== false ? 'so' : 'po']">
+            {{ o.IsSOTrx !== false ? '銷售' : '採購' }}
+          </span>
           <StatusBadge :status="getDocStatus(o)" />
           <span class="card-total">${{ formatAmount(o.GrandTotal) }}</span>
           <span class="card-date">{{ formatDate(o.DateOrdered) }}</span>
@@ -61,9 +64,9 @@ const orders = ref<any[]>([])
 const loading = ref(false)
 
 function getFilterForTab(tab: TabKey): string | undefined {
-  if (tab === 'draft') return "DocStatus eq 'DR' and IsSOTrx eq true"
-  if (tab === 'completed') return "DocStatus eq 'CO' and IsSOTrx eq true"
-  return 'IsSOTrx eq true'
+  if (tab === 'draft') return "DocStatus eq 'DR'"
+  if (tab === 'completed') return "DocStatus eq 'CO'"
+  return undefined
 }
 
 async function loadOrders() {
@@ -85,14 +88,14 @@ function switchTab(tab: TabKey) {
 
 function getCustomerName(o: any): string {
   const bp = o.C_BPartner_ID
+  const fallback = o.IsSOTrx !== false ? '未指定客戶' : '未指定供應商'
   if (bp && typeof bp === 'object') {
-    // $expand returns full record with Name; non-expanded returns {id, identifier}
-    return bp.identifier || bp.Name || '未指定客戶'
+    return bp.identifier || bp.Name || fallback
   }
   if (typeof bp === 'number' && bp > 0) {
-    return `客戶 #${bp}`
+    return `#${bp}`
   }
-  return '未指定客戶'
+  return fallback
 }
 
 function getDocStatus(o: any): string {
@@ -220,6 +223,24 @@ onMounted(() => {
 .card-date {
   font-size: 0.8125rem;
   color: #94a3b8;
+}
+
+.sotrx-chip {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.sotrx-chip.so {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.sotrx-chip.po {
+  background: #fefce8;
+  color: #ca8a04;
 }
 
 .fab {

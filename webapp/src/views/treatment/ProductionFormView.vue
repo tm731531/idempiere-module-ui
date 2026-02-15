@@ -21,13 +21,25 @@
         :modelValue="formData"
         :disabled="readOnly"
         :columnFilters="columnFilters"
+        :fkLabels="fkLabels"
         @update:modelValue="formData = $event"
       />
+
+      <div v-if="isCreate && mandatoryErrors.length > 0" class="mandatory-errors">
+        <span>請填寫必填欄位：</span>{{ mandatoryErrors.join('、') }}
+      </div>
 
       <div v-if="isCreate" class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
         <button type="button" :disabled="saving || !isValid" @click="handleCreateProduction">
           {{ saving ? '建立中...' : '建立療程' }}
+        </button>
+      </div>
+
+      <!-- Save button (draft edit mode) -->
+      <div v-if="!isCreate && !readOnly" class="form-actions">
+        <button type="button" :disabled="saving" @click="handleSave">
+          {{ saving ? '儲存中...' : '儲存修改' }}
         </button>
       </div>
 
@@ -93,6 +105,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDocumentForm } from '@/composables/useDocumentForm'
+import { apiClient } from '@/api/client'
+import { toIdempiereDateTime } from '@/api/utils'
 import DynamicForm from '@/components/DynamicForm.vue'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -100,7 +114,6 @@ import DocActionBar from '@/components/DocActionBar.vue'
 import {
   getProduction,
   getProductionLines,
-  createProduction,
   addProductionLine,
   deleteProductionLine,
 } from '@/api/production'
@@ -114,24 +127,38 @@ const productionId = computed(() => {
   return id ? Number(id) : null
 })
 
-const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
+const columnFilters = {
+  C_BPartner_ID: 'IsCustomer eq true',
+  M_Product_ID: "IsBOM eq true AND IsVerified eq true",
+}
 
 const {
   visibleFieldDefs,
   formData,
   recordData,
+  fkLabels,
   docStatus,
   pageLoading,
   pageError,
   readOnly,
   isCreate,
   isValid,
+  mandatoryErrors,
   load,
   getFormPayload,
+  getUpdatePayload,
+  populateFromRecord,
 } = useDocumentForm({
-  tabId: 319,  // M_Production
+  tabId: 53344,  // M_Production (Single Product window — has M_Product_ID, ProductionQty, M_Locator_ID)
   recordId: productionId,
   loadRecord: (id) => getProduction(id),
+  excludeColumns: [
+    'IsUseProductionPlan',  // internal flag
+    'C_OrderLine_ID',       // read-only, auto-populated
+    'M_InOutLine_ID',       // read-only, auto-populated
+    'C_BPartner_ID',        // read-only, auto-populated
+    'PP_Product_BOM_ID',    // read-only, auto-populated from product
+  ],
   columnFilters,
 })
 
@@ -162,11 +189,39 @@ async function handleCreateProduction() {
   try {
     const payload = getFormPayload()
     payload.AD_Org_ID = authStore.context?.organizationId ?? 0
-    const result = await createProduction(payload as any)
-    router.replace({ name: 'treatment-detail', params: { id: result.id } })
+    // Ensure MovementDate is properly formatted
+    if (payload.MovementDate instanceof Date) {
+      payload.MovementDate = toIdempiereDateTime(payload.MovementDate)
+    } else if (!payload.MovementDate) {
+      payload.MovementDate = toIdempiereDateTime(new Date())
+    }
+    const resp = await apiClient.post('/api/v1/models/M_Production', payload)
+    router.replace({ name: 'treatment-detail', params: { id: resp.data.id } })
   } catch (e: unknown) {
     const err = e as { message?: string }
     errorMsg.value = err.message || '建立療程失敗'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleSave() {
+  if (!productionId.value) return
+  saving.value = true
+  errorMsg.value = ''
+  try {
+    const payload = getUpdatePayload()
+    // Ensure MovementDate is properly formatted
+    if (payload.MovementDate instanceof Date) {
+      payload.MovementDate = toIdempiereDateTime(payload.MovementDate)
+    }
+    await apiClient.put(`/api/v1/models/M_Production/${productionId.value}`, payload)
+    // Reload to sync with server
+    const data = await getProduction(productionId.value)
+    populateFromRecord(data)
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } }; message?: string }
+    errorMsg.value = err.response?.data?.detail || err.message || '儲存失敗'
   } finally {
     saving.value = false
   }
@@ -236,6 +291,7 @@ onMounted(async () => {
 .form-header h2 { font-size: 1.25rem; margin: 0; }
 .loading-state { text-align: center; padding: 2rem; color: #64748b; }
 .form-error { background: #fef2f2; color: var(--color-error); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
+.mandatory-errors { background: #fffbeb; color: #92400e; padding: 0.75rem; border-radius: 8px; margin-top: 1rem; font-size: 0.875rem; }
 .form-section { margin-bottom: 1.5rem; }
 .doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
 .doc-docno { font-size: 1.125rem; font-weight: 600; }

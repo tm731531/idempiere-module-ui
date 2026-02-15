@@ -42,7 +42,8 @@ const resolvedTableName = computed(() => {
 })
 
 // Display field for SearchSelector — resolved from AD_Column.IsIdentifier
-const displayFieldName = ref('Name')
+// Starts empty; SearchSelector waits for this to be resolved before initializing
+const displayFieldName = ref('')
 
 const isFkField = computed(() =>
   [18, 19, 30].includes(props.column.referenceId) && resolvedTableName.value

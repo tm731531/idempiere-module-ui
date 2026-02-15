@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { FieldDefinition } from '@/api/metadata'
+import { sqlWhereToODataFilter } from '@/api/metadata'
+import { useAuthStore } from '@/stores/auth'
 import DynamicField from './DynamicField.vue'
 
 const props = defineProps<{
@@ -15,7 +17,42 @@ const emit = defineEmits<{
   'update:modelValue': [value: Record<string, any>]
 }>()
 
+const authStore = useAuthStore()
+
 const highlightSet = computed(() => new Set(props.highlightColumns || []))
+
+// Auto-resolve AD_Val_Rule filters for all fields with validationRuleSql.
+// Priority: explicit columnFilters (view-specific) > AD_Val_Rule (generic)
+const resolvedFilters = computed(() => {
+  const filters: Record<string, string> = {}
+
+  // Build context from formData + auth for resolving @Var@ references
+  const ctx: Record<string, any> = { ...props.modelValue }
+  if (authStore.context) {
+    ctx.AD_Client_ID = authStore.context.clientId ?? 0
+    ctx.AD_Org_ID = authStore.context.organizationId ?? 0
+    ctx.M_Warehouse_ID = authStore.context.warehouseId ?? 0
+  }
+
+  // Auto-apply AD_Val_Rule for fields that have validationRuleSql
+  for (const def of props.fieldDefs) {
+    if (def.validationRuleSql) {
+      try {
+        const filter = sqlWhereToODataFilter(def.validationRuleSql, ctx)
+        if (filter) filters[def.column.columnName] = filter
+      } catch { /* skip unrecognized rules */ }
+    }
+  }
+
+  // Merge explicit columnFilters (take priority over auto-resolved)
+  if (props.columnFilters) {
+    for (const [col, filter] of Object.entries(props.columnFilters)) {
+      filters[col] = filter
+    }
+  }
+
+  return filters
+})
 
 const mandatoryFields = computed(() =>
   props.fieldDefs.filter(d => d.column.isMandatory)
@@ -50,7 +87,7 @@ function onFieldUpdate(columnName: string, value: any) {
             :model-value="modelValue[def.column.columnName]"
             :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
             :referenceTableName="def.referenceTableName"
-            :filter="columnFilters?.[def.column.columnName]"
+            :filter="resolvedFilters[def.column.columnName]"
             @update:model-value="onFieldUpdate(def.column.columnName, $event)"
           />
         </div>
@@ -80,7 +117,7 @@ function onFieldUpdate(columnName: string, value: any) {
             :model-value="modelValue[def.column.columnName]"
             :disabled="disabled || def.field.isReadOnly || !def.column.isUpdateable"
             :referenceTableName="def.referenceTableName"
-            :filter="columnFilters?.[def.column.columnName]"
+            :filter="resolvedFilters[def.column.columnName]"
             @update:model-value="onFieldUpdate(def.column.columnName, $event)"
           />
         </div>

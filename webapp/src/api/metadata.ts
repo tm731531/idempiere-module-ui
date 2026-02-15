@@ -9,12 +9,14 @@ export interface ColumnMeta {
   id: number; columnName: string; referenceId: number
   referenceValueId: number | null; fieldLength: number
   isMandatory: boolean; defaultValue: string; isUpdateable: boolean
+  validationRuleId: number | null
 }
 
 export interface FieldDefinition {
   field: FieldMeta
   column: ColumnMeta
   referenceTableName?: string  // Resolved table name for Ref 18/19/30
+  validationRuleSql?: string   // Raw SQL from AD_Val_Rule.Code
 }
 
 // ========== FK Table Name Resolution ==========
@@ -262,6 +264,103 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext, refer
   return defaultExpr
 }
 
+// ========== Validation Rule Resolution ==========
+
+const valRuleCache = new Map<number, string>()
+
+export async function fetchValidationRule(ruleId: number): Promise<string> {
+  if (valRuleCache.has(ruleId)) return valRuleCache.get(ruleId)!
+  try {
+    const resp = await apiClient.get(`/api/v1/models/AD_Val_Rule/${ruleId}`, {
+      params: { '$select': 'Code' },
+    })
+    const code = resp.data.Code || ''
+    valRuleCache.set(ruleId, code)
+    return code
+  } catch {
+    valRuleCache.set(ruleId, '')
+    return ''
+  }
+}
+
+// SQL keywords that indicate unconvertible expressions
+// IS NULL/IS NOT NULL: iDempiere REST OData parser doesn't support the IS operator
+const UNCONVERTIBLE_SQL = /\b(SELECT|EXISTS|FROM|JOIN|UNION|GROUP\s+BY|HAVING|ORDER\s+BY|IS\s+NULL|IS\s+NOT\s+NULL)\b/i
+
+/**
+ * Convert iDempiere SQL WHERE clause to OData $filter.
+ * Supports common patterns: IN, =, <>, AND, COALESCE, table prefixes, context variables.
+ * Returns null for complex SQL that cannot be converted (subqueries, EXISTS, etc.).
+ */
+export function sqlWhereToODataFilter(
+  sql: string,
+  context: Record<string, any>,
+): string | null {
+  // Skip complex SQL that cannot be represented in OData
+  if (UNCONVERTIBLE_SQL.test(sql)) return null
+
+  let odata = sql
+
+  // Check if all context variables can be resolved; skip if any are missing
+  const contextVarPattern = /@#?(\w+)@/g
+  let match: RegExpExecArray | null
+  while ((match = contextVarPattern.exec(sql)) !== null) {
+    const varName = match[1] as string
+    if (context[varName] === undefined) return null
+  }
+
+  // 1. Strip table prefixes (C_DocType.DocBaseType → DocBaseType)
+  odata = odata.replace(/\w+\.(\w+)/g, '$1')
+
+  // 2. Strip COALESCE(Column,'default') → Column
+  odata = odata.replace(/COALESCE\s*\(\s*(\w+)\s*,\s*'[^']*'\s*\)/gi, '$1')
+
+  // 3. Resolve context variables: @VarName@ or @#VarName@
+  // Handle both quoted ('@Var@') and unquoted (@Var@) contexts
+  odata = odata.replace(/'@#?(\w+)@'/g, (_, varName: string) => {
+    const val = context[varName]
+    if (typeof val === 'boolean') return val ? "'Y'" : "'N'"
+    return `'${val}'`
+  })
+  odata = odata.replace(/@#?(\w+)@/g, (_, varName: string) => {
+    const val = context[varName]
+    if (typeof val === 'boolean') return val ? "'Y'" : "'N'"
+    if (typeof val === 'number') return String(val)
+    return `'${val}'`
+  })
+
+  // 4. Convert IN('a','b') → (Column eq 'a' or Column eq 'b')
+  odata = odata.replace(
+    /(\w+)\s+IN\s*\(([^)]+)\)/gi,
+    (_, col: string, values: string) => {
+      const parts = values.split(',').map((v: string) => `${col} eq ${v.trim()}`)
+      return `(${parts.join(' or ')})`
+    },
+  )
+
+  // 5. Convert <> to ne
+  odata = odata.replace(/<>/g, ' ne ')
+
+  // 6. Convert = to eq (but not in context of <= >= or already-processed 'eq')
+  odata = odata.replace(/(?<![<>!])=(?!=)/g, ' eq ')
+
+  // 7. AND → and, OR → or
+  odata = odata.replace(/\bAND\b/gi, 'and')
+  odata = odata.replace(/\bOR\b/gi, 'or')
+
+  // 8. Convert SQL YesNo ('Y'/'N') to OData booleans (true/false)
+  // iDempiere SQL uses ='Y'/='N' but REST OData expects eq true/eq false
+  odata = odata.replace(/\beq\s+'Y'/g, 'eq true')
+  odata = odata.replace(/\beq\s+'N'/g, 'eq false')
+  odata = odata.replace(/\bne\s+'Y'/g, 'ne true')
+  odata = odata.replace(/\bne\s+'N'/g, 'ne false')
+
+  // 9. Clean up whitespace
+  odata = odata.replace(/\s+/g, ' ').trim()
+
+  return odata
+}
+
 // ========== Field & Column Fetching ==========
 
 export async function fetchFieldsForTab(tabId: number): Promise<FieldMeta[]> {
@@ -285,7 +384,7 @@ export async function fetchFieldsForTab(tabId: number): Promise<FieldMeta[]> {
  */
 export async function fetchColumn(columnId: number): Promise<ColumnMeta> {
   const resp = await apiClient.get(`/api/v1/models/AD_Column/${columnId}`, {
-    params: { '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable' },
+    params: { '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable,AD_Val_Rule_ID' },
   })
   const r = resp.data
   return mapColumnRecord(r)
@@ -302,7 +401,7 @@ export async function fetchColumnsBatch(columnIds: number[]): Promise<ColumnMeta
   const resp = await apiClient.get('/api/v1/models/AD_Column', {
     params: {
       '$filter': filter,
-      '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable',
+      '$select': 'AD_Column_ID,ColumnName,AD_Reference_ID,AD_Reference_Value_ID,FieldLength,IsMandatory,DefaultValue,IsUpdateable,AD_Val_Rule_ID',
       '$top': columnIds.length,
     },
   })
@@ -320,6 +419,7 @@ function mapColumnRecord(r: any): ColumnMeta {
     isMandatory: r.IsMandatory === true || r.IsMandatory === 'Y',
     defaultValue: r.DefaultValue || '',
     isUpdateable: r.IsUpdateable === true || r.IsUpdateable === 'Y',
+    validationRuleId: r.AD_Val_Rule_ID?.id || r.AD_Val_Rule_ID || null,
   }
 }
 
@@ -384,6 +484,15 @@ export async function fetchFieldDefinitions(tabId: number): Promise<FieldDefinit
         d.referenceTableName = cn.slice(0, -3)
       }
     }
+  }
+
+  // Resolve validation rules (AD_Val_Rule)
+  const valRuleDefs = defs.filter(d => d.column.validationRuleId)
+  if (valRuleDefs.length > 0) {
+    await Promise.all(valRuleDefs.map(async (d) => {
+      const sql = await fetchValidationRule(d.column.validationRuleId!)
+      if (sql) d.validationRuleSql = sql
+    }))
   }
 
   return defs

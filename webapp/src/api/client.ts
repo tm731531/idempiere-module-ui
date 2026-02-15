@@ -5,6 +5,7 @@ export const apiClient = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
   },
 })
 
@@ -21,14 +22,26 @@ apiClient.interceptors.request.use((config) => {
 export const sessionState = { expired: false }
 export function clearSessionExpired() { sessionState.expired = false }
 
-// 401 interceptor
+// 401 interceptor — auto-redirect to login
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       const url = error.config?.url || ''
-      if (!url.includes('/api/v1/auth/')) {
+      if (!url.includes('/api/v1/auth/') && !sessionState.expired) {
         sessionState.expired = true
+        // Defer redirect to avoid circular import issues
+        setTimeout(() => {
+          // Clear auth state from localStorage directly
+          localStorage.removeItem('token')
+          localStorage.removeItem('auth_context')
+          localStorage.removeItem('auth_user')
+          localStorage.removeItem('auth_clients')
+          localStorage.removeItem('auth_orgs')
+          delete apiClient.defaults.headers.common['Authorization']
+          // Redirect to login via hash router
+          window.location.hash = '#/login'
+        }, 0)
       }
     }
     return Promise.reject(error)

@@ -25,7 +25,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 const baseField = { id: 1, name: 'Test', seqNo: 10, isDisplayed: true, isReadOnly: false, fieldGroup: '', columnId: 1 }
-const baseColumn = { id: 1, columnName: 'Test', referenceId: 10, referenceValueId: null, fieldLength: 60, isMandatory: true, defaultValue: '', isUpdateable: true }
+const baseColumn = { id: 1, columnName: 'Test', referenceId: 10, referenceValueId: null, fieldLength: 60, isMandatory: true, defaultValue: '', isUpdateable: true, validationRuleId: null }
 
 describe('DynamicField', () => {
   it('renders text input for referenceId=10', () => {

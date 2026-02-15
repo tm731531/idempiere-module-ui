@@ -143,7 +143,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
     return s
   })
 
-  // Extract payload for API submission
+  // Extract payload for API submission (create mode)
   // Only includes updateable, non-system columns with non-null values
   function getFormPayload(): Record<string, any> {
     const payload: Record<string, any> = {}
@@ -153,6 +153,21 @@ export function useDocumentForm(options: DocumentFormOptions) {
         if (allowed.has(key)) {
           payload[key] = value
         }
+      }
+    }
+    return payload
+  }
+
+  // Extract payload for update (PUT) — includes all non-system, non-null values
+  // to preserve mandatory fields that are not updateable (e.g. C_Currency_ID)
+  function getUpdatePayload(): Record<string, any> {
+    const payload: Record<string, any> = {}
+    for (const def of fieldDefs.value) {
+      const cn = def.column.columnName
+      if (SYSTEM_COLUMNS.has(cn)) continue
+      const value = formData.value[cn]
+      if (value !== null && value !== undefined && value !== '') {
+        payload[cn] = value
       }
     }
     return payload
@@ -176,5 +191,6 @@ export function useDocumentForm(options: DocumentFormOptions) {
     initDefaults,
     populateFromRecord,
     getFormPayload,
+    getUpdatePayload,
   }
 }

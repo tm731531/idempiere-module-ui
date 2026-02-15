@@ -57,7 +57,7 @@
           <div v-else class="add-line-form">
             <div class="form-group">
               <label>產品 <span class="required">*</span></label>
-              <SearchSelector v-model="newLine.M_Product_ID" tableName="M_Product" displayField="Name" searchField="Name" />
+              <SearchSelector v-model="newLine.M_Product_ID" tableName="M_Product" displayField="Name" searchField="Name" :quickCreate="true" :quickCreateDefaults="{ ProductType: 'I', IsPurchased: true, IsSold: true }" />
             </div>
             <div class="inline-fields">
               <div class="form-group">
@@ -66,10 +66,22 @@
               </div>
               <div class="form-group">
                 <label>儲位 <span class="required">*</span></label>
-                <select v-model="newLine.M_Locator_ID" class="form-input">
-                  <option :value="0">-- 請選擇 --</option>
-                  <option v-for="loc in locators" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
-                </select>
+                <div class="selector-row">
+                  <select v-model="newLine.M_Locator_ID" class="form-input">
+                    <option :value="0">-- 請選擇 --</option>
+                    <option v-for="loc in locators" :key="loc.id" :value="loc.id">{{ loc.name }}</option>
+                  </select>
+                  <button type="button" class="inline-add-btn" @click="showCreateLocator = true" title="新增儲位">+</button>
+                </div>
+                <div v-if="showCreateLocator" class="inline-create-form">
+                  <input v-model="newLocatorValue" class="form-input" placeholder="儲位名稱" @keyup.enter="handleCreateLocator" />
+                  <div class="inline-create-actions">
+                    <button type="button" class="cancel-btn" @click="showCreateLocator = false; newLocatorValue = ''">取消</button>
+                    <button type="button" :disabled="creatingLocator || !newLocatorValue.trim()" @click="handleCreateLocator">
+                      {{ creatingLocator ? '...' : '建立' }}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-group">
@@ -104,7 +116,7 @@ import DynamicForm from '@/components/DynamicForm.vue'
 import SearchSelector from '@/components/SearchSelector.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import DocActionBar from '@/components/DocActionBar.vue'
-import { lookupLocators } from '@/api/lookup'
+import { lookupLocators, createLocator } from '@/api/lookup'
 import { getInOut, getInOutLines, createInOut, addInOutLine, deleteInOutLine } from '@/api/inout'
 
 const router = useRouter()
@@ -246,6 +258,28 @@ function cancelAddLine() {
   newLine.Description = ''
 }
 
+// Locator creation
+const showCreateLocator = ref(false)
+const newLocatorValue = ref('')
+const creatingLocator = ref(false)
+
+async function handleCreateLocator() {
+  const whId = formData.value.M_Warehouse_ID
+  if (!whId || !newLocatorValue.value.trim()) return
+  creatingLocator.value = true
+  try {
+    const created = await createLocator(whId, newLocatorValue.value.trim())
+    await loadLocatorsForWarehouse(whId)
+    newLine.M_Locator_ID = created.id
+    showCreateLocator.value = false
+    newLocatorValue.value = ''
+  } catch {
+    errorMsg.value = '新增儲位失敗'
+  } finally {
+    creatingLocator.value = false
+  }
+}
+
 async function handleDeleteLine(lineId: number) {
   if (!inoutId.value) return
   errorMsg.value = ''
@@ -312,4 +346,12 @@ onMounted(async () => {
 .add-line-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
 .action-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
 .back-btn { padding: 0.5rem 1rem; background: transparent; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; min-height: var(--min-touch); }
+.selector-row { display: flex; gap: 0.5rem; align-items: center; }
+.selector-row select { flex: 1; }
+.inline-add-btn { width: 44px; height: 44px; min-height: var(--min-touch); border: 1px solid var(--color-primary); background: transparent; color: var(--color-primary); border-radius: 8px; font-size: 1.25rem; font-weight: 600; cursor: pointer; flex-shrink: 0; }
+.inline-add-btn:hover { background: var(--color-primary); color: white; }
+.inline-create-form { margin-top: 0.5rem; padding: 0.5rem; background: white; border: 1px dashed var(--color-primary); border-radius: 8px; }
+.inline-create-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.inline-create-actions button { flex: 1; padding: 0.5rem; border-radius: 8px; font-size: 0.875rem; min-height: var(--min-touch); cursor: pointer; background: var(--color-primary); color: white; border: none; }
+.inline-create-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

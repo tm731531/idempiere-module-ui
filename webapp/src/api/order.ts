@@ -8,6 +8,7 @@ import {
   lookupBPartnerLocationId,
   lookupSOCurrencyId,
   lookupEachUomId,
+  lookupPriceListInfo,
 } from './lookup'
 import { toIdempiereDateTime } from './utils'
 
@@ -17,10 +18,29 @@ export interface OrderHeaderData {
   M_Warehouse_ID: number
   Description?: string
   username?: string
+  // Fields that may be pre-filled by callout
+  C_DocTypeTarget_ID?: number
+  C_BPartner_Location_ID?: number
+  Bill_Location_ID?: number
+  M_PriceList_ID?: number
+  C_PaymentTerm_ID?: number
+  PaymentRule?: string
+  SalesRep_ID?: number
+  DateOrdered?: string
+  DateAcct?: string
+  DatePromised?: string
+  IsSOTrx?: boolean
+  DeliveryRule?: string
+  DeliveryViaRule?: string
+  FreightCostRule?: string
+  InvoiceRule?: string
+  PriorityRule?: string
 }
 
 export interface OrderLineData {
   M_Product_ID: number
+  C_UOM_ID?: number
+  C_Tax_ID?: number
   QtyOrdered: number
   PriceEntered: number
   Description?: string
@@ -45,20 +65,34 @@ export async function getOrder(id: number): Promise<any> {
   return resp.data
 }
 
+export async function updateOrder(id: number, data: Record<string, any>): Promise<any> {
+  const resp = await apiClient.put(`/api/v1/models/C_Order/${id}`, data)
+  return resp.data
+}
+
 export async function createOrder(data: OrderHeaderData): Promise<any> {
   if (!data.M_Warehouse_ID) {
     throw new Error('請先選擇倉庫（M_Warehouse_ID 為必填）')
   }
 
-  // Parallel lookups for mandatory references
-  const [docTypeId, priceListId, paymentTermId, userId, bpLocationId, currencyId] = await Promise.all([
-    lookupDocTypeId('SOO'),
-    lookupSalesPriceListId(),
-    lookupDefaultPaymentTermId(),
-    lookupCurrentUserId(data.username || ''),
-    lookupBPartnerLocationId(data.C_BPartner_ID),
-    lookupSOCurrencyId(),
+  // Only lookup values not already provided by the form (callout may have pre-filled them)
+  const [docTypeId, priceListId, paymentTermId, userId, bpLocationId] = await Promise.all([
+    data.C_DocTypeTarget_ID ? Promise.resolve(data.C_DocTypeTarget_ID) : lookupDocTypeId('SOO'),
+    data.M_PriceList_ID ? Promise.resolve(data.M_PriceList_ID) : lookupSalesPriceListId(),
+    data.C_PaymentTerm_ID ? Promise.resolve(data.C_PaymentTerm_ID) : lookupDefaultPaymentTermId(),
+    data.SalesRep_ID ? Promise.resolve(data.SalesRep_ID) : lookupCurrentUserId(data.username || ''),
+    data.C_BPartner_Location_ID ? Promise.resolve(data.C_BPartner_Location_ID) : lookupBPartnerLocationId(data.C_BPartner_ID),
   ])
+
+  // Resolve currency from the actual price list being used
+  let currencyId: number | null = null
+  try {
+    const plInfo = await lookupPriceListInfo(priceListId)
+    currencyId = plInfo.currencyId
+  } catch { /* fallback below */ }
+  if (!currencyId) {
+    currencyId = await lookupSOCurrencyId()
+  }
 
   const now = toIdempiereDateTime(new Date())
   const resp = await apiClient.post('/api/v1/models/C_Order', {
@@ -67,22 +101,22 @@ export async function createOrder(data: OrderHeaderData): Promise<any> {
     C_DocTypeTarget_ID: docTypeId,
     C_BPartner_ID: data.C_BPartner_ID,
     C_BPartner_Location_ID: bpLocationId,
-    Bill_Location_ID: bpLocationId,
+    Bill_Location_ID: data.Bill_Location_ID || bpLocationId,
     M_PriceList_ID: priceListId,
     C_PaymentTerm_ID: paymentTermId,
     C_Currency_ID: currencyId,
     M_Warehouse_ID: data.M_Warehouse_ID,
-    DateOrdered: now,
-    DateAcct: now,
-    DatePromised: now,
+    DateOrdered: data.DateOrdered || now,
+    DateAcct: data.DateAcct || now,
+    DatePromised: data.DatePromised || now,
     SalesRep_ID: userId,
-    IsSOTrx: true,
-    DeliveryRule: 'F',
-    DeliveryViaRule: 'P',
-    FreightCostRule: 'I',
-    InvoiceRule: 'I',
-    PaymentRule: 'B',
-    PriorityRule: '5',
+    IsSOTrx: data.IsSOTrx ?? true,
+    DeliveryRule: data.DeliveryRule || 'F',
+    DeliveryViaRule: data.DeliveryViaRule || 'P',
+    FreightCostRule: data.FreightCostRule || 'I',
+    InvoiceRule: data.InvoiceRule || 'I',
+    PaymentRule: data.PaymentRule || 'B',
+    PriorityRule: data.PriorityRule || '5',
     Description: data.Description || '',
   })
   return resp.data
@@ -100,16 +134,19 @@ export async function getOrderLines(orderId: number): Promise<any[]> {
 }
 
 export async function addOrderLine(orderId: number, data: OrderLineData): Promise<any> {
-  const taxId = await lookupDefaultTaxId()
-  const resp = await apiClient.post('/api/v1/models/C_OrderLine', {
+  const taxId = data.C_Tax_ID || await lookupDefaultTaxId()
+  const payload: Record<string, any> = {
     C_Order_ID: orderId,
     M_Product_ID: data.M_Product_ID,
     QtyOrdered: data.QtyOrdered,
+    QtyEntered: data.QtyOrdered,
     PriceEntered: data.PriceEntered,
     PriceActual: data.PriceEntered,
     C_Tax_ID: taxId,
     Description: data.Description || '',
-  })
+  }
+  if (data.C_UOM_ID) payload.C_UOM_ID = data.C_UOM_ID
+  const resp = await apiClient.post('/api/v1/models/C_OrderLine', payload)
   return resp.data
 }
 

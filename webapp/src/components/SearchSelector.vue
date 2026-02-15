@@ -207,12 +207,22 @@ async function initialize(): Promise<void> {
 }
 
 onMounted(() => {
-  initialize()
+  // Only initialize if displayField is already resolved; otherwise wait for watch
+  if (props.displayField) {
+    initialize()
+  }
 })
 
 // Re-initialize when displayField changes (resolved asynchronously by DynamicField)
 watch(() => props.displayField, (newVal, oldVal) => {
-  if (newVal && newVal !== oldVal && mode.value !== 'loading') {
+  if (newVal && newVal !== oldVal) {
+    initialize()
+  }
+})
+
+// Re-initialize when filter changes (e.g. AD_Val_Rule context variables resolved later)
+watch(() => props.filter, (newVal, oldVal) => {
+  if (newVal !== oldVal && props.displayField) {
     initialize()
   }
 })

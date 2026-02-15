@@ -57,7 +57,7 @@
           <div v-else class="add-line-form">
             <div class="form-group">
               <label>耗材產品 <span class="required">*</span></label>
-              <SearchSelector v-model="newLine.M_Product_ID" tableName="M_Product" displayField="Name" searchField="Name" />
+              <SearchSelector v-model="newLine.M_Product_ID" tableName="M_Product" displayField="Name" searchField="Name" :quickCreate="true" :quickCreateDefaults="{ ProductType: 'I', IsPurchased: true, IsSold: true }" />
             </div>
             <div class="inline-fields">
               <div class="form-group">

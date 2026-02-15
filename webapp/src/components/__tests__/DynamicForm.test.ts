@@ -21,7 +21,7 @@ vi.mock('@/api/client', () => ({
 
 const makeDef = (name: string, group: string, mandatory: boolean) => ({
   field: { id: 1, name, seqNo: 10, isDisplayed: true, isReadOnly: false, fieldGroup: group, columnId: 1 },
-  column: { id: 1, columnName: name, referenceId: 10, referenceValueId: null, fieldLength: 60, isMandatory: mandatory, defaultValue: '', isUpdateable: true },
+  column: { id: 1, columnName: name, referenceId: 10, referenceValueId: null, fieldLength: 60, isMandatory: mandatory, defaultValue: '', isUpdateable: true, validationRuleId: null },
 })
 
 describe('DynamicForm', () => {

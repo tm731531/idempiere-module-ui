@@ -86,7 +86,8 @@ function switchTab(tab: TabKey) {
 function getCustomerName(o: any): string {
   const bp = o.C_BPartner_ID
   if (bp && typeof bp === 'object') {
-    return bp.identifier || bp.name || '未指定客戶'
+    // $expand returns full record with Name; non-expanded returns {id, identifier}
+    return bp.identifier || bp.Name || '未指定客戶'
   }
   if (typeof bp === 'number' && bp > 0) {
     return `客戶 #${bp}`

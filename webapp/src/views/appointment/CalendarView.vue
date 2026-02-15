@@ -72,20 +72,20 @@
             @click="onSlotClick(slot)"
           >
             <div class="time-label">{{ slot }}</div>
-            <div class="slot-content">
-              <div
-                v-for="appt in getAppointmentsAt(slot)"
-                :key="appt.id"
-                class="appt-chip"
-                :style="{ backgroundColor: getAppointmentColor(appt) }"
-                :title="`${getResourceName(appt)} — ${appt.Name}`"
-              >
-                <span class="appt-resource">{{ getResourceName(appt) }}</span>
-                <span class="appt-name">{{ appt.Name }}</span>
-                <span class="appt-time">{{ formatApptTime(appt) }}</span>
-              </div>
-              <div v-if="getAppointmentsAt(slot).length === 0" class="slot-empty">+</div>
-            </div>
+            <div class="slot-bg"></div>
+          </div>
+          <!-- Appointment blocks (absolutely positioned, side-by-side) -->
+          <div
+            v-for="layout in dayApptLayout"
+            :key="layout.appt.id"
+            class="appt-block"
+            :style="getApptBlockStyle(layout)"
+            :title="`${getResourceName(layout.appt)} — ${layout.appt.Name}`"
+            @click.stop="onApptClick(layout.appt)"
+          >
+            <span class="appt-resource">{{ getResourceName(layout.appt) }}</span>
+            <span class="appt-name">{{ layout.appt.Name }}</span>
+            <span class="appt-time">{{ formatApptTime(layout.appt) }}</span>
           </div>
         </div>
       </div>
@@ -107,7 +107,14 @@
             @click="cell.date && drillToDay(cell.date)"
           >
             <span class="cell-day">{{ cell.day }}</span>
-            <span v-if="cell.count > 0" class="cell-count">{{ cell.count }}</span>
+            <div v-if="cell.resourceCounts.length > 0" class="cell-counts">
+              <span
+                v-for="rc in cell.resourceCounts"
+                :key="rc.id"
+                class="cell-res-badge"
+                :style="{ backgroundColor: getResourceColor(rc.id) }"
+              >{{ rc.count }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -122,20 +129,30 @@
           @click="drillToMonth(m.month)"
         >
           <span class="month-name">{{ m.label }}</span>
-          <span v-if="m.count > 0" class="month-count">{{ m.count }}</span>
+          <div v-if="m.resourceCounts.length > 0" class="cell-counts">
+            <span
+              v-for="rc in m.resourceCounts"
+              :key="rc.id"
+              class="cell-res-badge"
+              :style="{ backgroundColor: getResourceColor(rc.id) }"
+            >{{ rc.count }}</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Appointment form modal -->
+    <!-- Appointment form modal (create or edit) -->
     <AppointmentForm
       v-if="showForm"
       :resources="resources"
+      :existing-assignments="assignments"
       :initial-resource-id="selectedResourceId"
       :initial-date="formDate"
       :initial-time="formTime"
+      :editing-appt="editingAppt"
       @saved="onAppointmentSaved"
       @cancel="showForm = false"
+      @resources-changed="reloadResources"
     />
   </div>
 </template>
@@ -328,11 +345,10 @@ const weekDays = computed(() => {
 // ========== Time Slots ==========
 const timeSlots = computed(() => {
   const slots: string[] = []
-  for (let h = 7; h < 21; h++) {
+  for (let h = 0; h < 24; h++) {
     slots.push(`${String(h).padStart(2, '0')}:00`)
     slots.push(`${String(h).padStart(2, '0')}:30`)
   }
-  slots.push('21:00')
   return slots
 })
 
@@ -375,20 +391,105 @@ async function loadAssignments() {
   }
 }
 
-// ========== Day/Week: filter for time grid ==========
-function getAppointmentsAt(slot: string): any[] {
-  const slotHour = parseInt(slot.split(':')[0]!)
-  const slotMin = parseInt(slot.split(':')[1]!)
+// ========== Day/Week: filtered assignments for selected day ==========
+const GRID_START_HOUR = 0  // time grid starts at 00:00
+const SLOT_HEIGHT = 44     // px per 30-min slot (matches height of .time-row)
+const LABEL_WIDTH = 52     // px for time label column
 
+const filteredDayAssignments = computed(() => {
   return assignments.value.filter((a) => {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
     if (!selectedResourceIds.has(aResId)) return false
-
     const from = parseIdempiereDateTime(a.AssignDateFrom)
-    if (formatDateFull(from) !== selectedDay.value) return false
-
-    return from.getHours() === slotHour && from.getMinutes() === slotMin
+    return formatDateFull(from) === selectedDay.value
   })
+})
+
+// Compute layout: which column each appointment goes in (Google Calendar style)
+interface ApptLayout {
+  appt: any
+  col: number
+  totalCols: number
+}
+
+const dayApptLayout = computed((): ApptLayout[] => {
+  const appts = filteredDayAssignments.value.map((a) => {
+    const from = parseIdempiereDateTime(a.AssignDateFrom)
+    const to = parseIdempiereDateTime(a.AssignDateTo)
+    return {
+      appt: a,
+      fromMins: from.getHours() * 60 + from.getMinutes(),
+      toMins: to.getHours() * 60 + to.getMinutes(),
+      resId: typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID,
+      col: 0,
+      totalCols: 1,
+    }
+  })
+
+  // Sort by start time, then by resource ID for stable ordering
+  appts.sort((a, b) => a.fromMins - b.fromMins || a.resId - b.resId)
+
+  // Find overlapping groups and assign columns
+  for (let i = 0; i < appts.length; i++) {
+    const a = appts[i]!
+    // Find all appointments that overlap with this one
+    const overlapping = appts.filter(
+      (b) => b.fromMins < a.toMins && b.toMins > a.fromMins
+    )
+    // Determine which columns are taken by earlier-assigned overlapping items
+    const usedCols = new Set<number>()
+    for (const o of overlapping) {
+      if (o !== a && o.col !== undefined) usedCols.add(o.col)
+    }
+    // Assign first available column
+    let col = 0
+    while (usedCols.has(col)) col++
+    a.col = col
+  }
+
+  // Second pass: compute totalCols for each overlapping group
+  for (let i = 0; i < appts.length; i++) {
+    const a = appts[i]!
+    const overlapping = appts.filter(
+      (b) => b.fromMins < a.toMins && b.toMins > a.fromMins
+    )
+    const maxCol = Math.max(...overlapping.map((o) => o.col))
+    const totalCols = maxCol + 1
+    for (const o of overlapping) {
+      o.totalCols = Math.max(o.totalCols, totalCols)
+    }
+  }
+
+  return appts.map((a) => ({
+    appt: a.appt,
+    col: a.col,
+    totalCols: a.totalCols,
+  }))
+})
+
+function getApptBlockStyle(layout: ApptLayout): Record<string, string> {
+  const from = parseIdempiereDateTime(layout.appt.AssignDateFrom)
+  const to = parseIdempiereDateTime(layout.appt.AssignDateTo)
+  const fromMins = from.getHours() * 60 + from.getMinutes()
+  const toMins = to.getHours() * 60 + to.getMinutes()
+  const gridStartMins = GRID_START_HOUR * 60
+
+  const topPx = ((fromMins - gridStartMins) / 30) * SLOT_HEIGHT
+  const heightPx = Math.max(((toMins - fromMins) / 30) * SLOT_HEIGHT, SLOT_HEIGHT / 2)
+
+  // Horizontal: divide available space among overlapping columns
+  // Available space starts after the time label (LABEL_WIDTH + border + gap)
+  const leftOffset = LABEL_WIDTH + 5  // label width + border + small gap
+  const rightGap = 4
+  const colGap = 2  // gap between columns
+
+  return {
+    top: `${topPx}px`,
+    height: `${heightPx}px`,
+    left: `calc(${leftOffset}px + (100% - ${leftOffset + rightGap}px) * ${layout.col / layout.totalCols})`,
+    width: `calc((100% - ${leftOffset + rightGap}px) / ${layout.totalCols} - ${colGap}px)`,
+    backgroundColor: getAppointmentColor(layout.appt),
+  }
 }
 
 function formatApptTime(appt: any): string {
@@ -414,37 +515,52 @@ const monthCells = computed(() => {
   let startOffset = firstDay.getDay() - 1
   if (startOffset < 0) startOffset = 6
 
-  const cells: { day: number; date: string; currentMonth: boolean; isToday: boolean; count: number }[] = []
+  interface ResourceCount { id: number; count: number }
+  const cells: { day: number; date: string; currentMonth: boolean; isToday: boolean; resourceCounts: ResourceCount[] }[] = []
 
   // Previous month padding
   const prevLastDay = new Date(year, month, 0).getDate()
   for (let i = startOffset - 1; i >= 0; i--) {
     const pd = prevLastDay - i
     const pDate = new Date(year, month - 1, pd)
-    cells.push({ day: pd, date: formatDateFull(pDate), currentMonth: false, isToday: false, count: 0 })
+    cells.push({ day: pd, date: formatDateFull(pDate), currentMonth: false, isToday: false, resourceCounts: [] })
   }
 
   // Current month
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const dateStr = formatDateFull(new Date(year, month, day))
-    cells.push({ day, date: dateStr, currentMonth: true, isToday: dateStr === today, count: 0 })
+    cells.push({ day, date: dateStr, currentMonth: true, isToday: dateStr === today, resourceCounts: [] })
   }
 
   // Next month padding (fill to 42 cells = 6 rows)
   let nextDay = 1
   while (cells.length < 42) {
     const nDate = new Date(year, month + 1, nextDay)
-    cells.push({ day: nextDay, date: formatDateFull(nDate), currentMonth: false, isToday: false, count: 0 })
+    cells.push({ day: nextDay, date: formatDateFull(nDate), currentMonth: false, isToday: false, resourceCounts: [] })
     nextDay++
   }
 
-  // Count appointments per day
+  // Count appointments per day per resource
+  const dayCounts = new Map<string, Map<number, number>>()
   for (const a of assignments.value) {
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
     if (!selectedResourceIds.has(aResId)) continue
     const dateStr = formatDateFull(parseIdempiereDateTime(a.AssignDateFrom))
-    const cell = cells.find(c => c.date === dateStr)
-    if (cell) cell.count++
+    if (!dayCounts.has(dateStr)) dayCounts.set(dateStr, new Map())
+    const resMap = dayCounts.get(dateStr)!
+    resMap.set(aResId, (resMap.get(aResId) || 0) + 1)
+  }
+  for (const cell of cells) {
+    const resMap = dayCounts.get(cell.date)
+    if (resMap) {
+      cell.resourceCounts = Array.from(resMap.entries())
+        .map(([id, count]) => ({ id, count }))
+        .sort((a, b) => {
+          const ai = resources.value.findIndex(r => r.id === a.id)
+          const bi = resources.value.findIndex(r => r.id === b.id)
+          return ai - bi
+        })
+    }
   }
 
   return cells
@@ -456,21 +572,30 @@ const yearMonths = computed(() => {
   const now = new Date()
   const currentMonth = now.getFullYear() === year ? now.getMonth() : -1
 
+  // Pre-compute per-month per-resource counts
+  const monthResCounts = Array.from({ length: 12 }, () => new Map<number, number>())
+  for (const a of assignments.value) {
+    const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
+    if (!selectedResourceIds.has(aResId)) continue
+    const d = parseIdempiereDateTime(a.AssignDateFrom)
+    if (d.getFullYear() !== year) continue
+    const resMap = monthResCounts[d.getMonth()]!
+    resMap.set(aResId, (resMap.get(aResId) || 0) + 1)
+  }
+
   return Array.from({ length: 12 }, (_, m) => {
-    // Count assignments in this month
-    const monthStart = formatDateFull(new Date(year, m, 1))
-    const monthEnd = formatDateFull(new Date(year, m + 1, 0))
-    let count = 0
-    for (const a of assignments.value) {
-      const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
-      if (!selectedResourceIds.has(aResId)) continue
-      const dateStr = formatDateFull(parseIdempiereDateTime(a.AssignDateFrom))
-      if (dateStr >= monthStart && dateStr <= monthEnd) count++
-    }
+    const resMap = monthResCounts[m]!
+    const resourceCounts = Array.from(resMap.entries())
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => {
+        const ai = resources.value.findIndex(r => r.id === a.id)
+        const bi = resources.value.findIndex(r => r.id === b.id)
+        return ai - bi
+      })
     return {
       month: m,
       label: MONTH_LABELS[m],
-      count,
+      resourceCounts,
       isCurrent: m === currentMonth,
     }
   })
@@ -498,17 +623,41 @@ const showForm = ref(false)
 const selectedResourceId = ref(0)
 const formDate = ref('')
 const formTime = ref('')
+const editingAppt = ref<any>(null)
 
 function onSlotClick(slot: string) {
+  editingAppt.value = null
   selectedResourceId.value = 0
   formDate.value = selectedDay.value
   formTime.value = slot
   showForm.value = true
 }
 
+function onApptClick(appt: any) {
+  editingAppt.value = appt
+  selectedResourceId.value = 0
+  formDate.value = ''
+  formTime.value = ''
+  showForm.value = true
+}
+
 function onAppointmentSaved() {
   showForm.value = false
+  editingAppt.value = null
   loadAssignments()
+}
+
+async function reloadResources() {
+  try {
+    const newList = await listResources()
+    // Add any newly created resources to selection
+    for (const r of newList) {
+      if (!resources.value.find((x: any) => x.id === r.id)) {
+        selectedResourceIds.add(r.id)
+      }
+    }
+    resources.value = newList
+  } catch { /* silent */ }
 }
 
 // ========== Init ==========
@@ -742,13 +891,14 @@ onMounted(async () => {
 }
 
 .time-grid {
+  position: relative;
   min-width: 0;
 }
 
 .time-row {
   display: flex;
   border-bottom: 1px solid var(--color-border);
-  min-height: 44px;
+  height: 44px;
   cursor: pointer;
 }
 
@@ -767,35 +917,29 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.slot-content {
+.slot-bg {
   flex: 1;
-  padding: 0.25rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  align-items: flex-start;
-  align-content: flex-start;
 }
 
-.slot-empty {
-  width: 100%;
-  text-align: center;
-  color: #cbd5e1;
-  font-size: 0.875rem;
-  line-height: 36px;
-}
-
-.appt-chip {
-  display: inline-flex;
-  flex-direction: column;
-  padding: 0.25rem 0.5rem;
+/* Appointment block (absolute positioned, spans multiple slots) */
+.appt-block {
+  position: absolute;
   border-radius: 6px;
   color: white;
   font-size: 0.75rem;
-  line-height: 1.2;
-  max-width: 100%;
+  line-height: 1.3;
+  padding: 0.25rem 0.5rem;
   overflow: hidden;
   cursor: pointer;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.appt-block:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .appt-resource {
@@ -874,13 +1018,21 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.cell-count {
-  font-size: 0.6875rem;
+.cell-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+
+.cell-res-badge {
+  font-size: 0.625rem;
   color: white;
-  background: var(--color-primary);
-  border-radius: 10px;
-  padding: 0 0.375rem;
+  border-radius: 8px;
+  padding: 0 0.3rem;
   line-height: 1.4;
+  min-width: 16px;
+  text-align: center;
 }
 
 /* Year grid */
@@ -918,11 +1070,4 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.month-count {
-  font-size: 0.75rem;
-  color: white;
-  background: var(--color-primary);
-  border-radius: 10px;
-  padding: 0.125rem 0.5rem;
-}
 </style>

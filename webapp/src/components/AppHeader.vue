@@ -42,7 +42,6 @@ const titleMap: Record<string, string> = {
   'shipment-list': '出入庫',
   'shipment-new': '新增出入庫',
   'shipment-detail': '出入庫明細',
-  'field-config': '欄位設定',
   'table-list': 'Table/Column 管理',
   'table-columns': 'Column 詳情',
 }

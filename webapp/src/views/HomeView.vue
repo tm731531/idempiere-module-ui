@@ -20,6 +20,7 @@
         class="module-card"
         @click="navigate(card.route)"
       >
+        <div class="card-icon">{{ card.icon }}</div>
         <div class="card-label">{{ card.label }}</div>
         <div class="card-desc">{{ card.desc }}</div>
       </div>
@@ -38,6 +39,7 @@ const router = useRouter()
 const { canAccess, loadPermissions } = usePermission()
 
 interface ModuleCard {
+  icon: string
   label: string
   desc: string
   route: string
@@ -49,17 +51,16 @@ interface ModuleCard {
 const isSystemClient = computed(() => auth.context?.clientId === 0)
 
 const allCards: ModuleCard[] = [
-  { label: '客戶管理', desc: '管理客戶資料', route: '/customer', pageKey: 'customer', businessOnly: true },
-  { label: '諮詢記錄', desc: '諮詢與評估記錄', route: '/consultation', pageKey: 'consultation', businessOnly: true },
-  { label: '預約管理', desc: '預約行事曆', route: '/appointment', pageKey: 'appointment', businessOnly: true },
-  { label: '訂單管理', desc: '銷售訂單', route: '/order', pageKey: 'order', businessOnly: true },
-  { label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', businessOnly: true },
-  { label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', businessOnly: true },
-  { label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', businessOnly: true },
-  { label: '商品管理', desc: '管理商品與療程項目', route: '/product', pageKey: 'product', businessOnly: true },
-  { label: '基礎資料', desc: '管理稅率、服務人員、儲位等設定', route: '/admin/reference-data', pageKey: null, businessOnly: true },
-  { label: '欄位設定', desc: '管理欄位顯示與順序', route: '/admin/field-config', pageKey: null, businessOnly: true },
-  { label: 'Table/Column', desc: 'AD 資料字典管理', route: '/admin/tables', pageKey: null, systemOnly: true },
+  { icon: '👤', label: '客戶管理', desc: '管理客戶資料', route: '/customer', pageKey: 'customer', businessOnly: true },
+  { icon: '📋', label: '諮詢記錄', desc: '諮詢與評估記錄', route: '/consultation', pageKey: 'consultation', businessOnly: true },
+  { icon: '📅', label: '預約管理', desc: '預約行事曆', route: '/appointment', pageKey: 'appointment', businessOnly: true },
+  { icon: '🛒', label: '訂單管理', desc: '銷售訂單', route: '/order', pageKey: 'order', businessOnly: true },
+  { icon: '💉', label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', businessOnly: true },
+  { icon: '💰', label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', businessOnly: true },
+  { icon: '📦', label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', businessOnly: true },
+  { icon: '🏷️', label: '商品管理', desc: '管理商品與療程項目', route: '/product', pageKey: 'product', businessOnly: true },
+  { icon: '⚙️', label: '基礎資料', desc: '管理稅率、服務人員、儲位等設定', route: '/admin/reference-data', pageKey: null, businessOnly: true },
+  { icon: '🗄️', label: 'Table/Column', desc: 'AD 資料字典管理', route: '/admin/tables', pageKey: null, systemOnly: true },
 ]
 
 const visibleCards = computed(() => {
@@ -186,6 +187,11 @@ onMounted(async () => {
 .module-card:hover {
   border-color: var(--color-primary);
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.12);
+}
+
+.card-icon {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .card-label {

@@ -95,12 +95,6 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/admin/field-config',
-      name: 'field-config',
-      component: () => import('@/views/admin/FieldConfigView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
       path: '/admin/tables',
       name: 'table-list',
       component: () => import('@/views/admin/TableListView.vue'),

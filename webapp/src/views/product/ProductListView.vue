@@ -37,7 +37,7 @@
         <div class="card-main">
           <div class="card-name">{{ p.Name }}</div>
           <div class="card-badges">
-            <span v-if="p.IsBOM === true || p.IsBOM === 'Y'" class="badge bom">BOM</span>
+            <span v-if="p.IsBOM === true || p.IsBOM === 'Y'" class="badge bom">療程</span>
             <span v-if="p.IsActive === false || p.IsActive === 'N'" class="badge inactive">停用</span>
           </div>
         </div>
@@ -67,7 +67,7 @@ type TabKey = 'all' | 'bom' | 'general'
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: 'bom', label: 'BOM療程' },
+  { key: 'bom', label: '療程' },
   { key: 'general', label: '一般商品' },
 ]
 

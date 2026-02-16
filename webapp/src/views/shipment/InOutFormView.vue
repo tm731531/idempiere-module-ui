@@ -201,9 +201,9 @@ function getHeaderBPartnerName(): string {
 
 function getProductName(line: any): string {
   if (line.M_Product_ID && typeof line.M_Product_ID === 'object') {
-    return line.M_Product_ID.identifier || line.M_Product_ID.Name || '未知產品'
+    return line.M_Product_ID.identifier || line.M_Product_ID.Name || '未知品項'
   }
-  return '未知產品'
+  return '未知品項'
 }
 
 async function loadLines() {

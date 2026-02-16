@@ -672,9 +672,9 @@ function getProductName(line: any): string {
   const p = line.M_Product_ID
   if (p && typeof p === 'object') {
     // $expand returns full record with Name; non-expanded returns {id, identifier}
-    return p.identifier || p.Name || '未知產品'
+    return p.identifier || p.Name || '未知品項'
   }
-  return '未知產品'
+  return '未知品項'
 }
 
 function formatAmount(val: any): string {

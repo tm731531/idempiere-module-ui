@@ -82,8 +82,8 @@ function handleLogout() {
   router.push('/login')
 }
 
-function handleSwitchContext() {
-  auth.switchContext()
+async function handleSwitchContext() {
+  await auth.switchContext()
   router.push('/login')
 }
 

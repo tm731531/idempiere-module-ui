@@ -44,17 +44,17 @@
       <!-- ===== BOM Section (edit mode + IsBOM=true) ===== -->
       <div v-if="!isCreate && productId && isBOM" class="bom-section">
         <div class="section-title-row">
-          <h3 class="section-title">BOM 配方組成</h3>
+          <h3 class="section-title">療程內容</h3>
           <span v-if="isVerified" class="badge verified">已驗證</span>
           <span v-else class="badge unverified">未驗證</span>
         </div>
 
-        <div v-if="bomLoading" class="loading-state">載入 BOM 中...</div>
+        <div v-if="bomLoading" class="loading-state">載入療程中...</div>
 
         <template v-else>
           <!-- BOM lines list -->
           <div v-if="bomLines.length === 0 && !showAddBOMLine" class="empty-lines">
-            尚無 BOM 組成項目
+            尚無療程項目
           </div>
 
           <div v-else class="lines-table">
@@ -62,7 +62,7 @@
               <!-- Editing this line -->
               <div v-if="editingBOMLineId === line.id" class="line-edit-form">
                 <div class="form-group">
-                  <label>組成產品 <span class="required">*</span></label>
+                  <label>療程品項 <span class="required">*</span></label>
                   <SearchSelector
                     :modelValue="editBOMLine.M_Product_ID"
                     tableName="M_Product"
@@ -85,7 +85,7 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label>組成類型</label>
+                    <label>項目類型</label>
                     <select class="form-input" v-model="editBOMLine.ComponentType">
                       <option v-for="ct in componentTypes" :key="ct.value" :value="ct.value">
                         {{ ct.name }}
@@ -135,12 +135,12 @@
               class="add-line-btn"
               @click="showAddBOMLine = true"
             >
-              新增組成項目
+              新增療程項目
             </button>
 
             <div v-else class="add-line-form">
               <div class="form-group">
-                <label>組成產品 <span class="required">*</span></label>
+                <label>療程品項 <span class="required">*</span></label>
                 <SearchSelector
                   :modelValue="newBOMLine.M_Product_ID"
                   tableName="M_Product"
@@ -162,7 +162,7 @@
                   />
                 </div>
                 <div class="form-group">
-                  <label>組成類型</label>
+                  <label>項目類型</label>
                   <select class="form-input" v-model="newBOMLine.ComponentType">
                     <option v-for="ct in componentTypes" :key="ct.value" :value="ct.value">
                       {{ ct.name }}
@@ -191,7 +191,7 @@
               :disabled="verifying"
               @click="handleVerifyBOM"
             >
-              {{ verifying ? '驗證中...' : '驗證 BOM' }}
+              {{ verifying ? '驗證中...' : '驗證療程' }}
             </button>
           </div>
 
@@ -297,8 +297,8 @@ const bomProductFilter = computed(() => {
 
 function getBOMProductName(line: any): string {
   const p = line.M_Product_ID
-  if (p && typeof p === 'object') return p.identifier || p.Name || '未知產品'
-  return '未知產品'
+  if (p && typeof p === 'object') return p.identifier || p.Name || '未知品項'
+  return '未知品項'
 }
 
 function getComponentTypeLabel(line: any): string {
@@ -351,7 +351,7 @@ async function loadComponentTypes() {
 
 async function ensureBOMHeader(): Promise<number> {
   if (bomHeader.value) return bomHeader.value.id
-  const productName = formData.value.Name || 'BOM'
+  const productName = formData.value.Name || ''
   const productValue = formData.value.Value || productName
   const created = await createBOM({
     M_Product_ID: productId.value!,
@@ -382,7 +382,7 @@ async function handleAddBOMLine() {
     await loadBOM()
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    bomMsg.value = err.response?.data?.detail || err.message || '新增 BOM 項目失敗'
+    bomMsg.value = err.response?.data?.detail || err.message || '新增療程項目失敗'
     bomMsgType.value = 'error'
   } finally {
     addingBOMLine.value = false
@@ -424,7 +424,7 @@ async function handleUpdateBOMLine() {
     await loadBOM()
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    bomMsg.value = err.response?.data?.detail || err.message || '儲存 BOM 項目失敗'
+    bomMsg.value = err.response?.data?.detail || err.message || '儲存療程項目失敗'
     bomMsgType.value = 'error'
   } finally {
     savingBOMLine.value = false
@@ -437,7 +437,7 @@ async function handleDeleteBOMLine(lineId: number) {
     await deleteBOMLine(lineId)
     await loadBOM()
   } catch {
-    bomMsg.value = '刪除 BOM 項目失敗'
+    bomMsg.value = '刪除療程項目失敗'
     bomMsgType.value = 'error'
   }
 }
@@ -449,17 +449,17 @@ async function handleVerifyBOM() {
   try {
     const result = await verifyBOM(productId.value)
     if (result.isError) {
-      bomMsg.value = result.summary || 'BOM 驗證失敗'
+      bomMsg.value = result.summary || '療程驗證失敗'
       bomMsgType.value = 'error'
     } else {
-      bomMsg.value = 'BOM 驗證成功'
+      bomMsg.value = '療程驗證成功'
       bomMsgType.value = 'success'
       const data = await getProduct(productId.value)
       populateFromRecord(data)
     }
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    bomMsg.value = err.response?.data?.detail || err.message || 'BOM 驗證失敗'
+    bomMsg.value = err.response?.data?.detail || err.message || '療程驗證失敗'
     bomMsgType.value = 'error'
   } finally {
     verifying.value = false

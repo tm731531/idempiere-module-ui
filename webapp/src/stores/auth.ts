@@ -319,17 +319,43 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Switch context: go back to credentials step for a fresh token.
-   * The old token may become stale after context changes, so always re-authenticate.
+   * Switch context: keep token + context, go back to client selection step.
+   * Context/user are NOT cleared until new selections finalize via PUT /auth/tokens.
+   * This allows canceling the switch and returning to previous state.
    */
-  function switchContext(): void {
-    context.value = null
-    user.value = null
+  async function switchContext(): Promise<void> {
     loginError.value = ''
-    loginStep.value = 'credentials'
-    localStorage.removeItem('auth_context')
-    localStorage.removeItem('auth_user')
     clearLookupCache()
+
+    // If we have a token, skip credentials and go straight to client selection
+    if (token.value && availableClients.value.length > 0) {
+      if (availableClients.value.length === 1) {
+        // Auto-select the only client, go to role selection
+        await selectClient(availableClients.value[0]!.id)
+      } else {
+        loginStep.value = 'client'
+      }
+    } else {
+      // No token or no clients — fall back to full re-login
+      context.value = null
+      user.value = null
+      loginStep.value = 'credentials'
+      localStorage.removeItem('auth_context')
+      localStorage.removeItem('auth_user')
+    }
+  }
+
+  /**
+   * Cancel switch: restore 'done' state when user backs out of context switching.
+   * Only works if token + context still exist.
+   */
+  function cancelSwitch(): boolean {
+    if (token.value && context.value) {
+      loginStep.value = 'done'
+      loginError.value = ''
+      return true
+    }
+    return false
   }
 
   function logout() {
@@ -405,6 +431,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginGoBack,
     login,
     switchContext,
+    cancelSwitch,
     logout,
   }
 })

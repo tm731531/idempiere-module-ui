@@ -36,7 +36,7 @@
             {{ item.name }}
           </button>
         </div>
-        <button class="back-btn" @click="auth.loginGoBack()">返回</button>
+        <button class="back-btn" @click="handleGoBack">返回</button>
       </div>
     </div>
   </div>
@@ -51,15 +51,15 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
-const username = ref('')
-const password = ref('')
+const username = ref('SuperUser')
+const password = ref('System')
 
 const stepTitle = computed(() => {
   switch (auth.loginStep) {
     case 'client': return '選擇公司'
     case 'role': return '選擇角色'
-    case 'org': return '選擇組織'
-    case 'warehouse': return '選擇倉庫'
+    case 'org': return '選擇分院'
+    case 'warehouse': return '選擇庫房'
     default: return ''
   }
 })
@@ -91,6 +91,15 @@ async function selectItem(id: number) {
   if (auth.isAuthenticated) {
     navigateAfterLogin()
   }
+}
+
+function handleGoBack() {
+  // If on client step during context switch, cancel and go home
+  if (auth.loginStep === 'client' && auth.cancelSwitch()) {
+    router.push('/')
+    return
+  }
+  auth.loginGoBack()
 }
 
 function navigateAfterLogin() {

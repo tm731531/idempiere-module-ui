@@ -13,6 +13,7 @@
       <div v-if="!isCreate && recordData" class="doc-info">
         <span class="doc-docno">{{ recordData.DocumentNo }}</span>
         <StatusBadge :status="docStatus" />
+        <span class="doc-key-field">客戶: {{ getHeaderBPartnerName() }}</span>
       </div>
 
       <!-- Dynamic form from AD metadata -->
@@ -191,9 +192,16 @@ const newLine = reactive({
   Description: '',
 })
 
+function getHeaderBPartnerName(): string {
+  if (!recordData.value) return '未指定客戶'
+  const bp = recordData.value.C_BPartner_ID
+  if (bp && typeof bp === 'object') return bp.identifier || bp.Name || '未指定客戶'
+  return '未指定客戶'
+}
+
 function getProductName(line: any): string {
   if (line.M_Product_ID && typeof line.M_Product_ID === 'object') {
-    return line.M_Product_ID.identifier || '未知產品'
+    return line.M_Product_ID.identifier || line.M_Product_ID.Name || '未知產品'
   }
   return '未知產品'
 }
@@ -314,8 +322,9 @@ onMounted(async () => {
 .loading-state { text-align: center; padding: 2rem; color: #64748b; }
 .form-error { background: #fef2f2; color: var(--color-error); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
 .form-section { margin-bottom: 1.5rem; }
-.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .doc-docno { font-size: 1.125rem; font-weight: 600; }
+.doc-key-field { font-size: 0.875rem; color: #64748b; background: #f1f5f9; padding: 0.125rem 0.5rem; border-radius: 4px; }
 .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-border); }
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; }

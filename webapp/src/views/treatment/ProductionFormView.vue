@@ -13,6 +13,7 @@
       <div v-if="!isCreate && recordData" class="doc-info">
         <span class="doc-docno">{{ recordData.DocumentNo }}</span>
         <StatusBadge :status="docStatus" />
+        <span class="doc-key-field">療程: {{ getHeaderProductName() }}</span>
       </div>
 
       <!-- Dynamic form from AD metadata -->
@@ -178,9 +179,17 @@ const newLine = reactive({
 
 function getProductName(line: any): string {
   if (line.M_Product_ID && typeof line.M_Product_ID === 'object') {
-    return line.M_Product_ID.identifier || '未知產品'
+    return line.M_Product_ID.identifier || line.M_Product_ID.Name || '未知產品'
   }
   return '未知產品'
+}
+
+function getHeaderProductName(): string {
+  if (!recordData.value) return '未指定療程'
+  const p = recordData.value.M_Product_ID
+  if (p && typeof p === 'object') return p.identifier || p.Name || '未指定療程'
+  if (fkLabels.value?.M_Product_ID) return fkLabels.value.M_Product_ID
+  return '未指定療程'
 }
 
 async function handleCreateProduction() {
@@ -293,8 +302,9 @@ onMounted(async () => {
 .form-error { background: #fef2f2; color: var(--color-error); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
 .mandatory-errors { background: #fffbeb; color: #92400e; padding: 0.75rem; border-radius: 8px; margin-top: 1rem; font-size: 0.875rem; }
 .form-section { margin-bottom: 1.5rem; }
-.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .doc-docno { font-size: 1.125rem; font-weight: 600; }
+.doc-key-field { font-size: 0.875rem; color: #64748b; background: #f1f5f9; padding: 0.125rem 0.5rem; border-radius: 4px; }
 .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-border); }
 .form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; }

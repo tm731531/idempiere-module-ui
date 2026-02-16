@@ -174,6 +174,16 @@ const labels: Record<string, string> = {
   CreateFrom: '建立/更新生產明細',
   DocAction: '單據動作',
 
+  // BOM
+  BOMType: 'BOM 類型',
+  BOMUse: 'BOM 用途',
+  QtyBOM: '數量',
+  ComponentType: '組成類型',
+  IssueMethod: '領料方式',
+  Scrap: '損耗率 %',
+  ValidFrom: '生效日',
+  ValidTo: '失效日',
+
   // Project
   C_Project_ID: '專案',
   C_Campaign_ID: '行銷活動',
@@ -182,6 +192,26 @@ const labels: Record<string, string> = {
   C_BankAccount_ID: '銀行帳戶',
   C_ConversionType_ID: '匯率類型',
   C_PaymentProcessor_ID: '付款處理器',
+
+  // Project / Activity / Campaign dimensions
+  DateContract: '合約日期',
+  DateFinish: '完成日期',
+  ProjInvoiceRule: '專案請款規則',
+  ProjectCategory: '專案類別',
+  ProjectLineLevel: '專案明細層級',
+  PlannedAmt: '計畫金額',
+  PlannedQty: '計畫數量',
+  PlannedMarginAmt: '計畫利潤',
+  CommittedAmt: '承諾金額',
+  CommittedQty: '承諾數量',
+  InvoicedAmt: '已開票金額',
+  InvoicedQty: '已開票數量',
+  ProjectBalanceAmt: '專案餘額',
+  IsCommitment: '承諾管理',
+  IsCommitCeiling: '承諾上限',
+  IsSummary: '彙總',
+  Costs: '費用',
+  EndDate: '結束日期',
 
   // Shipping
   DropShip_BPartner_ID: '直運對象',

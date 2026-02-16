@@ -14,6 +14,7 @@
       <div v-if="!isCreate && order" class="doc-info">
         <span class="doc-docno">{{ order.DocumentNo }}</span>
         <StatusBadge :status="docStatus" />
+        <span class="doc-key-field">{{ order.IsSOTrx !== false ? '客戶' : '供應商' }}: {{ getHeaderBPartnerName() }}</span>
       </div>
 
       <!-- IsSOTrx toggle (create mode) / badge (edit mode) -->
@@ -659,6 +660,14 @@ function onProductSelect(event: Event) {
   }
 }
 
+function getHeaderBPartnerName(): string {
+  if (!order.value) return '未指定'
+  const bp = order.value.C_BPartner_ID
+  if (bp && typeof bp === 'object') return bp.identifier || bp.Name || '未指定'
+  if (fkLabels.value?.C_BPartner_ID) return fkLabels.value.C_BPartner_ID
+  return '未指定'
+}
+
 function getProductName(line: any): string {
   const p = line.M_Product_ID
   if (p && typeof p === 'object') {
@@ -998,11 +1007,20 @@ onMounted(async () => {
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .doc-docno {
   font-size: 1.125rem;
   font-weight: 600;
+}
+
+.doc-key-field {
+  font-size: 0.875rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
 }
 
 .form-section {

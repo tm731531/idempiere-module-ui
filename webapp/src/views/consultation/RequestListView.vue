@@ -94,7 +94,7 @@ function getCustomerName(r: any): string {
 
 function getStatusName(r: any): string {
   if (r.R_Status_ID && typeof r.R_Status_ID === 'object') {
-    return r.R_Status_ID.identifier || ''
+    return r.R_Status_ID.identifier || r.R_Status_ID.Name || ''
   }
   return ''
 }

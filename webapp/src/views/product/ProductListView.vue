@@ -116,14 +116,14 @@ function onSearchInput() {
 
 function getCategoryName(p: any): string {
   if (p.M_Product_Category_ID && typeof p.M_Product_Category_ID === 'object') {
-    return p.M_Product_Category_ID.identifier || ''
+    return p.M_Product_Category_ID.identifier || p.M_Product_Category_ID.Name || ''
   }
   return ''
 }
 
 function getUomName(p: any): string {
   if (p.C_UOM_ID && typeof p.C_UOM_ID === 'object') {
-    return p.C_UOM_ID.identifier || ''
+    return p.C_UOM_ID.identifier || p.C_UOM_ID.Name || ''
   }
   return ''
 }

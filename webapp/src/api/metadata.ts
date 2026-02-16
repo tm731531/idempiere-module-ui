@@ -96,11 +96,12 @@ export async function fetchIdentifierColumn(tableName: string): Promise<string> 
         '$filter': `AD_Table_ID eq ${tableId} and IsIdentifier eq true and IsActive eq true`,
         '$select': 'ColumnName,SeqNo',
         '$orderby': 'SeqNo',
-        '$top': 1,
       },
     })
     const cols = colResp.data.records || []
-    const result = cols.length > 0 ? cols[0].ColumnName : 'Name'
+    // Prefer 'Name' if it's among identifiers (more user-friendly than Value/code)
+    const hasName = cols.some((c: any) => c.ColumnName === 'Name')
+    const result = hasName ? 'Name' : (cols.length > 0 ? cols[0].ColumnName : 'Name')
     identifierCache.set(tableName, result)
     return result
   } catch {

@@ -222,8 +222,8 @@ function getAppointmentColor(appt: any): string {
 }
 
 function getResourceName(appt: any): string {
-  if (typeof appt.S_Resource_ID === 'object' && appt.S_Resource_ID.identifier) {
-    return appt.S_Resource_ID.identifier
+  if (typeof appt.S_Resource_ID === 'object' && (appt.S_Resource_ID.identifier || appt.S_Resource_ID.Name)) {
+    return appt.S_Resource_ID.identifier || appt.S_Resource_ID.Name
   }
   const resId = typeof appt.S_Resource_ID === 'object' ? appt.S_Resource_ID.id : appt.S_Resource_ID
   const res = resources.value.find(r => r.id === resId)

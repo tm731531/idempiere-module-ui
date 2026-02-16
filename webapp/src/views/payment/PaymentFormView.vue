@@ -13,6 +13,7 @@
       <div v-if="!isCreate && recordData" class="doc-info">
         <span class="doc-docno">{{ recordData.DocumentNo }}</span>
         <StatusBadge :status="docStatus" />
+        <span class="doc-key-field">客戶: {{ getHeaderBPartnerName() }}</span>
       </div>
 
       <!-- Dynamic form from AD metadata -->
@@ -83,6 +84,13 @@ const {
 const submitting = ref(false)
 const errorMsg = ref('')
 
+function getHeaderBPartnerName(): string {
+  if (!recordData.value) return '未指定客戶'
+  const bp = recordData.value.C_BPartner_ID
+  if (bp && typeof bp === 'object') return bp.identifier || bp.Name || '未指定客戶'
+  return '未指定客戶'
+}
+
 async function handleCreatePayment() {
   const payload = getFormPayload()
 
@@ -121,8 +129,9 @@ onMounted(() => load())
 .form-header h2 { font-size: 1.25rem; margin: 0; }
 .loading-state { text-align: center; padding: 2rem; color: #64748b; }
 .form-error { background: #fef2f2; color: var(--color-error); padding: 0.75rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; }
-.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.doc-info { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .doc-docno { font-size: 1.125rem; font-weight: 600; }
+.doc-key-field { font-size: 0.875rem; color: #64748b; background: #f1f5f9; padding: 0.125rem 0.5rem; border-radius: 4px; }
 .form-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
 .form-actions button { flex: 1; padding: 0.75rem; border-radius: 8px; font-size: 1rem; min-height: var(--min-touch); cursor: pointer; background: var(--color-primary); color: white; border: none; }
 .form-actions button:hover:not(:disabled) { background: var(--color-primary-hover); }

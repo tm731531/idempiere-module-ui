@@ -302,11 +302,14 @@ GET /api/v1/models/AD_Val_Rule/{ruleId}?$select=Code
 ## 11. Processes / Reports
 
 ```json
-POST /api/v1/processes/{slug-or-id}
-{ "params": { "DateFrom": "2025-01-01", "C_BPartner_ID": 119 } }
+POST /api/v1/processes/{slug}
+{ "record-id": 123, "table-id": 208, "params": { "DateFrom": "2025-01-01" } }
 ```
 
-回傳可能包含 `summary`、`isError`、`logs`。報表回傳 PDF/HTML。
+- **slug = AD_Process.Value 小寫** (e.g. `pp_product_bom`, `c_order-process`)
+- **⚠️ 不能用數字 ID** — `processes/136` 回 404
+- `record-id` + `table-id` 用於 record-bound process
+- 回傳: `summary`、`isError`、`logs`。報表回傳 PDF/HTML。
 
 ---
 

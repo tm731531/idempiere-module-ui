@@ -95,6 +95,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin/dimensions',
+      name: 'dimension-data',
+      component: () => import('@/views/admin/DimensionDataView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin/tables',
       name: 'table-list',
       component: () => import('@/views/admin/TableListView.vue'),

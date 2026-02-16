@@ -86,7 +86,7 @@ function switchTab(tab: TabKey) {
 
 function getProductName(p: any): string {
   if (p.M_Product_ID && typeof p.M_Product_ID === 'object') {
-    return p.M_Product_ID.identifier || '未指定療程'
+    return p.M_Product_ID.identifier || p.M_Product_ID.Name || '未指定療程'
   }
   return '未指定療程'
 }

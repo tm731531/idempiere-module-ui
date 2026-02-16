@@ -54,12 +54,13 @@ const allCards: ModuleCard[] = [
   { icon: '👤', label: '客戶管理', desc: '管理客戶資料', route: '/customer', pageKey: 'customer', businessOnly: true },
   { icon: '📋', label: '諮詢記錄', desc: '諮詢與評估記錄', route: '/consultation', pageKey: 'consultation', businessOnly: true },
   { icon: '📅', label: '預約管理', desc: '預約行事曆', route: '/appointment', pageKey: 'appointment', businessOnly: true },
-  { icon: '🛒', label: '訂單管理', desc: '銷售訂單', route: '/order', pageKey: 'order', businessOnly: true },
+  { icon: '🛒', label: '開單紀錄', desc: '銷售與消費明細', route: '/order', pageKey: 'order', businessOnly: true },
   { icon: '💉', label: '療程記錄', desc: '療程執行與耗材', route: '/treatment', pageKey: 'treatment', businessOnly: true },
   { icon: '💰', label: '收款管理', desc: '收款記錄', route: '/payment', pageKey: 'payment', businessOnly: true },
-  { icon: '📦', label: '出入庫', desc: '出貨與收貨', route: '/shipment', pageKey: 'shipment', businessOnly: true },
-  { icon: '🏷️', label: '商品管理', desc: '管理商品與療程項目', route: '/product', pageKey: 'product', businessOnly: true },
-  { icon: '⚙️', label: '基礎資料', desc: '管理稅率、服務人員、儲位等設定', route: '/admin/reference-data', pageKey: null, businessOnly: true },
+  { icon: '📦', label: '庫存進出', desc: '進貨與領用記錄', route: '/shipment', pageKey: 'shipment', businessOnly: true },
+  { icon: '🏷️', label: '商品管理', desc: '商品與療程項目', route: '/product', pageKey: 'product', businessOnly: true },
+  { icon: '⚙️', label: '系統設定', desc: '稅率、服務人員、儲位', route: '/admin/reference-data', pageKey: null, businessOnly: true },
+  { icon: '📊', label: '行銷設定', desc: '績效分類設定', route: '/admin/dimensions', pageKey: null, businessOnly: true },
   { icon: '🗄️', label: 'Table/Column', desc: 'AD 資料字典管理', route: '/admin/tables', pageKey: null, systemOnly: true },
 ]
 

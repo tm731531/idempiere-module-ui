@@ -698,6 +698,35 @@ export async function lookupProductsOnPriceList(priceListId: number): Promise<Pr
   }).sort((a: PriceListProduct, b: PriceListProduct) => a.productName.localeCompare(b.productName))
 }
 
+/**
+ * Lookup default C_Currency_ID for the current client.
+ * Tries SO price list currency first, then falls back to first active currency.
+ */
+export async function lookupDefaultCurrencyId(): Promise<number> {
+  if (cache['C_Currency_Default'] !== undefined) return cache['C_Currency_Default']
+
+  // Try from SO price list (already cached by lookupSOCurrencyId)
+  const soCurrencyId = await lookupSOCurrencyId()
+  if (soCurrencyId) {
+    cache['C_Currency_Default'] = soCurrencyId
+    return soCurrencyId
+  }
+
+  // Fallback: first active currency
+  const resp = await apiClient.get('/api/v1/models/C_Currency', {
+    params: {
+      '$filter': 'IsActive eq true',
+      '$select': 'C_Currency_ID,ISO_Code',
+      '$orderby': 'ISO_Code',
+      '$top': '1',
+    },
+  })
+  const records = resp.data.records || []
+  const id = records[0]?.id || 0
+  cache['C_Currency_Default'] = id
+  return id
+}
+
 export async function lookupDefaultBankAccountId(): Promise<number> {
   if (cache['C_BankAccount'] !== undefined) return cache['C_BankAccount']
   const resp = await apiClient.get('/api/v1/models/C_BankAccount', {

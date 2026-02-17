@@ -350,6 +350,10 @@ POST /api/v1/models/{table}/{id}/attachments (multipart)
 | 混合日期欄位 | 不要混用兩個日期欄位做範圍查詢 |
 | 401 處理 | 不要 auto-logout，用 `sessionExpired` flag + UI banner |
 | DocAction | 不要 PUT 更新欄位，走 Process 端點 |
+| C_BPartner 單獨建 | ❌ 必須連同 C_Location → C_BPartner_Location → AD_User 一起建 |
+| BPartner 無地址 | 訂單/出入庫需要 C_BPartner_Location_ID，沒有要自動建立預設地址 |
+| 價目表無產品 | M_ProductPrice 為空時要 fallback 到全部 M_Product |
+| 倉庫預設值 | 優先用登入時選的 warehouseId，不要只查 lookupOrgWarehouse |
 
 ---
 

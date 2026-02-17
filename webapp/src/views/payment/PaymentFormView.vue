@@ -2,7 +2,7 @@
   <div class="payment-form-page">
     <div class="form-header">
       <button class="back-btn" @click="goBack">返回</button>
-      <h2>{{ isCreate ? '新增收款' : '收款明細' }}</h2>
+      <h2>{{ isCreate ? (isReceipt ? '新增收款' : '新增付款') : (isReceipt ? '收款明細' : '付款明細') }}</h2>
     </div>
 
     <div v-if="pageLoading" class="loading-state">載入中...</div>
@@ -13,7 +13,13 @@
       <div v-if="!isCreate && recordData" class="doc-info">
         <span class="doc-docno">{{ recordData.DocumentNo }}</span>
         <StatusBadge :status="docStatus" />
-        <span class="doc-key-field">客戶: {{ getHeaderBPartnerName() }}</span>
+        <span class="doc-key-field">{{ isReceipt ? '客戶' : '供應商' }}: {{ getHeaderBPartnerName() }}</span>
+      </div>
+
+      <!-- AR/AP toggle -->
+      <div v-if="isCreate" class="type-toggle">
+        <button type="button" :class="['toggle-btn', { active: isReceipt }]" @click="setReceiptType(true)">收款 (AR)</button>
+        <button type="button" :class="['toggle-btn', { active: !isReceipt }]" @click="setReceiptType(false)">付款 (AP)</button>
       </div>
 
       <!-- Dynamic form from AD metadata -->
@@ -30,7 +36,7 @@
       <div v-if="isCreate" class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
         <button type="button" :disabled="submitting" @click="handleCreatePayment">
-          {{ submitting ? '建立中...' : '建立收款' }}
+          {{ submitting ? '建立中...' : (isReceipt ? '建立收款' : '建立付款') }}
         </button>
       </div>
 
@@ -60,8 +66,6 @@ const paymentId = computed(() => {
   return id ? Number(id) : null
 })
 
-const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
-
 const {
   visibleFieldDefs,
   formData,
@@ -78,17 +82,37 @@ const {
   recordId: paymentId,
   loadRecord: (id) => getPayment(id),
   excludeColumns: ['C_DocType_ID', 'C_BankAccount_ID', 'C_Currency_ID', 'DateAcct', 'IsReceipt'],
-  columnFilters,
 })
+
+const isReceipt = computed(() => formData.value.IsReceipt !== false)
+
+const columnFilters = computed<Record<string, string>>(() => {
+  const ar = isReceipt.value
+  const excludeClosed = "DocStatus neq 'CL' and DocStatus neq 'VO'"
+  return {
+    C_BPartner_ID: ar ? 'IsCustomer eq true' : 'IsVendor eq true',
+    C_Order_ID: ar
+      ? `IsSOTrx eq true and ${excludeClosed}`
+      : `IsSOTrx eq false and ${excludeClosed}`,
+    C_Invoice_ID: ar
+      ? `IsSOTrx eq true and ${excludeClosed}`
+      : `IsSOTrx eq false and ${excludeClosed}`,
+  }
+})
+
+function setReceiptType(receipt: boolean) {
+  formData.value = { ...formData.value, IsReceipt: receipt }
+}
 
 const submitting = ref(false)
 const errorMsg = ref('')
 
 function getHeaderBPartnerName(): string {
-  if (!recordData.value) return '未指定客戶'
+  const fallback = isReceipt.value ? '未指定客戶' : '未指定供應商'
+  if (!recordData.value) return fallback
   const bp = recordData.value.C_BPartner_ID
-  if (bp && typeof bp === 'object') return bp.identifier || bp.Name || '未指定客戶'
-  return '未指定客戶'
+  if (bp && typeof bp === 'object') return bp.identifier || bp.Name || fallback
+  return fallback
 }
 
 async function handleCreatePayment() {
@@ -98,6 +122,7 @@ async function handleCreatePayment() {
   if (!payload.PayAmt) { errorMsg.value = '請輸入金額'; return }
 
   payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+  payload.IsReceipt = isReceipt.value
 
   submitting.value = true
   errorMsg.value = ''
@@ -139,4 +164,8 @@ onMounted(() => load())
 .cancel-btn { background: transparent !important; border: 1px solid var(--color-border) !important; color: var(--color-text) !important; }
 .action-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
 .back-btn { padding: 0.5rem 1rem; background: transparent; border: 1px solid var(--color-border); border-radius: 8px; cursor: pointer; min-height: var(--min-touch); }
+.type-toggle { display: flex; gap: 0; margin-bottom: 1rem; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+.toggle-btn { flex: 1; padding: 0.625rem; font-size: 0.9375rem; border: none; background: transparent; cursor: pointer; min-height: var(--min-touch); color: var(--color-text); transition: background 0.15s, color 0.15s; }
+.toggle-btn.active { background: var(--color-primary); color: white; font-weight: 600; }
+.toggle-btn:not(.active):hover { background: rgba(99, 102, 241, 0.06); }
 </style>

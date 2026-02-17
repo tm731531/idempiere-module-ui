@@ -212,6 +212,10 @@ const labels: Record<string, string> = {
   IsSummary: '彙總',
   Costs: '費用',
   EndDate: '結束日期',
+  IsSameTax: '統一稅率',
+  IsSameCurrency: '統一幣別',
+  IsTaxExempt: '免稅',
+  C_ChargeType_ID: '費用類型',
 
   // Shipping
   DropShip_BPartner_ID: '直運對象',

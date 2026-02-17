@@ -152,7 +152,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { apiClient } from '@/api/client'
-import { lookupOrgWarehouse, clearLookupCache, updatePriceListTaxIncluded } from '@/api/lookup'
+import { lookupOrgWarehouse, lookupDefaultTaxCategoryId, clearLookupCache, updatePriceListTaxIncluded } from '@/api/lookup'
 import DynamicForm from '@/components/DynamicForm.vue'
 import { useDocumentForm } from '@/composables/useDocumentForm'
 
@@ -274,6 +274,24 @@ const managedTables: ManagedTable[] = [
       return {
         M_Warehouse_ID: whId, X: '0', Y: '0', Z: '0',
         IsDefault: false, PriorityNo: 50,
+      }
+    },
+  },
+  {
+    tableName: 'C_Charge', label: '費用項目',
+    description: '費用項目管理，例如「運費」「手續費」',
+    idColumn: 'C_Charge_ID', tabId: 237,
+    extraFields: [
+      { key: 'ChargeAmt', label: '金額', type: 'number', min: 0, step: 1 },
+    ],
+    displayColumns: (rec: any) => rec.ChargeAmt != null ? `$${Number(rec.ChargeAmt).toLocaleString()}` : '',
+    async extraDefaults() {
+      const catId = await lookupDefaultTaxCategoryId()
+      if (!catId) throw new Error('找不到稅務類別')
+      return {
+        C_TaxCategory_ID: catId,
+        IsSameTax: false,
+        IsSameCurrency: false,
       }
     },
   },

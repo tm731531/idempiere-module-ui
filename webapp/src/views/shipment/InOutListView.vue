@@ -1,11 +1,18 @@
 <template>
   <div class="inout-list-page">
+    <!-- Primary: Shipment/Receipt toggle -->
+    <div class="type-toggle">
+      <button :class="['toggle-btn', { active: isShipment }]" @click="setType(true)">出貨</button>
+      <button :class="['toggle-btn', { active: !isShipment }]" @click="setType(false)">收貨</button>
+    </div>
+
+    <!-- Secondary: Status tabs -->
     <div class="filter-tabs">
       <button
-        v-for="tab in tabs"
+        v-for="tab in statusTabs"
         :key="tab.key"
-        :class="['tab-btn', { active: activeTab === tab.key }]"
-        @click="switchTab(tab.key)"
+        :class="['tab-btn', { active: statusTab === tab.key }]"
+        @click="switchStatus(tab.key)"
       >
         {{ tab.label }}
       </button>
@@ -14,7 +21,7 @@
     <div v-if="loading" class="loading-state">載入中...</div>
 
     <div v-else-if="inouts.length === 0" class="empty-state">
-      <p>目前沒有出貨/收貨紀錄</p>
+      <p>目前沒有{{ isShipment ? '出貨' : '收貨' }}紀錄</p>
     </div>
 
     <div v-else class="inout-cards">
@@ -30,47 +37,51 @@
         </div>
         <div class="card-meta">
           <StatusBadge :status="getDocStatus(io)" />
-          <span class="card-type">{{ getTypeLabel(io) }}</span>
           <span class="card-date">{{ formatDate(io.MovementDate) }}</span>
         </div>
       </div>
     </div>
 
-    <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增出入庫</button>
+    <button class="fab" @click="goToNew">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      新增{{ isShipment ? '出貨' : '收貨' }}
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { listInOuts } from '@/api/inout'
 import StatusBadge from '@/components/StatusBadge.vue'
 
-type TabKey = 'all' | 'shipment' | 'receipt'
+type StatusKey = 'all' | 'draft' | 'completed'
 
-const tabs: { key: TabKey; label: string }[] = [
+const statusTabs: { key: StatusKey; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: 'shipment', label: '出貨' },
-  { key: 'receipt', label: '收貨' },
+  { key: 'draft', label: '草稿' },
+  { key: 'completed', label: '已完成' },
 ]
 
 const router = useRouter()
+const route = useRoute()
 
-const activeTab = ref<TabKey>('all')
+const isShipment = ref(true)
+const statusTab = ref<StatusKey>('all')
 const inouts = ref<any[]>([])
 const loading = ref(false)
 
-function getFilterForTab(tab: TabKey): string | undefined {
-  if (tab === 'shipment') return 'IsSOTrx eq true'
-  if (tab === 'receipt') return 'IsSOTrx eq false'
-  return undefined
+function buildFilter(): string {
+  const parts: string[] = [isShipment.value ? 'IsSOTrx eq true' : 'IsSOTrx eq false']
+  if (statusTab.value === 'draft') parts.push("DocStatus eq 'DR'")
+  else if (statusTab.value === 'completed') parts.push("DocStatus eq 'CO'")
+  return parts.join(' and ')
 }
 
 async function loadInOuts() {
   loading.value = true
   try {
-    const filter = getFilterForTab(activeTab.value)
-    inouts.value = await listInOuts(filter)
+    inouts.value = await listInOuts(buildFilter())
   } catch {
     inouts.value = []
   } finally {
@@ -78,20 +89,27 @@ async function loadInOuts() {
   }
 }
 
-function switchTab(tab: TabKey) {
-  activeTab.value = tab
+function setType(shipment: boolean) {
+  if (isShipment.value === shipment) return
+  isShipment.value = shipment
+  loadInOuts()
+}
+
+function switchStatus(key: StatusKey) {
+  statusTab.value = key
   loadInOuts()
 }
 
 function getCustomerName(io: any): string {
   const bp = io.C_BPartner_ID
+  const fallback = isShipment.value ? '未指定客戶' : '未指定供應商'
   if (bp && typeof bp === 'object') {
-    return bp.identifier || bp.Name || bp.name || '未指定客戶'
+    return bp.identifier || bp.Name || bp.name || fallback
   }
   if (typeof bp === 'number' && bp > 0) {
-    return `客戶 #${bp}`
+    return `#${bp}`
   }
-  return '未指定客戶'
+  return fallback
 }
 
 function getDocStatus(io: any): string {
@@ -99,14 +117,6 @@ function getDocStatus(io: any): string {
     return io.DocStatus.id || 'DR'
   }
   return io.DocStatus || 'DR'
-}
-
-function getTypeLabel(io: any): string {
-  let isSOTrx = io.IsSOTrx
-  if (isSOTrx && typeof isSOTrx === 'object') {
-    isSOTrx = isSOTrx.id
-  }
-  return isSOTrx ? '出貨' : '收貨'
 }
 
 function formatDate(dateStr: string): string {
@@ -123,10 +133,12 @@ function goToDetail(id: number) {
 }
 
 function goToNew() {
-  router.push({ name: 'shipment-new' })
+  router.push({ name: 'shipment-new', query: { type: isShipment.value ? 'so' : 'po' } })
 }
 
 onMounted(() => {
+  const type = route.query.type as string
+  if (type === 'po') isShipment.value = false
   loadInOuts()
 })
 </script>
@@ -139,6 +151,37 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 0.625rem;
+  font-size: 0.9375rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  min-height: var(--min-touch);
+  color: var(--color-text);
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.toggle-btn:not(.active):hover {
+  background: rgba(99, 102, 241, 0.06);
+}
+
 .filter-tabs {
   display: flex;
   gap: 0.5rem;
@@ -147,12 +190,12 @@ onMounted(() => {
 
 .tab-btn {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.375rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: transparent;
-  font-size: 0.875rem;
-  min-height: var(--min-touch);
+  font-size: 0.8125rem;
+  min-height: 36px;
   cursor: pointer;
 }
 
@@ -210,11 +253,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.card-type {
-  font-size: 0.8125rem;
-  color: #64748b;
 }
 
 .card-date {

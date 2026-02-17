@@ -1,11 +1,18 @@
 <template>
   <div class="order-list-page">
+    <!-- Primary: SO/PO toggle -->
+    <div class="type-toggle">
+      <button :class="['toggle-btn', { active: isSOTrx }]" @click="setType(true)">銷售訂單</button>
+      <button :class="['toggle-btn', { active: !isSOTrx }]" @click="setType(false)">採購單</button>
+    </div>
+
+    <!-- Secondary: Status tabs -->
     <div class="filter-tabs">
       <button
-        v-for="tab in tabs"
+        v-for="tab in statusTabs"
         :key="tab.key"
-        :class="['tab-btn', { active: activeTab === tab.key }]"
-        @click="switchTab(tab.key)"
+        :class="['tab-btn', { active: statusTab === tab.key }]"
+        @click="switchStatus(tab.key)"
       >
         {{ tab.label }}
       </button>
@@ -14,7 +21,7 @@
     <div v-if="loading" class="loading-state">載入中...</div>
 
     <div v-else-if="orders.length === 0" class="empty-state">
-      <p>目前沒有訂單</p>
+      <p>目前沒有{{ isSOTrx ? '銷售訂單' : '採購單' }}</p>
     </div>
 
     <div v-else class="order-cards">
@@ -29,9 +36,6 @@
           <div class="card-customer">{{ getCustomerName(o) }}</div>
         </div>
         <div class="card-meta">
-          <span :class="['sotrx-chip', o.IsSOTrx !== false ? 'so' : 'po']">
-            {{ o.IsSOTrx !== false ? '銷售' : '採購' }}
-          </span>
           <StatusBadge :status="getDocStatus(o)" />
           <span class="card-total">${{ formatAmount(o.GrandTotal) }}</span>
           <span class="card-date">{{ formatDate(o.DateOrdered) }}</span>
@@ -39,41 +43,46 @@
       </div>
     </div>
 
-    <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增訂單</button>
+    <button class="fab" @click="goToNew">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      新增{{ isSOTrx ? '銷售訂單' : '採購單' }}
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { listOrders } from '@/api/order'
 import StatusBadge from '@/components/StatusBadge.vue'
 
-type TabKey = 'all' | 'draft' | 'completed'
+type StatusKey = 'all' | 'draft' | 'completed'
 
-const tabs: { key: TabKey; label: string }[] = [
+const statusTabs: { key: StatusKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'draft', label: '草稿' },
   { key: 'completed', label: '已完成' },
 ]
 
 const router = useRouter()
+const route = useRoute()
 
-const activeTab = ref<TabKey>('all')
+const isSOTrx = ref(true)
+const statusTab = ref<StatusKey>('all')
 const orders = ref<any[]>([])
 const loading = ref(false)
 
-function getFilterForTab(tab: TabKey): string | undefined {
-  if (tab === 'draft') return "DocStatus eq 'DR'"
-  if (tab === 'completed') return "DocStatus eq 'CO'"
-  return undefined
+function buildFilter(): string {
+  const parts: string[] = [isSOTrx.value ? 'IsSOTrx eq true' : 'IsSOTrx eq false']
+  if (statusTab.value === 'draft') parts.push("DocStatus eq 'DR'")
+  else if (statusTab.value === 'completed') parts.push("DocStatus eq 'CO'")
+  return parts.join(' and ')
 }
 
 async function loadOrders() {
   loading.value = true
   try {
-    const filter = getFilterForTab(activeTab.value)
-    orders.value = await listOrders(filter)
+    orders.value = await listOrders(buildFilter())
   } catch {
     orders.value = []
   } finally {
@@ -81,14 +90,20 @@ async function loadOrders() {
   }
 }
 
-function switchTab(tab: TabKey) {
-  activeTab.value = tab
+function setType(so: boolean) {
+  if (isSOTrx.value === so) return
+  isSOTrx.value = so
+  loadOrders()
+}
+
+function switchStatus(key: StatusKey) {
+  statusTab.value = key
   loadOrders()
 }
 
 function getCustomerName(o: any): string {
   const bp = o.C_BPartner_ID
-  const fallback = o.IsSOTrx !== false ? '未指定客戶' : '未指定供應商'
+  const fallback = isSOTrx.value ? '未指定客戶' : '未指定供應商'
   if (bp && typeof bp === 'object') {
     return bp.identifier || bp.Name || fallback
   }
@@ -124,10 +139,12 @@ function goToDetail(id: number) {
 }
 
 function goToNew() {
-  router.push({ name: 'order-new' })
+  router.push({ name: 'order-new', query: { type: isSOTrx.value ? 'so' : 'po' } })
 }
 
 onMounted(() => {
+  const type = route.query.type as string
+  if (type === 'po') isSOTrx.value = false
   loadOrders()
 })
 </script>
@@ -140,6 +157,37 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 0.625rem;
+  font-size: 0.9375rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  min-height: var(--min-touch);
+  color: var(--color-text);
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.toggle-btn:not(.active):hover {
+  background: rgba(99, 102, 241, 0.06);
+}
+
 .filter-tabs {
   display: flex;
   gap: 0.5rem;
@@ -148,12 +196,12 @@ onMounted(() => {
 
 .tab-btn {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.375rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: transparent;
-  font-size: 0.875rem;
-  min-height: var(--min-touch);
+  font-size: 0.8125rem;
+  min-height: 36px;
   cursor: pointer;
 }
 
@@ -223,24 +271,6 @@ onMounted(() => {
 .card-date {
   font-size: 0.8125rem;
   color: #94a3b8;
-}
-
-.sotrx-chip {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.sotrx-chip.so {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.sotrx-chip.po {
-  background: #fefce8;
-  color: #ca8a04;
 }
 
 .fab {

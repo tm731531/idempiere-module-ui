@@ -21,7 +21,7 @@ export const TENDER_TYPES = [
 
 export async function listPayments(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'C_Payment_ID,DocumentNo,DocStatus,C_BPartner_ID,PayAmt,TenderType,DateTrx',
+    '$select': 'C_Payment_ID,DocumentNo,DocStatus,C_BPartner_ID,PayAmt,TenderType,DateTrx,IsReceipt',
     '$expand': 'C_BPartner_ID',
     '$orderby': 'DateTrx desc',
     '$top': '100',

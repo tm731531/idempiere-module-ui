@@ -577,9 +577,59 @@ export async function lookupBPartnerLocationId(bpartnerId: number): Promise<numb
   })
   const records = resp.data.records || []
   if (records.length === 0) {
-    throw new Error('此客戶沒有地址，請先編輯客戶資料新增地址')
+    // Auto-create a default location so the user isn't stuck
+    return await createDefaultBPartnerLocation(bpartnerId)
   }
   return records[0].id
+}
+
+/**
+ * Auto-create a minimal C_Location + C_BPartner_Location for a BPartner that has none.
+ * Uses C_Country_ID from system defaults (lookupDefaultCountryId) so we don't hardcode.
+ */
+async function createDefaultBPartnerLocation(bpartnerId: number): Promise<number> {
+  const countryId = await lookupDefaultCountryId()
+
+  // 1. Create minimal C_Location
+  const locResp = await apiClient.post('/api/v1/models/C_Location', {
+    C_Country_ID: countryId,
+    Address1: '',
+  })
+  const locationId = locResp.data.id
+
+  // 2. Create C_BPartner_Location linking to the location
+  try {
+    const bpLocResp = await apiClient.post('/api/v1/models/C_BPartner_Location', {
+      C_BPartner_ID: bpartnerId,
+      C_Location_ID: locationId,
+      Name: '預設地址',
+    })
+    return bpLocResp.data.id
+  } catch (error) {
+    // Cleanup location on failure
+    try { await apiClient.delete(`/api/v1/models/C_Location/${locationId}`) } catch { /* best-effort */ }
+    throw error
+  }
+}
+
+/**
+ * Lookup the default C_Country_ID from AD_ClientInfo → C_Country_ID.
+ * Falls back to 316 (Taiwan) if not found.
+ */
+async function lookupDefaultCountryId(): Promise<number> {
+  const key = 'defaultCountryId'
+  if (cache[key] !== undefined) return cache[key] as number
+  try {
+    const resp = await apiClient.get('/api/v1/models/AD_ClientInfo', {
+      params: { '$select': 'C_Country_ID', '$top': '1' },
+    })
+    const records = resp.data.records || []
+    const countryId = extractId(records[0]?.C_Country_ID) || 316
+    cache[key] = countryId
+    return countryId
+  } catch {
+    return 316
+  }
 }
 
 /**
@@ -696,6 +746,31 @@ export async function lookupProductsOnPriceList(priceListId: number): Promise<Pr
       priceLimit: r.PriceLimit ?? 0,
     }
   }).sort((a: PriceListProduct, b: PriceListProduct) => a.productName.localeCompare(b.productName))
+}
+
+/**
+ * Get all active products (not filtered by price list).
+ * Fallback for when the price list has no products configured.
+ */
+export async function lookupAllActiveProducts(): Promise<PriceListProduct[]> {
+  const resp = await apiClient.get('/api/v1/models/M_Product', {
+    params: {
+      '$filter': 'IsActive eq true and IsSummary eq false',
+      '$select': 'M_Product_ID,Name,C_UOM_ID',
+      '$expand': 'C_UOM_ID',
+      '$orderby': 'Name',
+      '$top': '500',
+    },
+  })
+  const records = resp.data.records || []
+  return records.map((r: any) => ({
+    productId: r.id,
+    productName: r.Name || `#${r.id}`,
+    uomId: r.C_UOM_ID?.id ?? 0,
+    priceStd: 0,
+    priceList: 0,
+    priceLimit: 0,
+  }))
 }
 
 /**

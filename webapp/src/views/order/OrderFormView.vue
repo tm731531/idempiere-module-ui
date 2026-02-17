@@ -113,7 +113,7 @@
                     :key="p.productId"
                     :value="p.productId"
                   >
-                    {{ p.productName }} (${{ p.priceStd }})
+                    {{ p.productName }}{{ p.priceStd ? ` ($${p.priceStd})` : '' }}
                   </option>
                 </select>
                 <div v-else-if="productsLoading" class="loading-state">載入產品中...</div>
@@ -210,11 +210,11 @@
                   :key="p.productId"
                   :value="p.productId"
                 >
-                  {{ p.productName }} (${{ p.priceStd }})
+                  {{ p.productName }}{{ p.priceStd ? ` ($${p.priceStd})` : '' }}
                 </option>
               </select>
               <div v-else-if="productsLoading" class="loading-state">載入產品中...</div>
-              <div v-else class="empty-lines">此價目表尚無產品</div>
+              <div v-else class="empty-lines">尚無可選產品</div>
             </div>
             <div class="inline-fields">
               <div class="form-group">
@@ -305,6 +305,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDocumentForm } from '@/composables/useDocumentForm'
 import {
   lookupBPartnerOrderInfo,
+  lookupBPartnerLocationId,
   lookupDocTypeInfo,
   lookupPriceListInfo,
   lookupOrgWarehouse,
@@ -312,6 +313,7 @@ import {
   lookupSalesPriceListId,
   lookupPurchasePriceListId,
   lookupProductsOnPriceList,
+  lookupAllActiveProducts,
   lookupTaxes,
   createTax,
   clearLookupCache,
@@ -449,10 +451,14 @@ watch(() => formData.value.C_BPartner_ID, async (newBpId) => {
     const updates: Record<string, any> = {
       Bill_BPartner_ID: newBpId,
     }
-    // Locations
-    if (info.shipLocationId) updates.C_BPartner_Location_ID = info.shipLocationId
+    // Locations — auto-create if BPartner has none
+    let shipLocId = info.shipLocationId
+    if (!shipLocId) {
+      shipLocId = await lookupBPartnerLocationId(newBpId)
+    }
+    if (shipLocId) updates.C_BPartner_Location_ID = shipLocId
     if (info.billLocationId) updates.Bill_Location_ID = info.billLocationId
-    else if (info.shipLocationId) updates.Bill_Location_ID = info.shipLocationId
+    else if (shipLocId) updates.Bill_Location_ID = shipLocId
     // Contacts
     if (info.userId) updates.AD_User_ID = info.userId
     if (info.billUserId) updates.Bill_User_ID = info.billUserId
@@ -552,6 +558,12 @@ watch(() => formData.value.AD_Org_ID, async (newOrgId) => {
   if (!newOrgId || !isCreate.value) return
   // Set default warehouse if not already set
   if (formData.value.M_Warehouse_ID) return
+  // Prefer the warehouse selected at login
+  const loginWhId = authStore.context?.warehouseId
+  if (loginWhId) {
+    formData.value = { ...formData.value, M_Warehouse_ID: loginWhId }
+    return
+  }
   try {
     const whId = await lookupOrgWarehouse(newOrgId)
     if (whId) {
@@ -637,7 +649,12 @@ const productsLoading = ref(false)
 async function loadPriceListProducts(priceListId: number) {
   productsLoading.value = true
   try {
-    priceListProducts.value = await lookupProductsOnPriceList(priceListId)
+    let products = await lookupProductsOnPriceList(priceListId)
+    // Fallback: if price list has no products, load all active products
+    if (products.length === 0) {
+      products = await lookupAllActiveProducts()
+    }
+    priceListProducts.value = products
   } catch {
     priceListProducts.value = []
   } finally {
@@ -927,14 +944,19 @@ async function applyInitialCallouts() {
     }
   }
 
-  // 2. Set default warehouse from org if not already set
+  // 2. Set default warehouse: prefer login warehouse, fallback to org lookup
   if (!formData.value.M_Warehouse_ID) {
-    const orgId = formData.value.AD_Org_ID || authStore.context?.organizationId
-    if (orgId) {
-      try {
-        const whId = await lookupOrgWarehouse(orgId)
-        if (whId) updates.M_Warehouse_ID = whId
-      } catch { /* skip */ }
+    const loginWhId = authStore.context?.warehouseId
+    if (loginWhId) {
+      updates.M_Warehouse_ID = loginWhId
+    } else {
+      const orgId = formData.value.AD_Org_ID || authStore.context?.organizationId
+      if (orgId) {
+        try {
+          const whId = await lookupOrgWarehouse(orgId)
+          if (whId) updates.M_Warehouse_ID = whId
+        } catch { /* skip */ }
+      }
     }
   }
 

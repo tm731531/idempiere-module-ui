@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import type { FieldMeta, ColumnMeta } from '@/api/metadata'
-import { fetchRefListItems, fetchIdentifierColumn, checkQuickCreateEligibility } from '@/api/metadata'
+import { fetchRefListItems, fetchIdentifierColumn, fetchSecondaryDisplayColumn, checkQuickCreateEligibility } from '@/api/metadata'
 import { getFieldLabel } from '@/i18n/fieldLabels'
 import SearchSelector from './SearchSelector.vue'
 
@@ -45,6 +45,7 @@ const resolvedTableName = computed(() => {
 // Display field for SearchSelector — resolved from AD_Column.IsIdentifier
 // Starts empty; SearchSelector waits for this to be resolved before initializing
 const displayFieldName = ref('')
+const secondaryDisplayFieldName = ref('')
 
 const isFkField = computed(() =>
   [18, 19, 30, 31].includes(props.column.referenceId) && resolvedTableName.value
@@ -88,10 +89,13 @@ onMounted(async () => {
   }
   if (isFkField.value) {
     const table = resolvedTableName.value
-    displayFieldName.value = await fetchIdentifierColumn(table)
-
-    // Check QuickCreate eligibility from AD metadata
-    const qc = await checkQuickCreateEligibility(table)
+    const [identifier, secondary, qc] = await Promise.all([
+      fetchIdentifierColumn(table),
+      fetchSecondaryDisplayColumn(table),
+      checkQuickCreateEligibility(table),
+    ])
+    displayFieldName.value = identifier
+    secondaryDisplayFieldName.value = secondary
     enableQuickCreate.value = qc.eligible
     quickCreateDefaults.value = qc.mandatoryDefaults
   }
@@ -112,6 +116,7 @@ onMounted(async () => {
       :tableName="resolvedTableName"
       :displayField="displayFieldName"
       :searchField="displayFieldName"
+      :secondaryDisplayField="secondaryDisplayFieldName || undefined"
       :filter="filter"
       :disabled="disabled"
       :quickCreate="enableQuickCreate"

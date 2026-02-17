@@ -6,6 +6,7 @@ import { checkQuickCreateEligibility } from '@/api/metadata'
 vi.mock('@/api/metadata', () => ({
   fetchRefListItems: vi.fn().mockResolvedValue([]),
   fetchIdentifierColumn: vi.fn().mockResolvedValue('Name'),
+  fetchSecondaryDisplayColumn: vi.fn().mockResolvedValue(''),
   checkQuickCreateEligibility: vi.fn().mockResolvedValue({ eligible: false, mandatoryDefaults: {} }),
 }))
 vi.mock('@/i18n/fieldLabels', () => ({

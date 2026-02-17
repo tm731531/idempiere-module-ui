@@ -35,7 +35,10 @@ const resolvedFilters = computed(() => {
     ctx.M_Warehouse_ID = authStore.context.warehouseId ?? 0
   }
   // Provide well-known context defaults for hidden columns that AD_Val_Rule may reference
-  if (ctx.IsSOTrx === undefined) ctx.IsSOTrx = true
+  // Bridge IsReceipt (C_Payment) → IsSOTrx for validation rules
+  if (ctx.IsSOTrx === undefined) {
+    ctx.IsSOTrx = ctx.IsReceipt !== undefined ? ctx.IsReceipt : true
+  }
 
   // Auto-apply AD_Val_Rule for fields that have validationRuleSql
   for (const def of props.fieldDefs) {

@@ -110,6 +110,49 @@ export async function fetchIdentifierColumn(tableName: string): Promise<string> 
   }
 }
 
+// ========== Secondary Display Column Resolution ==========
+
+const secondaryCache = new Map<string, string>()
+
+/**
+ * Check if a table has a Description column that can serve as secondary display.
+ * Returns 'Description' if the column exists and is active, empty string otherwise.
+ * Reuses the tableId lookup from fetchIdentifierColumn via AD_Table query.
+ */
+export async function fetchSecondaryDisplayColumn(tableName: string): Promise<string> {
+  if (secondaryCache.has(tableName)) return secondaryCache.get(tableName)!
+
+  try {
+    const tableResp = await apiClient.get('/api/v1/models/AD_Table', {
+      params: {
+        '$filter': `TableName eq '${tableName}'`,
+        '$select': 'AD_Table_ID',
+        '$top': 1,
+      },
+    })
+    const tables = tableResp.data.records || []
+    if (tables.length === 0) {
+      secondaryCache.set(tableName, '')
+      return ''
+    }
+    const tableId = tables[0].id
+
+    const colResp = await apiClient.get('/api/v1/models/AD_Column', {
+      params: {
+        '$filter': `AD_Table_ID eq ${tableId} and ColumnName eq 'Description' and IsActive eq true`,
+        '$select': 'ColumnName',
+        '$top': 1,
+      },
+    })
+    const result = (colResp.data.records || []).length > 0 ? 'Description' : ''
+    secondaryCache.set(tableName, result)
+    return result
+  } catch {
+    secondaryCache.set(tableName, '')
+    return ''
+  }
+}
+
 // ========== QuickCreate Eligibility ==========
 
 const quickCreateCache = new Map<string, { eligible: boolean; mandatoryDefaults: Record<string, any> }>()

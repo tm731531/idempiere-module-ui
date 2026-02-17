@@ -94,8 +94,9 @@ async function selectItem(id: number) {
 }
 
 function handleGoBack() {
-  // If on client step during context switch, cancel and go home
-  if (auth.loginStep === 'client' && auth.cancelSwitch()) {
+  // During switch, going back from first step cancels and returns home
+  if (auth.isSwitching && auth.loginStep === 'client') {
+    auth.cancelSwitch()
     router.push('/')
     return
   }

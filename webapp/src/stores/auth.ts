@@ -37,6 +37,7 @@ export const useAuthStore = defineStore('auth', () => {
   const loginStep = ref<LoginStep>('credentials')
   const loginError = ref('')
   const loginLoading = ref(false)
+  const isSwitching = ref(false)
   const availableClients = ref<SelectionItem[]>([])
   const availableRoles = ref<SelectionItem[]>([])
   const availableOrgs = ref<SelectionItem[]>([])
@@ -44,6 +45,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Internal: track selections during login flow
   let pendingUsername = ''
+  let pendingPassword = ''
   let pendingClientId = 0
   let pendingClientName = ''
   let pendingRoleId = 0
@@ -79,6 +81,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       pendingUsername = username
+      pendingPassword = password
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`
       availableClients.value = clients.map((c: any) => ({ id: c.id, name: c.name || '' }))
 
@@ -182,7 +185,7 @@ export const useAuthStore = defineStore('auth', () => {
         loginStep.value = 'warehouse'
       }
     } catch {
-      loginError.value = '載入倉庫失敗'
+      loginError.value = '載入庫房失敗'
     } finally {
       loginLoading.value = false
     }
@@ -230,6 +233,9 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       loginStep.value = 'done'
+      isSwitching.value = false
+      savedContextBeforeSwitch = null
+      savedUserBeforeSwitch = null
 
       // Persist to localStorage for page refresh
       localStorage.setItem('auth_context', JSON.stringify(context.value))
@@ -318,44 +324,72 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Saved state for cancel during switch
+  let savedContextBeforeSwitch: AuthContext | null = null
+  let savedUserBeforeSwitch: User | null = null
+
   /**
-   * Switch context: keep token + context, go back to client selection step.
-   * Context/user are NOT cleared until new selections finalize via PUT /auth/tokens.
-   * This allows canceling the switch and returning to previous state.
+   * Switch context: re-authenticate with saved credentials to get fresh token,
+   * then jump to client selection.
    */
   async function switchContext(): Promise<void> {
+    isSwitching.value = true
+    savedContextBeforeSwitch = context.value
+    savedUserBeforeSwitch = user.value
+    context.value = null
+    user.value = null
     loginError.value = ''
+    loginLoading.value = true
     clearLookupCache()
 
-    // If we have a token, skip credentials and go straight to client selection
-    if (token.value && availableClients.value.length > 0) {
-      if (availableClients.value.length === 1) {
-        // Auto-select the only client, go to role selection
-        await selectClient(availableClients.value[0]!.id)
-      } else {
-        loginStep.value = 'client'
+    try {
+      // Re-POST with saved credentials to get fresh token + clients
+      const loginResponse = await apiClient.post('/api/v1/auth/tokens', {
+        userName: pendingUsername,
+        password: pendingPassword,
+      })
+
+      const freshToken = loginResponse.data.token
+      const clients = loginResponse.data.clients || []
+
+      if (!freshToken || clients.length === 0) {
+        isSwitching.value = false
+        loginStep.value = 'credentials'
+        loginError.value = '重新認證失敗'
+        return
       }
-    } else {
-      // No token or no clients — fall back to full re-login
-      context.value = null
-      user.value = null
+
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${freshToken}`
+      availableClients.value = clients.map((c: any) => ({ id: c.id, name: c.name || '' }))
+      localStorage.setItem('auth_clients', JSON.stringify(availableClients.value))
+
+      if (clients.length > 1) {
+        loginStep.value = 'client'
+      } else {
+        await selectClient(clients[0].id)
+      }
+    } catch {
+      // Credentials expired or invalid — fall back to login
+      isSwitching.value = false
       loginStep.value = 'credentials'
-      localStorage.removeItem('auth_context')
-      localStorage.removeItem('auth_user')
+      loginError.value = '登入已過期，請重新登入'
+    } finally {
+      loginLoading.value = false
     }
   }
 
   /**
-   * Cancel switch: restore 'done' state when user backs out of context switching.
-   * Only works if token + context still exist.
+   * Cancel context switch: restore previous state and go back to done.
    */
   function cancelSwitch(): boolean {
-    if (token.value && context.value) {
-      loginStep.value = 'done'
-      loginError.value = ''
-      return true
-    }
-    return false
+    if (!isSwitching.value || !savedContextBeforeSwitch) return false
+    context.value = savedContextBeforeSwitch
+    user.value = savedUserBeforeSwitch
+    isSwitching.value = false
+    loginStep.value = 'done'
+    savedContextBeforeSwitch = null
+    savedUserBeforeSwitch = null
+    return true
   }
 
   function logout() {
@@ -430,6 +464,7 @@ export const useAuthStore = defineStore('auth', () => {
     selectWarehouse,
     loginGoBack,
     login,
+    isSwitching,
     switchContext,
     cancelSwitch,
     logout,

@@ -46,8 +46,10 @@ export async function createProduction(data: ProductionData): Promise<any> {
   } else {
     movementDate = toIdempiereDateTime(new Date())
   }
+  const docTypeId = await lookupDocTypeId('MMP')
   const resp = await apiClient.post('/api/v1/models/M_Production', {
     AD_Org_ID: data.AD_Org_ID,
+    C_DocType_ID: docTypeId,
     M_Product_ID: data.M_Product_ID,
     ProductionQty: data.ProductionQty,
     MovementDate: movementDate,

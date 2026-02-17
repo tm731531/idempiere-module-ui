@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
   quickCreateDefaults?: Record<string, any>
   disabled?: boolean
   initialLabel?: string
+  secondaryDisplayField?: string
 }>(), {
   quickCreate: false,
   disabled: false,
@@ -51,6 +52,21 @@ function buildFilter(extra?: string): string {
   return parts.join(' and ')
 }
 
+function selectColumns(): string {
+  const cols = [idColumn.value, props.displayField]
+  if (props.secondaryDisplayField) cols.push(props.secondaryDisplayField)
+  return cols.join(',')
+}
+
+function buildLabel(r: any): string {
+  const primary = r[props.displayField] || ''
+  if (props.secondaryDisplayField) {
+    const secondary = r[props.secondaryDisplayField]
+    if (secondary) return `${primary} - ${secondary}`
+  }
+  return primary
+}
+
 async function countRecords(): Promise<number> {
   const params: Record<string, string> = {
     '$top': '0',
@@ -63,7 +79,7 @@ async function countRecords(): Promise<number> {
 
 async function loadAllOptions(): Promise<void> {
   const params: Record<string, string> = {
-    '$select': `${idColumn.value},${props.displayField}`,
+    '$select': selectColumns(),
     '$orderby': props.displayField,
     '$filter': buildFilter(),
   }
@@ -71,7 +87,7 @@ async function loadAllOptions(): Promise<void> {
   const records = resp.data.records || []
   dropdownOptions.value = records.map((r: any) => ({
     id: r.id,
-    label: r[props.displayField] || '',
+    label: buildLabel(r),
   }))
 }
 
@@ -83,12 +99,16 @@ async function doSearch(query: string): Promise<void> {
   }
 
   const safe = escapeODataString(query)
-  const filterStr = buildFilter(`contains(${props.searchField},'${safe}')`)
+  let searchExpr = `contains(${props.searchField},'${safe}')`
+  if (props.secondaryDisplayField) {
+    searchExpr = `(${searchExpr} or contains(${props.secondaryDisplayField},'${safe}'))`
+  }
+  const filterStr = buildFilter(searchExpr)
 
   const resp = await apiClient.get(`/api/v1/models/${props.tableName}`, {
     params: {
       '$filter': filterStr,
-      '$select': `${idColumn.value},${props.displayField}`,
+      '$select': selectColumns(),
       '$orderby': props.displayField,
       '$top': '20',
     },
@@ -97,7 +117,7 @@ async function doSearch(query: string): Promise<void> {
   const records = resp.data.records || []
   searchResults.value = records.map((r: any) => ({
     id: r.id,
-    label: r[props.displayField] || '',
+    label: buildLabel(r),
   }))
   showDropdown.value = true
 }
@@ -184,9 +204,9 @@ async function resolveCurrentLabel(): Promise<void> {
   }
   try {
     const resp = await apiClient.get(`/api/v1/models/${props.tableName}/${props.modelValue}`, {
-      params: { '$select': `${idColumn.value},${props.displayField}` },
+      params: { '$select': selectColumns() },
     })
-    searchText.value = resp.data[props.displayField] || ''
+    searchText.value = buildLabel(resp.data)
   } catch {
     // If resolution fails, show the ID as fallback
     searchText.value = `#${props.modelValue}`

@@ -150,7 +150,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
   const updateableColumns = computed(() => {
     const s = new Set<string>()
     for (const def of fieldDefs.value) {
-      if (def.column.isUpdateable && !SYSTEM_COLUMNS.has(def.column.columnName)) {
+      if (def.column.isUpdateable && !excludeSet.value.has(def.column.columnName)) {
         s.add(def.column.columnName)
       }
     }
@@ -178,7 +178,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
     const payload: Record<string, any> = {}
     for (const def of fieldDefs.value) {
       const cn = def.column.columnName
-      if (SYSTEM_COLUMNS.has(cn)) continue
+      if (excludeSet.value.has(cn)) continue
       const value = formData.value[cn]
       if (value !== null && value !== undefined && value !== '') {
         payload[cn] = value

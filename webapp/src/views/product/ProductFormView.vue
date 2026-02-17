@@ -289,8 +289,8 @@ const bomMsg = ref('')
 const bomMsgType = ref('success')
 
 const bomProductFilter = computed(() => {
-  if (!productId.value) return 'IsActive eq true'
-  return `IsActive eq true and M_Product_ID neq ${productId.value}`
+  if (!productId.value) return 'IsActive eq true and IsBOM eq false'
+  return `IsActive eq true and IsBOM eq false and M_Product_ID neq ${productId.value}`
 })
 
 // ===== BOM helpers =====

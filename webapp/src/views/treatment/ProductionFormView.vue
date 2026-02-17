@@ -118,6 +118,7 @@ import {
   addProductionLine,
   deleteProductionLine,
 } from '@/api/production'
+import { lookupDocTypeId } from '@/api/lookup'
 
 const router = useRouter()
 const route = useRoute()
@@ -154,6 +155,9 @@ const {
   recordId: productionId,
   loadRecord: (id) => getProduction(id),
   excludeColumns: [
+    'C_DocType_ID',         // auto-filled (MMP), only one option
+    'DocAction',            // Button type, server-managed
+    'Posted',               // Button type, server-managed
     'IsUseProductionPlan',  // internal flag
     'C_OrderLine_ID',       // read-only, auto-populated
     'M_InOutLine_ID',       // read-only, auto-populated
@@ -198,6 +202,7 @@ async function handleCreateProduction() {
   try {
     const payload = getFormPayload()
     payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+    payload.C_DocType_ID = await lookupDocTypeId('MMP')
     // Ensure MovementDate is properly formatted
     if (payload.MovementDate instanceof Date) {
       payload.MovementDate = toIdempiereDateTime(payload.MovementDate)

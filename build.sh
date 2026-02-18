@@ -45,10 +45,12 @@ if [ "$1" = "--deploy" ]; then
     DEPLOY_JAR="$IDEMPIERE_HOME/plugins/$JAR_NAME"
     echo "[4/4] Deploying to $DEPLOY_JAR ..."
     cp "$OUTPUT_JAR" "$DEPLOY_JAR"
-    
+
     # Also deploy to /opt/idempiere-server/x86_64/plugins/
     if [ -d "/opt/idempiere-server/x86_64/plugins/" ]; then
       cp "$OUTPUT_JAR" "/opt/idempiere-server/x86_64/plugins/$JAR_NAME"
+      # Clear Jetty WAB cache for aesthetics bundle
+      sudo rm -rf "/opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-" 2>/dev/null || true
     fi
     echo "Deployed successfully."
 

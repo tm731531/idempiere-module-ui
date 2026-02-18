@@ -3,7 +3,7 @@
     <!-- Resource filter chips -->
     <div class="resource-selector">
       <div class="selector-header">
-        <span class="selector-title">服務人員</span>
+        <span class="selector-title">醫療人員 (新版本)</span>
         <button class="btn-toggle-all" @click="toggleAll">
           {{ allSelected ? '取消全選' : '全選' }}
         </button>
@@ -420,7 +420,7 @@ const weekDays = computed(() => {
 // ========== Time Slots ==========
 const timeSlots = computed(() => {
   const slots: string[] = []
-  for (let h = 0; h < 24; h++) {
+  for (let h = CALENDAR_CONFIG.GRID_START_HOUR; h < CALENDAR_CONFIG.BUSINESS_END_HOUR; h++) {
     slots.push(`${String(h).padStart(2, '0')}:00`)
     slots.push(`${String(h).padStart(2, '0')}:30`)
   }

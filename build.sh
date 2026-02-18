@@ -101,8 +101,6 @@ if [ "$1" = "--deploy" ]; then
     # Also deploy to /opt/idempiere-server/x86_64/plugins/
     if [ -d "/opt/idempiere-server/x86_64/plugins/" ]; then
       cp "$OUTPUT_JAR" "/opt/idempiere-server/x86_64/plugins/$JAR_NAME"
-      # Clear Jetty WAB cache for aesthetics bundle
-      sudo rm -rf "/opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-" 2>/dev/null || true
     fi
     echo "Deployed successfully."
 
@@ -119,39 +117,39 @@ if [ "$1" = "--deploy" ]; then
         -d "username=SuperUser&password=System&csrfToken=$CSRF&returnUrl=/osgi/system/console/bundles" \
         "$FELIX_BASE/login" -o /dev/null
 
-    # Find bundle ID by symbolic name
-    BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
+    # Find bundle ID by symbolic name and uninstall it first
+    BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" 2>/dev/null | \
         python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
 
     if [ -n "$BUNDLE_ID" ]; then
-        # Hot-deploy: uninstall old bundle and install new one (forces Jetty cache clear)
-        echo "Uninstalling old bundle $BUNDLE_ID..."
+        echo "Stopping bundle $BUNDLE_ID..."
         curl -ks -b /tmp/felix-deploy -X POST \
-            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID?action=uninstall" \
-            -o /dev/null
+            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID?action=stop" \
+            -o /dev/null 2>&1
         sleep 1
 
-        echo "Installing new bundle..."
+        echo "Uninstalling bundle $BUNDLE_ID..."
         curl -ks -b /tmp/felix-deploy -X POST \
-            -F "action=install" \
-            -F "bundlestart=start" \
-            -F "bundlefile=@$DEPLOY_JAR" \
-            "$FELIX_BASE/system/console/bundles" -o /dev/null
+            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID?action=uninstall" \
+            -o /dev/null 2>&1
         sleep 2
+    fi
 
-        NEW_BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
-            python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
-        echo "Bundle $NEW_BUNDLE_ID installed and started (hot-deploy)."
+    echo "Installing new bundle from $DEPLOY_JAR..."
+    curl -ks -b /tmp/felix-deploy -X POST \
+        -F "action=install" \
+        -F "bundlestart=start" \
+        -F "bundlefile=@$DEPLOY_JAR" \
+        "$FELIX_BASE/system/console/bundles" -o /dev/null 2>&1
+    sleep 2
+
+    NEW_BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" 2>/dev/null | \
+        python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
+
+    if [ -n "$NEW_BUNDLE_ID" ]; then
+        echo "✓ Bundle $NEW_BUNDLE_ID installed and started"
     else
-        # First install — no existing bundle found
-        curl -ks -b /tmp/felix-deploy -X POST \
-            -F "action=install" \
-            -F "bundlefile=@$DEPLOY_JAR" \
-            -F "bundlestart=start" \
-            "$FELIX_BASE/system/console/bundles" -o /dev/null
-        BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
-            python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
-        echo "Bundle $BUNDLE_ID installed and started."
+        echo "⚠️  Warning: Could not verify bundle installation"
     fi
 
     rm -f /tmp/felix-deploy

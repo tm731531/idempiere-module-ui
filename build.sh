@@ -7,7 +7,9 @@ BUNDLE_DIR="$SCRIPT_DIR/osgi-bundle"
 IDEMPIERE_HOME="${IDEMPIERE_HOME:-/home/tom/idempiere-server}"
 
 BUILD_TIMESTAMP="$(date +%Y%m%d%H%M)"
-JAR_NAME="org.idempiere.ui.aesthetics_1.0.0.${BUILD_TIMESTAMP}.jar"
+# Use full timestamp for version to force Jetty to recognize as new bundle
+BUILD_VERSION="1.0.0.${BUILD_TIMESTAMP}"
+JAR_NAME="org.idempiere.ui.aesthetics_${BUILD_VERSION}.jar"
 OUTPUT_JAR="$SCRIPT_DIR/$JAR_NAME"
 
 echo "=========================================="
@@ -22,10 +24,10 @@ npm run build
 echo "Vue build complete"
 echo ""
 
-echo "[2/4] Preparing MANIFEST (qualifier → $BUILD_TIMESTAMP)..."
+echo "[2/4] Preparing MANIFEST (version → $BUILD_VERSION)..."
 cd "$BUNDLE_DIR"
 cp META-INF/MANIFEST.MF META-INF/MANIFEST.MF.bak
-sed -i "s/Bundle-Version: 1.0.0.qualifier/Bundle-Version: 1.0.0.${BUILD_TIMESTAMP}/" META-INF/MANIFEST.MF
+sed -i "s/Bundle-Version: 1.0.0.qualifier/Bundle-Version: ${BUILD_VERSION}/" META-INF/MANIFEST.MF
 
 echo "[3/4] Building OSGi JAR..."
 jar cfm "$OUTPUT_JAR" META-INF/MANIFEST.MF \
@@ -72,14 +74,24 @@ if [ "$1" = "--deploy" ]; then
         python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
 
     if [ -n "$BUNDLE_ID" ]; then
-        # Update existing bundle in-place (keeps same bundle ID)
-        # Felix uses: action=install + uploadid={id} + bundlefile to update
+        # Hot-deploy: uninstall old bundle and install new one (forces Jetty cache clear)
+        echo "Uninstalling old bundle $BUNDLE_ID..."
+        curl -ks -b /tmp/felix-deploy -X POST \
+            "$FELIX_BASE/system/console/bundles/$BUNDLE_ID?action=uninstall" \
+            -o /dev/null
+        sleep 1
+
+        echo "Installing new bundle..."
         curl -ks -b /tmp/felix-deploy -X POST \
             -F "action=install" \
-            -F "uploadid=$BUNDLE_ID" \
+            -F "bundlestart=start" \
             -F "bundlefile=@$DEPLOY_JAR" \
             "$FELIX_BASE/system/console/bundles" -o /dev/null
-        echo "Bundle $BUNDLE_ID updated."
+        sleep 2
+
+        NEW_BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" | \
+            python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
+        echo "Bundle $NEW_BUNDLE_ID installed and started (hot-deploy)."
     else
         # First install — no existing bundle found
         curl -ks -b /tmp/felix-deploy -X POST \
@@ -100,3 +112,18 @@ fi
 echo ""
 echo "URL: https://<host>:8443/aesthetics/#/"
 echo "=========================================="
+echo ""
+
+# After deploy, check if Jetty cache needs clearing
+if [ "$1" = "--deploy" ] && [ -d "/opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-" ]; then
+    echo ""
+    echo "⚠️  NOTE: Jetty WAB cache detected"
+    echo "If UI changes are not visible after hard refresh (Ctrl+Shift+R),"
+    echo "run this command to clear Jetty cache:"
+    echo ""
+    echo "  sudo rm -rf /opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-"
+    echo ""
+    echo "Then restart the server:"
+    echo "  sudo systemctl restart idempiere"
+    echo ""
+fi

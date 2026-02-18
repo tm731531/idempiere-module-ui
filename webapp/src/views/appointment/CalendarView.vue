@@ -459,7 +459,7 @@ async function loadAssignments() {
   try {
     const { start, end } = getDateRange()
     assignments.value = await listAssignments(start, end)
-  } catch {
+  } catch (e) {
     assignments.value = []
   } finally {
     loading.value = false

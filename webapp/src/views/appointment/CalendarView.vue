@@ -79,13 +79,27 @@
             v-for="layout in dayApptLayout"
             :key="layout.appt.id"
             class="appt-block"
+            :class="{
+              'conflict': dragState.hasConflict && dragState.appointmentId === layout.appt.id,
+              'dragging': dragState.dragging && dragState.appointmentId === layout.appt.id,
+            }"
             :style="getApptBlockStyle(layout)"
             :title="`${getResourceName(layout.appt)} — ${layout.appt.Name}`"
             @click.stop="onApptClick(layout.appt)"
+            @mousedown="startDragAppt($event, layout.appt)"
+            @touchstart="startDragAppt($event, layout.appt)"
           >
             <span class="appt-resource">{{ getResourceName(layout.appt) }}</span>
             <span class="appt-name">{{ layout.appt.Name }}</span>
             <span class="appt-time">{{ formatApptTime(layout.appt) }}</span>
+
+            <!-- Conflict tooltip -->
+            <div
+              v-if="dragState.hasConflict && dragState.appointmentId === layout.appt.id"
+              class="conflict-tooltip"
+            >
+              與「{{ dragState.conflictingNames.join('」「') }}」衝突
+            </div>
           </div>
         </div>
       </div>
@@ -141,6 +155,18 @@
       </div>
     </div>
 
+    <!-- Bottom Sheet: Appointment Action Menu (Mobile) -->
+    <BottomSheet v-model="showActionSheet">
+      <AppointmentActionSheet
+        v-if="selectedAppt"
+        :appt="selectedAppt"
+        :resources="resources"
+        @edit="handleEditAppt"
+        @copy="handleCopyAppt"
+        @delete="handleDeleteAppt"
+      />
+    </BottomSheet>
+
     <!-- Appointment form modal (create or edit) -->
     <AppointmentForm
       v-if="showForm"
@@ -160,9 +186,13 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { listResources } from '@/api/resource'
-import { listAssignments } from '@/api/assignment'
+import { listAssignments, updateAssignment } from '@/api/assignment'
 import { parseIdempiereDateTime } from '@/api/utils'
 import AppointmentForm from './AppointmentForm.vue'
+import BottomSheet from '@/components/BottomSheet.vue'
+import AppointmentActionSheet from '@/components/AppointmentActionSheet.vue'
+import { checkConflict, formatDuration, getMinutesDiff } from '@/lib/time-overlap'
+import { CALENDAR_CONFIG } from '@/constants/calendar'
 
 // ========== View Mode ==========
 type ViewMode = 'day' | 'week' | 'month' | 'year'
@@ -210,10 +240,10 @@ function toggleAll() {
   }
 }
 
-const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899']
 function getResourceColor(resourceId: number): string {
   const idx = resources.value.findIndex(r => r.id === resourceId)
-  return COLORS[idx >= 0 ? idx % COLORS.length : 0]!
+  const colorIdx = Math.max(0, idx) % CALENDAR_CONFIG.COLORS.length
+  return CALENDAR_CONFIG.COLORS[colorIdx]!
 }
 
 function getAppointmentColor(appt: any): string {
@@ -392,9 +422,9 @@ async function loadAssignments() {
 }
 
 // ========== Day/Week: filtered assignments for selected day ==========
-const GRID_START_HOUR = 0  // time grid starts at 00:00
-const SLOT_HEIGHT = 44     // px per 30-min slot (matches height of .time-row)
-const LABEL_WIDTH = 52     // px for time label column
+const GRID_START_HOUR = CALENDAR_CONFIG.GRID_START_HOUR
+const SLOT_HEIGHT = CALENDAR_CONFIG.SLOT_HEIGHT
+const LABEL_WIDTH = CALENDAR_CONFIG.LABEL_WIDTH
 
 const filteredDayAssignments = computed(() => {
   return assignments.value.filter((a) => {
@@ -618,12 +648,24 @@ function drillToMonth(month: number) {
   loadAssignments()
 }
 
-// ========== Form ==========
+// ========== Bottom Sheet & Form ==========
 const showForm = ref(false)
+const showActionSheet = ref(false)
+const selectedAppt = ref<any>(null)
 const selectedResourceId = ref(0)
 const formDate = ref('')
 const formTime = ref('')
 const editingAppt = ref<any>(null)
+
+// ========== Drag State: Conflict Detection ==========
+const dragState = reactive({
+  dragging: false,
+  appointmentId: null as number | null,
+  hasConflict: false,
+  conflictingNames: [] as string[],
+  dragStartY: 0,
+  dragCurrentY: 0,
+})
 
 function onSlotClick(slot: string) {
   editingAppt.value = null
@@ -634,17 +676,173 @@ function onSlotClick(slot: string) {
 }
 
 function onApptClick(appt: any) {
-  editingAppt.value = appt
+  // Mobile first: show action sheet instead of directly opening form
+  selectedAppt.value = appt
+  showActionSheet.value = true
+}
+
+function handleEditAppt() {
+  if (!selectedAppt.value) return
+  editingAppt.value = selectedAppt.value
   selectedResourceId.value = 0
   formDate.value = ''
   formTime.value = ''
+  showActionSheet.value = false
   showForm.value = true
 }
 
 function onAppointmentSaved() {
   showForm.value = false
   editingAppt.value = null
+  selectedAppt.value = null
   loadAssignments()
+}
+
+// ========== Drag & Conflict Detection ==========
+function startDragAppt(event: MouseEvent | TouchEvent, appt: any) {
+  // Ignore if already dragging
+  if (dragState.dragging) return
+
+  // Get the Y coordinate
+  const clientY = event instanceof TouchEvent
+    ? event.touches[0]?.clientY || 0
+    : event.clientY
+
+  dragState.dragging = true
+  dragState.appointmentId = appt.id
+  dragState.dragStartY = clientY
+  dragState.hasConflict = false
+  dragState.conflictingNames = []
+
+  // Add global listeners for mousemove/touchmove and mouseup/touchend
+  const moveListener = (e: MouseEvent | TouchEvent) => onDragMove(e, appt)
+  const upListener = (e: MouseEvent | TouchEvent) => onDragEnd(e, appt)
+
+  document.addEventListener('mousemove', moveListener)
+  document.addEventListener('touchmove', moveListener, { passive: false })
+  document.addEventListener('mouseup', upListener)
+  document.addEventListener('touchend', upListener)
+
+  // Cleanup function
+  function cleanup() {
+    document.removeEventListener('mousemove', moveListener)
+    document.removeEventListener('touchmove', moveListener)
+    document.removeEventListener('mouseup', upListener)
+    document.removeEventListener('touchend', upListener)
+  }
+
+  // Store cleanup for later
+  ;(upListener as any).__cleanup = cleanup
+}
+
+function onDragMove(event: MouseEvent | TouchEvent, appt: any) {
+  const clientY = event instanceof TouchEvent
+    ? event.touches[0]?.clientY || 0
+    : event.clientY
+
+  dragState.dragCurrentY = clientY
+
+  // Calculate time shift (1 slot = 30min = SLOT_HEIGHT px)
+  const pixelDelta = clientY - dragState.dragStartY
+  const slotsDelta = Math.round(pixelDelta / SLOT_HEIGHT)
+  const minutesDelta = slotsDelta * 30
+
+  // Calculate new time range
+  const from = parseIdempiereDateTime(appt.AssignDateFrom)
+  const to = parseIdempiereDateTime(appt.AssignDateTo)
+
+  const newFrom = new Date(from.getTime() + minutesDelta * 60000)
+  const newTo = new Date(to.getTime() + minutesDelta * 60000)
+
+  // Get resource ID
+  const resId = typeof appt.S_Resource_ID === 'object'
+    ? appt.S_Resource_ID.id
+    : appt.S_Resource_ID
+
+  // Check for conflicts
+  const conflict = checkConflict(
+    { start: newFrom, end: newTo, resourceId: resId },
+    assignments.value,
+    appt.id // exclude self
+  )
+
+  dragState.hasConflict = conflict.hasConflict
+  dragState.conflictingNames = conflict.conflictingNames
+}
+
+async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
+  // Remove listeners
+  const listeners = Object.values(document._listeners || {})
+
+  dragState.dragging = false
+
+  if (dragState.hasConflict) {
+    // Conflict: show toast and revert
+    const msg = `與「${dragState.conflictingNames.join('」「')}」時間衝突，未儲存`
+    // TODO: Replace with your toast solution (e.g., useToast())
+    console.warn(msg)
+    dragState.hasConflict = false
+    dragState.conflictingNames = []
+    dragState.appointmentId = null
+    return
+  }
+
+  // No conflict: save new time
+  const clientY = event instanceof TouchEvent
+    ? event.changedTouches[0]?.clientY || 0
+    : event.clientY
+
+  const pixelDelta = clientY - dragState.dragStartY
+  const slotsDelta = Math.round(pixelDelta / SLOT_HEIGHT)
+  const minutesDelta = slotsDelta * 30
+
+  if (minutesDelta === 0) {
+    // No movement, just deselect
+    dragState.appointmentId = null
+    return
+  }
+
+  const from = parseIdempiereDateTime(appt.AssignDateFrom)
+  const to = parseIdempiereDateTime(appt.AssignDateTo)
+
+  const newFrom = new Date(from.getTime() + minutesDelta * 60000)
+  const newTo = new Date(to.getTime() + minutesDelta * 60000)
+
+  // Format to iDempiere datetime
+  const toIdempiereDateTime = (d: Date): string => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const h = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    const s = String(d.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${day}T${h}:${min}:${s}Z`
+  }
+
+  try {
+    await updateAssignment(appt.id, {
+      AssignDateFrom: toIdempiereDateTime(newFrom),
+      AssignDateTo: toIdempiereDateTime(newTo),
+    })
+    await loadAssignments()
+  } catch (error) {
+    console.error('Failed to update appointment:', error)
+    // TODO: Show error toast
+  } finally {
+    dragState.appointmentId = null
+  }
+}
+
+async function handleCopyAppt() {
+  // TODO: Implement copy dialog in Phase 2
+  console.log('Copy appointment:', selectedAppt.value)
+  showActionSheet.value = false
+}
+
+async function handleDeleteAppt() {
+  // TODO: Implement delete with confirmation
+  console.log('Delete appointment:', selectedAppt.value)
+  showActionSheet.value = false
 }
 
 async function reloadResources() {
@@ -929,17 +1127,61 @@ onMounted(async () => {
   font-size: 0.75rem;
   line-height: 1.3;
   padding: 0.25rem 0.5rem;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   z-index: 1;
   display: flex;
   flex-direction: column;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: opacity 0.2s, box-shadow 0.2s;
 }
 
 .appt-block:hover {
   opacity: 0.9;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* Dragging state */
+.appt-block.dragging {
+  opacity: 0.6;
+  cursor: grabbing;
+  z-index: 50;
+}
+
+/* Conflict state: red border + shadow warning */
+.appt-block.conflict {
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* Conflict tooltip */
+.conflict-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef4444;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.conflict-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #ef4444;
 }
 
 .appt-resource {

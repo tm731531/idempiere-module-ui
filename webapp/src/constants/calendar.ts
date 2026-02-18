@@ -6,13 +6,13 @@
 export const CALENDAR_CONFIG = {
   // ========== 業務時間 ==========
   // 業務時間是指在時間 grid 視圖上主要顯示的時段
-  // GRID_START_HOUR = 0 表示時間 grid 從 00:00 開始顯示所有 24 小時
-  // 但實際醫療診所會在 BUSINESS_START_HOUR 到 BUSINESS_END_HOUR 之間運作
-  BUSINESS_START_HOUR: 9,
-  BUSINESS_END_HOUR: 18,
+  // GRID_START_HOUR = 8 表示時間 grid 從 08:00 開始
+  // 實際醫療診所會在 BUSINESS_START_HOUR 到 BUSINESS_END_HOUR 之間運作（08:00 - 19:00）
+  BUSINESS_START_HOUR: 8,
+  BUSINESS_END_HOUR: 19,
 
   // ========== UI 尺寸 ==========
-  GRID_START_HOUR: 0,        // 時間 grid 從 00:00 開始
+  GRID_START_HOUR: 8,        // 時間 grid 從 08:00 開始
   SLOT_HEIGHT: 44,           // 每個 30 分鐘 slot 的像素高度
   LABEL_WIDTH: 52,           // 左側時間標籤列的寬度
   SLOT_MINUTES: 30,          // 時段粒度（30 分鐘為一個 slot）

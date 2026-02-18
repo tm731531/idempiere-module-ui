@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: iDempiere Aesthetics UI
-Bundle-SymbolicName: org.idempiere.ui.aesthetics;singleton:=true
+Bundle-SymbolicName: org.idempiere.ui.aesthetics.v2;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Bundle-Vendor: Yishou Clinic
 Bundle-RequiredExecutionEnvironment: JavaSE-17

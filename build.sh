@@ -104,9 +104,10 @@ if [ "$1" = "--deploy" ]; then
     fi
     echo "Deployed successfully."
 
-    # Auto-update via Felix Web Console (bundle ID stays the same)
+    # Auto-update via Felix Web Console
     FELIX_BASE="https://localhost:8443/osgi"
-    BUNDLE_SYM="org.idempiere.ui.aesthetics"
+    BUNDLE_SYM="org.idempiere.ui.aesthetics.v2"
+    BUNDLE_SYM_OLD="org.idempiere.ui.aesthetics"
 
     echo ""
     echo "[5/5] Activating via Felix Web Console..."
@@ -117,7 +118,25 @@ if [ "$1" = "--deploy" ]; then
         -d "username=SuperUser&password=System&csrfToken=$CSRF&returnUrl=/osgi/system/console/bundles" \
         "$FELIX_BASE/login" -o /dev/null
 
-    # Find bundle ID by symbolic name and uninstall it first
+    # Uninstall OLD bundle first (cleanup migration from old symbolic name)
+    OLD_BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" 2>/dev/null | \
+        python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM_OLD']" 2>/dev/null)
+
+    if [ -n "$OLD_BUNDLE_ID" ]; then
+        echo "Stopping old bundle $OLD_BUNDLE_ID..."
+        curl -ks -b /tmp/felix-deploy -X POST \
+            "$FELIX_BASE/system/console/bundles/$OLD_BUNDLE_ID?action=stop" \
+            -o /dev/null 2>&1
+        sleep 1
+
+        echo "Uninstalling old bundle $OLD_BUNDLE_ID..."
+        curl -ks -b /tmp/felix-deploy -X POST \
+            "$FELIX_BASE/system/console/bundles/$OLD_BUNDLE_ID?action=uninstall" \
+            -o /dev/null 2>&1
+        sleep 2
+    fi
+
+    # Find NEW bundle ID by symbolic name and uninstall it if exists
     BUNDLE_ID=$(curl -ks -b /tmp/felix-deploy "$FELIX_BASE/system/console/bundles.json" 2>/dev/null | \
         python3 -c "import json,sys;data=json.load(sys.stdin);[print(b['id']) for b in data.get('data',[]) if b.get('symbolicName')=='$BUNDLE_SYM']" 2>/dev/null)
 

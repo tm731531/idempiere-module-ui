@@ -3,7 +3,7 @@
     <!-- Resource filter chips -->
     <div class="resource-selector">
       <div class="selector-header">
-        <span class="selector-title">醫療人員 (新版本)</span>
+        <span class="selector-title">服務人員</span>
         <button class="btn-toggle-all" @click="toggleAll">
           {{ allSelected ? '取消全選' : '全選' }}
         </button>

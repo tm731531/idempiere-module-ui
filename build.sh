@@ -41,9 +41,15 @@ echo ""
 
 if [ "$1" = "--deploy" ]; then
     rm -f "$IDEMPIERE_HOME/plugins/org.idempiere.ui.aesthetics_1.0.0"*.jar 2>/dev/null || true
+    # Original deploy
     DEPLOY_JAR="$IDEMPIERE_HOME/plugins/$JAR_NAME"
     echo "[4/4] Deploying to $DEPLOY_JAR ..."
     cp "$OUTPUT_JAR" "$DEPLOY_JAR"
+    
+    # Also deploy to /opt/idempiere-server/x86_64/plugins/
+    if [ -d "/opt/idempiere-server/x86_64/plugins/" ]; then
+      cp "$OUTPUT_JAR" "/opt/idempiere-server/x86_64/plugins/$JAR_NAME"
+    fi
     echo "Deployed successfully."
 
     # Auto-update via Felix Web Console (bundle ID stays the same)

@@ -45,7 +45,7 @@ interface Props {
   resources?: any[]
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   resources: () => [],
 })
 
@@ -56,18 +56,18 @@ defineEmits<{
 }>()
 
 function getResourceName(): string {
-  const resId = typeof appt.S_Resource_ID === 'object'
-    ? appt.S_Resource_ID.id
-    : appt.S_Resource_ID
+  const resId = typeof props.appt.S_Resource_ID === 'object'
+    ? props.appt.S_Resource_ID.id
+    : props.appt.S_Resource_ID
 
-  const res = props.resources?.find(r => r.id === resId)
+  const res = props.resources?.find((r: any) => r.id === resId)
   return res?.Name || `#${resId}`
 }
 
 function formatTime(): string {
   try {
-    const from = parseIdempiereDateTime(appt.AssignDateFrom)
-    const to = parseIdempiereDateTime(appt.AssignDateTo)
+    const from = parseIdempiereDateTime(props.appt.AssignDateFrom)
+    const to = parseIdempiereDateTime(props.appt.AssignDateTo)
 
     const fromStr = from.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
     const toStr = to.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })

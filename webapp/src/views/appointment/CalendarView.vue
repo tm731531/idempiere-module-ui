@@ -190,33 +190,20 @@
         >
           <button
             class="context-item"
-            @click="
-              selectedAppt = contextMenu.appt
-              showActionSheet = true
-              contextMenu.show = false
-              handleEditAppt()
-            "
+            @click="onContextMenuEdit"
           >
             ✎ 編輯
           </button>
           <button
             class="context-item"
-            @click="
-              selectedAppt = contextMenu.appt
-              showCopyDialog = true
-              contextMenu.show = false
-            "
+            @click="onContextMenuCopy"
           >
             ⊕ 複製
           </button>
           <div class="context-divider"></div>
           <button
             class="context-item danger"
-            @click="
-              selectedAppt = contextMenu.appt
-              handleDeleteAppt()
-              contextMenu.show = false
-            "
+            @click="onContextMenuDelete"
           >
             🗑 刪除
           </button>
@@ -757,6 +744,28 @@ function onApptContextMenu(event: MouseEvent, appt: any) {
   contextMenu.appt = appt
 }
 
+function onContextMenuEdit() {
+  if (!contextMenu.appt) return
+  selectedAppt.value = contextMenu.appt
+  showActionSheet.value = true
+  contextMenu.show = false
+  handleEditAppt()
+}
+
+function onContextMenuCopy() {
+  if (!contextMenu.appt) return
+  selectedAppt.value = contextMenu.appt
+  showCopyDialog.value = true
+  contextMenu.show = false
+}
+
+function onContextMenuDelete() {
+  if (!contextMenu.appt) return
+  selectedAppt.value = contextMenu.appt
+  handleDeleteAppt()
+  contextMenu.show = false
+}
+
 function handleEditAppt() {
   if (!selectedAppt.value) return
   editingAppt.value = selectedAppt.value
@@ -847,9 +856,6 @@ function onDragMove(event: MouseEvent | TouchEvent, appt: any) {
 }
 
 async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
-  // Remove listeners
-  const listeners = Object.values(document._listeners || {})
-
   dragState.dragging = false
 
   if (dragState.hasConflict) {

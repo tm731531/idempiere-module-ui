@@ -176,17 +176,21 @@ async function handleCopy() {
 
     for (const resourceId of selectedResourceIds) {
       // Build new appointment date times
-      const [year, month, day] = selectedDate.value.split('-').map(Number)
+      const [yearStr, monthStr, dayStr] = selectedDate.value.split('-')
+      const year = parseInt(yearStr!, 10)
+      const month = parseInt(monthStr!, 10)
+      const day = parseInt(dayStr!, 10)
       const newFrom = new Date(year, month - 1, day, sourceFrom.getHours(), sourceFrom.getMinutes())
       const newTo = new Date(newFrom.getTime() + durationMs)
 
       // Prepare payload
-      const payload: Record<string, any> = {
+      const payload = {
         S_Resource_ID: resourceId,
         AssignDateFrom: toIdempiereDateTime(newFrom),
         AssignDateTo: toIdempiereDateTime(newTo),
         Name: copyName.value || props.sourceAppt.Name,
-      }
+        AD_Org_ID: props.sourceAppt.AD_Org_ID,
+      } as any
 
       // Copy optional fields if they exist
       if (props.sourceAppt.Comments) {

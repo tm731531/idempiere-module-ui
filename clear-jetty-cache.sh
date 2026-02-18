@@ -3,7 +3,7 @@
 # 用途：當部署新版本但 UI 沒有更新時，執行此腳本
 
 echo "清除 Jetty WAB 快取..."
-sudo rm -rf "/opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-"
+echo '!QAZ2wsx' | sudo -S rm -rf "/opt/idempiere-server/x86_64/jettyhome/work/jetty-0_0_0_0-8080-bundleFile-_aesthetics-any-"
 
 if [ $? -eq 0 ]; then
     echo "✓ 快取已清除"

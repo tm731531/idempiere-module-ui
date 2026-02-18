@@ -5,6 +5,7 @@ import router from './router'
 import App from './App.vue'
 import { loadConfig } from './config'
 import './style.css'
+// v2.1 - force recompile
 
 loadConfig().then(() => {
   const app = createApp(App)

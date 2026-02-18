@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
         format: { comments: false },
       },
       rollupOptions: {
+        input: {
+          main: resolve(__dirname, 'src/main.ts'),
+        },
         output: {
           manualChunks: {
             'vue-vendor': ['vue', 'vue-router', 'pinia'],

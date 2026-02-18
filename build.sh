@@ -24,6 +24,56 @@ npm run build
 echo "Vue build complete"
 echo ""
 
+# Update index.html with actual Vite-generated asset hashes
+echo "[1b/4] Updating index.html asset hashes..."
+cd "$SCRIPT_DIR/osgi-bundle/web"
+
+# Find the actual generated hashes from the assets directory
+# Vite generates main-*.js (or index-*.js depending on config)
+MAIN_JS=$(ls -t assets/main-*.js 2>/dev/null | head -1)
+if [ -z "$MAIN_JS" ]; then
+  MAIN_JS=$(ls -t assets/index-*.js 2>/dev/null | head -1)
+fi
+MAIN_JS=$(basename "$MAIN_JS" 2>/dev/null)
+
+VUE_VENDOR=$(ls -t assets/vue-vendor-*.js 2>/dev/null | head -1 | xargs -r basename)
+PRIMEVUE_VENDOR=$(ls -t assets/primevue-vendor-*.js 2>/dev/null | head -1 | xargs -r basename)
+
+# CSS can be main-*.css or index-*.css
+MAIN_CSS=$(ls -t assets/main-*.css 2>/dev/null | head -1)
+if [ -z "$MAIN_CSS" ]; then
+  MAIN_CSS=$(ls -t assets/index-*.css 2>/dev/null | head -1)
+fi
+MAIN_CSS=$(basename "$MAIN_CSS" 2>/dev/null)
+
+if [ -n "$MAIN_JS" ] && [ -n "$VUE_VENDOR" ] && [ -n "$PRIMEVUE_VENDOR" ] && [ -n "$MAIN_CSS" ]; then
+    echo "Found assets: $MAIN_JS, $VUE_VENDOR, $PRIMEVUE_VENDOR, $MAIN_CSS"
+
+    # Create new index.html with updated hashes
+    cat > index.html << HTMLEOF
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>醫美診所</title>
+    <script type="module" crossorigin src="/aesthetics/assets/${MAIN_JS}"></script>
+    <link rel="modulepreload" crossorigin href="/aesthetics/assets/${VUE_VENDOR}">
+    <link rel="modulepreload" crossorigin href="/aesthetics/assets/${PRIMEVUE_VENDOR}">
+    <link rel="stylesheet" crossorigin href="/aesthetics/assets/${MAIN_CSS}">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>
+HTMLEOF
+    echo "✓ index.html updated with latest hashes"
+else
+    echo "⚠️  Warning: Could not find all expected assets, index.html may not be updated"
+    echo "  MAIN_JS=$MAIN_JS, VUE_VENDOR=$VUE_VENDOR, PRIMEVUE_VENDOR=$PRIMEVUE_VENDOR, MAIN_CSS=$MAIN_CSS"
+fi
+echo ""
+
 echo "[2/4] Preparing MANIFEST (version → $BUILD_VERSION)..."
 cd "$BUNDLE_DIR"
 cp META-INF/MANIFEST.MF META-INF/MANIFEST.MF.bak

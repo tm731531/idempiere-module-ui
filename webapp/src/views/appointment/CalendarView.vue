@@ -86,6 +86,7 @@
             :style="getApptBlockStyle(layout)"
             :title="`${getResourceName(layout.appt)} — ${layout.appt.Name}`"
             @click.stop="onApptClick(layout.appt)"
+            @contextmenu.stop="onApptContextMenu($event, layout.appt)"
             @mousedown="startDragAppt($event, layout.appt)"
             @touchstart="startDragAppt($event, layout.appt)"
           >
@@ -167,6 +168,62 @@
       />
     </BottomSheet>
 
+    <!-- Copy Assignment Dialog (Phase 2) -->
+    <CopyAssignmentDialog
+      v-if="showCopyDialog && selectedAppt"
+      :source-appt="selectedAppt"
+      :resources="resources"
+      @success="onCopySuccess"
+      @cancel="showCopyDialog = false"
+    />
+
+    <!-- Context Menu (Desktop right-click) -->
+    <Teleport v-if="contextMenu.show" to="body">
+      <div
+        class="context-menu-overlay"
+        @click="contextMenu.show = false"
+        @contextmenu.prevent
+      >
+        <div
+          class="context-menu"
+          :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
+        >
+          <button
+            class="context-item"
+            @click="
+              selectedAppt = contextMenu.appt
+              showActionSheet = true
+              contextMenu.show = false
+              handleEditAppt()
+            "
+          >
+            ✎ 編輯
+          </button>
+          <button
+            class="context-item"
+            @click="
+              selectedAppt = contextMenu.appt
+              showCopyDialog = true
+              contextMenu.show = false
+            "
+          >
+            ⊕ 複製
+          </button>
+          <div class="context-divider"></div>
+          <button
+            class="context-item danger"
+            @click="
+              selectedAppt = contextMenu.appt
+              handleDeleteAppt()
+              contextMenu.show = false
+            "
+          >
+            🗑 刪除
+          </button>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Appointment form modal (create or edit) -->
     <AppointmentForm
       v-if="showForm"
@@ -191,6 +248,7 @@ import { parseIdempiereDateTime } from '@/api/utils'
 import AppointmentForm from './AppointmentForm.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import AppointmentActionSheet from '@/components/AppointmentActionSheet.vue'
+import CopyAssignmentDialog from '@/components/CopyAssignmentDialog.vue'
 import { checkConflict, formatDuration, getMinutesDiff } from '@/lib/time-overlap'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
 
@@ -651,6 +709,7 @@ function drillToMonth(month: number) {
 // ========== Bottom Sheet & Form ==========
 const showForm = ref(false)
 const showActionSheet = ref(false)
+const showCopyDialog = ref(false)
 const selectedAppt = ref<any>(null)
 const selectedResourceId = ref(0)
 const formDate = ref('')
@@ -667,6 +726,14 @@ const dragState = reactive({
   dragCurrentY: 0,
 })
 
+// ========== Context Menu (Right-click, Desktop) ==========
+const contextMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  appt: null as any,
+})
+
 function onSlotClick(slot: string) {
   editingAppt.value = null
   selectedResourceId.value = 0
@@ -679,6 +746,15 @@ function onApptClick(appt: any) {
   // Mobile first: show action sheet instead of directly opening form
   selectedAppt.value = appt
   showActionSheet.value = true
+}
+
+function onApptContextMenu(event: MouseEvent, appt: any) {
+  // Desktop: right-click context menu
+  event.preventDefault()
+  contextMenu.show = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.appt = appt
 }
 
 function handleEditAppt() {
@@ -834,15 +910,33 @@ async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
 }
 
 async function handleCopyAppt() {
-  // TODO: Implement copy dialog in Phase 2
-  console.log('Copy appointment:', selectedAppt.value)
   showActionSheet.value = false
+  showCopyDialog.value = true
+}
+
+async function onCopySuccess() {
+  showCopyDialog.value = false
+  selectedAppt.value = null
+  await loadAssignments()
 }
 
 async function handleDeleteAppt() {
-  // TODO: Implement delete with confirmation
-  console.log('Delete appointment:', selectedAppt.value)
+  if (!selectedAppt.value) return
+
+  const confirmed = confirm(`確認刪除「${selectedAppt.value.Name}」?`)
+  if (!confirmed) return
+
   showActionSheet.value = false
+
+  try {
+    const { deleteAssignment } = await import('@/api/assignment')
+    await deleteAssignment(selectedAppt.value.id)
+    selectedAppt.value = null
+    await loadAssignments()
+  } catch (error) {
+    console.error('Failed to delete appointment:', error)
+    alert('刪除失敗，請重試')
+  }
 }
 
 async function reloadResources() {
@@ -1182,6 +1276,58 @@ onMounted(async () => {
   transform: translateX(-50%);
   border: 4px solid transparent;
   border-top-color: #ef4444;
+}
+
+/* Context Menu (Desktop right-click) */
+.context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+}
+
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  z-index: 201;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.context-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  color: #111827;
+}
+
+.context-item:hover {
+  background-color: #f3f4f6;
+}
+
+.context-item.danger {
+  color: #991b1b;
+}
+
+.context-item.danger:hover {
+  background-color: #fee2e2;
+}
+
+.context-divider {
+  height: 1px;
+  background-color: #e5e7eb;
+  margin: 4px 0;
 }
 
 .appt-resource {

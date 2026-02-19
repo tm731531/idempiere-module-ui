@@ -7,6 +7,16 @@
       </div>
 
       <div class="dialog-content">
+        <!-- Error message when no selection -->
+        <div v-if="showError" class="error-alert">
+          <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>請選擇狀態</span>
+        </div>
+
         <div v-if="props.statuses.length === 0" class="empty-state">
           無可用狀態
         </div>
@@ -38,7 +48,7 @@
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="props.statuses.length === 0"
+          :disabled="props.statuses.length === 0 || selectedStatusId === null"
           @click="handleConfirm"
         >
           確認
@@ -70,6 +80,7 @@ const emit = defineEmits<{
 }>()
 
 const selectedStatusId = ref<number | null>(null)
+const showError = ref(false)
 
 // Computed to normalize currentStatusId to number
 const normalizedCurrentStatusId = computed(() => {
@@ -80,9 +91,14 @@ const normalizedCurrentStatusId = computed(() => {
 })
 
 function handleConfirm() {
-  if (selectedStatusId.value !== null) {
-    emit('status-selected', selectedStatusId.value)
+  // Check if a status is selected
+  if (selectedStatusId.value === null) {
+    showError.value = true
+    return
   }
+
+  showError.value = false
+  emit('status-selected', selectedStatusId.value)
 }
 
 // Initialize and watch for prop changes
@@ -209,6 +225,38 @@ watch(
   font-size: 14px;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.error-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  color: #991b1b;
+  font-size: 13px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-icon {
+  width: 18px;
+  height: 18px;
+  color: #dc2626;
+  flex-shrink: 0;
 }
 
 .dialog-actions {

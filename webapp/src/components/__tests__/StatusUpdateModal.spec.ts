@@ -133,4 +133,90 @@ describe('StatusUpdateModal', () => {
     const radios = wrapper.findAll('input[type="radio"]')
     expect((radios[1].element as HTMLInputElement).checked).toBe(true)
   })
+
+  it('shows error when confirm button is clicked without selection', async () => {
+    const wrapper = mount(StatusUpdateModal, {
+      props: {
+        requestId: 123,
+        currentStatusId: 2,
+        statuses: mockStatuses,
+      },
+    })
+
+    // Deselect all radios by setting selectedStatusId to null
+    wrapper.vm.selectedStatusId = null
+    await wrapper.vm.$nextTick()
+
+    // Call handleConfirm directly to simulate click
+    wrapper.vm.handleConfirm()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.showError).toBe(true)
+    expect(wrapper.text()).toContain('請選擇狀態')
+  })
+
+  it('hides error message when status is selected', async () => {
+    const wrapper = mount(StatusUpdateModal, {
+      props: {
+        requestId: 123,
+        currentStatusId: 2,
+        statuses: mockStatuses,
+      },
+    })
+
+    // Clear error state
+    wrapper.vm.showError = true
+    await wrapper.vm.$nextTick()
+
+    // Select a status
+    const radios = wrapper.findAll('input[type="radio"]')
+    await radios[2].setValue(true)
+    await wrapper.vm.$nextTick()
+
+    // Click confirm
+    const buttons = wrapper.findAll('button')
+    const confirmBtn = buttons.find(b => b.text().includes('確認'))
+    await confirmBtn?.trigger('click')
+
+    // Error should be cleared and event emitted
+    expect(wrapper.vm.showError).toBe(false)
+    expect(wrapper.emitted('status-selected')).toBeTruthy()
+  })
+
+  it('disables confirm button when no status selected', async () => {
+    const wrapper = mount(StatusUpdateModal, {
+      props: {
+        requestId: 123,
+        currentStatusId: 2,
+        statuses: mockStatuses,
+      },
+    })
+
+    // Reset selection
+    wrapper.vm.selectedStatusId = null
+    await wrapper.vm.$nextTick()
+
+    const buttons = wrapper.findAll('button')
+    const confirmBtn = buttons.find(b => b.text().includes('確認'))
+    expect(confirmBtn?.attributes('disabled')).toBeDefined()
+  })
+
+  it('enables confirm button when status is selected', async () => {
+    const wrapper = mount(StatusUpdateModal, {
+      props: {
+        requestId: 123,
+        currentStatusId: 2,
+        statuses: mockStatuses,
+      },
+    })
+
+    // Select a different status
+    const radios = wrapper.findAll('input[type="radio"]')
+    await radios[3].setValue(true)
+    await wrapper.vm.$nextTick()
+
+    const buttons = wrapper.findAll('button')
+    const confirmBtn = buttons.find(b => b.text().includes('確認'))
+    expect(confirmBtn?.attributes('disabled')).toBeUndefined()
+  })
 })

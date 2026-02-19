@@ -170,6 +170,8 @@ describe('TrackingDateModal', () => {
 
     await dateInput.setValue(tomorrowStr)
     await wrapper.find('input[type="time"]').setValue('14:00')
+    await wrapper.find('textarea').setValue('Valid description')
+    await wrapper.vm.$nextTick()
 
     const buttons = wrapper.findAll('button')
     const confirmBtn = buttons.find(b => b.text().includes('確認'))
@@ -186,5 +188,177 @@ describe('TrackingDateModal', () => {
 
     const dateInput = wrapper.find('input[type="date"]')
     expect((dateInput.element as HTMLInputElement).value).toBe('2026-03-20')
+  })
+
+  it('shows error when description is empty', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(tomorrowStr)
+    await wrapper.find('input[type="time"]').setValue('14:00')
+    await wrapper.find('textarea').setValue('')
+
+    // Call validate
+    wrapper.vm.validateForm()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.validationErrors.description).toContain('請輸入追蹤說明')
+  })
+
+  it('shows error when time is outside business hours', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(tomorrowStr)
+    await wrapper.find('input[type="time"]').setValue('21:00') // Outside business hours
+    await wrapper.find('textarea').setValue('Test')
+
+    wrapper.vm.validateForm()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.validationErrors.time).toContain('08:00-20:00')
+  })
+
+  it('shows error when date is more than 90 days in future', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    const future = new Date()
+    future.setDate(future.getDate() + 91)
+    const futureStr = future.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(futureStr)
+    await wrapper.find('input[type="time"]').setValue('14:00')
+    await wrapper.find('textarea').setValue('Test')
+
+    wrapper.vm.validateForm()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.validationErrors.date).toContain('超過90天')
+  })
+
+  it('disables confirm button when validation errors exist', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    // Clear date input to leave it empty
+    const dateInput = wrapper.find('input[type="date"]')
+    await dateInput.setValue('')
+    await wrapper.find('input[type="time"]').setValue('14:00')
+    await wrapper.find('textarea').setValue('Test')
+
+    await wrapper.vm.$nextTick()
+
+    const buttons = wrapper.findAll('button')
+    const confirmBtn = buttons.find(b => b.text().includes('確認'))
+    expect(confirmBtn?.attributes('disabled')).toBeDefined()
+  })
+
+  it('shows error alert when validation fails', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(tomorrowStr)
+    await wrapper.find('input[type="time"]').setValue('21:00')
+    await wrapper.find('textarea').setValue('')
+
+    // Trigger validation
+    wrapper.vm.validateForm()
+    await wrapper.vm.$nextTick()
+
+    // Should show error alert
+    expect(wrapper.find('.error-alert').exists()).toBe(true)
+  })
+
+  it('dismisses error alert when dismiss button is clicked', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    // Set an error manually
+    wrapper.vm.validationErrors = { time: 'Test error' }
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.error-alert').exists()).toBe(true)
+
+    const dismissBtn = wrapper.find('.error-close')
+    await dismissBtn.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.error-alert').exists()).toBe(false)
+  })
+
+  it('validates all fields are required (date, time, description)', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    // Set valid date and time, but empty description
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(tomorrowStr)
+    await wrapper.find('input[type="time"]').setValue('14:00')
+    await wrapper.find('textarea').setValue('')
+
+    const isValid = wrapper.vm.validateForm()
+
+    expect(isValid).toBe(false)
+    expect(Object.keys(wrapper.vm.validationErrors).length).toBeGreaterThan(0)
+  })
+
+  it('shows multiple errors at once', async () => {
+    const wrapper = mount(TrackingDateModal, {
+      props: {
+        requestId: 123,
+      },
+    })
+
+    // Set invalid time and empty description
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+    await wrapper.find('input[type="date"]').setValue(tomorrowStr)
+    await wrapper.find('input[type="time"]').setValue('25:00') // Invalid time
+    await wrapper.find('textarea').setValue('') // Empty description
+
+    wrapper.vm.validateForm()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.validationErrors.time).toBeDefined()
+    expect(wrapper.vm.validationErrors.description).toBeDefined()
   })
 })

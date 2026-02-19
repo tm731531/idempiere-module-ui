@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { toIdempiereDateTime } from '@/api/utils'
+import { ref } from 'vue'
+import ActivityInputModal from './ActivityInputModal.vue'
 
 interface Props {
   requestId: number
@@ -27,30 +28,25 @@ const emit = defineEmits<{
   'set-tracking': [payload: StatusPayload]
 }>()
 
-function handlePhoneClick() {
-  const timestamp = toIdempiereDateTime(new Date())
-  const createdBy = localStorage.getItem('user_name') || '未知用戶'
+const showActivityModal = ref(false)
+const activityActionType = ref<'電話' | '訊息'>('電話')
 
-  emit('add-activity', {
-    type: '前台行動',
-    actionType: '打電話',
-    content: '',
-    timestamp,
-    createdBy,
-  })
+function handlePhoneClick() {
+  activityActionType.value = '電話'
+  showActivityModal.value = true
 }
 
 function handleMessageClick() {
-  const timestamp = toIdempiereDateTime(new Date())
-  const createdBy = localStorage.getItem('user_name') || '未知用戶'
+  activityActionType.value = '訊息'
+  showActivityModal.value = true
+}
 
-  emit('add-activity', {
-    type: '前台行動',
-    actionType: '發訊息',
-    content: '',
-    timestamp,
-    createdBy,
-  })
+function handleActivityAdded(payload: ActivityPayload) {
+  emit('add-activity', payload)
+}
+
+function closeActivityModal() {
+  showActivityModal.value = false
 }
 
 function handleStatusClick() {
@@ -68,6 +64,15 @@ function handleTrackingClick() {
 
 <template>
   <div class="quick-action-bar">
+    <!-- Activity Input Modal -->
+    <ActivityInputModal
+      v-if="showActivityModal"
+      :request-id="requestId"
+      :action-type="activityActionType"
+      @activity-added="handleActivityAdded"
+      @close="closeActivityModal"
+    />
+
     <div class="action-grid">
       <!-- 記錄打電話 -->
       <button

@@ -7,6 +7,14 @@
       </div>
 
       <div class="dialog-content">
+        <!-- Error display -->
+        <FormErrorAlert
+          :errors="validationErrors"
+          dismissible
+          title="預約追蹤驗證失敗"
+          @dismiss="validationErrors = {}"
+        />
+
         <!-- Date input -->
         <div class="form-group">
           <label class="form-label">日期 *</label>
@@ -15,6 +23,7 @@
             type="date"
             class="form-input"
             :min="todayStr"
+            @blur="validateForm"
           />
         </div>
 
@@ -25,17 +34,19 @@
             v-model="selectedTime"
             type="time"
             class="form-input"
+            @blur="validateForm"
           />
         </div>
 
         <!-- Description input -->
         <div class="form-group">
-          <label class="form-label">說明</label>
+          <label class="form-label">說明 *</label>
           <textarea
             v-model="description"
             class="form-textarea"
-            placeholder="預約追蹤說明（選填）"
+            placeholder="預約追蹤說明"
             maxlength="200"
+            @blur="validateForm"
           />
           <div class="char-counter">{{ description.length }}/200</div>
         </div>
@@ -52,7 +63,7 @@
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="!isValidDate"
+          :disabled="!isValidForm"
           @click="handleConfirm"
         >
           確認
@@ -64,6 +75,14 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import {
+  validateTrackingForm,
+  validateTrackingDate,
+  validateTrackingTime,
+  validateTrackingDescription,
+  type TrackingFormData,
+} from '@/utils/validation'
+import FormErrorAlert from './FormErrorAlert.vue'
 
 interface Props {
   requestId: number
@@ -101,6 +120,7 @@ const todayStr = computed(() => getTodayStr())
 const selectedDate = ref(props.initialDate || getTodayStr())
 const selectedTime = ref(getCurrentTimeStr())
 const _description = ref('')
+const validationErrors = ref<Record<string, string>>({})
 
 // Enforce 200 character limit
 const description = computed({
@@ -110,28 +130,42 @@ const description = computed({
   }
 })
 
-// Validate that date is today or future
-const isValidDate = computed(() => {
-  if (!selectedDate.value || !selectedTime.value) return false
+// Validate form data
+function validateForm() {
+  const formData: TrackingFormData = {
+    date: selectedDate.value,
+    time: selectedTime.value,
+    description: description.value,
+  }
 
-  const selected = new Date(selectedDate.value)
-  const today = new Date(getTodayStr())
+  const validation = validateTrackingForm(formData)
+  validationErrors.value = validation.errors
 
-  // Normalize to compare just dates (set time to 00:00:00)
-  selected.setHours(0, 0, 0, 0)
-  today.setHours(0, 0, 0, 0)
+  return validation.isValid
+}
 
-  return selected >= today
+// Check if form is valid (computed for button disabled state)
+const isValidForm = computed(() => {
+  const formData: TrackingFormData = {
+    date: selectedDate.value,
+    time: selectedTime.value,
+    description: description.value,
+  }
+
+  const validation = validateTrackingForm(formData)
+  return validation.isValid
 })
 
 function handleConfirm() {
-  if (isValidDate.value) {
-    emit('tracking-set', {
-      date: selectedDate.value,
-      time: selectedTime.value,
-      description: description.value,
-    })
+  if (!validateForm()) {
+    return
   }
+
+  emit('tracking-set', {
+    date: selectedDate.value,
+    time: selectedTime.value,
+    description: description.value,
+  })
 }
 </script>
 

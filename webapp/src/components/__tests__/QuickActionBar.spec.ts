@@ -17,7 +17,7 @@ describe('QuickActionBar', () => {
     expect(wrapper.text()).toContain('預約追蹤')
   })
 
-  it('emits add-activity event when phone button clicked', async () => {
+  it('shows activity modal when phone button clicked', async () => {
     const wrapper = mount(QuickActionBar, {
       props: {
         requestId: 123,
@@ -25,19 +25,16 @@ describe('QuickActionBar', () => {
       },
     })
 
-    // 找到第一個按鈕（記錄打電話）並點擊
-    const buttons = wrapper.findAll('button')
+    const buttons = wrapper.findAll('.action-btn')
     await buttons[0].trigger('click')
+    await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('add-activity')).toBeTruthy()
-    const emitted = wrapper.emitted('add-activity')[0] as any[]
-    expect(emitted[0].type).toBe('前台行動')
-    expect(emitted[0].actionType).toBe('打電話')
-    expect(emitted[0].timestamp).toBeTruthy()
-    expect(emitted[0].createdBy).toBeTruthy()
+    // Modal should be shown
+    expect(wrapper.vm.showActivityModal).toBe(true)
+    expect(wrapper.vm.activityActionType).toBe('電話')
   })
 
-  it('emits add-activity event when message button clicked', async () => {
+  it('shows activity modal when message button clicked', async () => {
     const wrapper = mount(QuickActionBar, {
       props: {
         requestId: 123,
@@ -45,14 +42,37 @@ describe('QuickActionBar', () => {
       },
     })
 
-    const buttons = wrapper.findAll('button')
+    const buttons = wrapper.findAll('.action-btn')
     await buttons[1].trigger('click')
+    await wrapper.vm.$nextTick()
+
+    // Modal should be shown
+    expect(wrapper.vm.showActivityModal).toBe(true)
+    expect(wrapper.vm.activityActionType).toBe('訊息')
+  })
+
+  it('forwards activity-added event from modal', async () => {
+    const wrapper = mount(QuickActionBar, {
+      props: {
+        requestId: 123,
+        currentStatus: '待處理',
+      },
+    })
+
+    const activity = {
+      type: '前台行動',
+      actionType: '打電話',
+      content: 'Test call',
+      timestamp: '2026-02-19T10:00:00Z',
+      createdBy: 'Test User',
+    }
+
+    // Call the handler directly
+    wrapper.vm.handleActivityAdded(activity)
+    await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('add-activity')).toBeTruthy()
-    const emitted = wrapper.emitted('add-activity')[0] as any[]
-    expect(emitted[0].actionType).toBe('發訊息')
-    expect(emitted[0].timestamp).toBeTruthy()
-    expect(emitted[0].createdBy).toBeTruthy()
+    expect(wrapper.emitted('add-activity')[0][0]).toEqual(activity)
   })
 
   it('emits update-status event when status button clicked', async () => {

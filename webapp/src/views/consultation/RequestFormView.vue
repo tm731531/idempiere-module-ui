@@ -224,6 +224,9 @@ function handleAddActivity(activity: Partial<Activity>) {
       createdBy: activity.createdBy || auth.user?.name || 'Unknown',
     })
     formData.value.Description = stringifyActivities(activities)
+    errorMsg.value = '' // Clear previous errors
+    // Note: handleAddActivity is called from QuickActionBar, so modal doesn't need to close
+    // The sidebar bar stays open for multiple quick actions
   } catch (e) {
     errorMsg.value = '活動記錄新增失敗'
   }
@@ -255,15 +258,17 @@ function handleTrackingSet(data: { date: string; time: string; description: stri
       createdBy: auth.user?.name || 'Unknown',
     })
     formData.value.Description = stringifyActivities(activities)
-    showTrackingModal.value = false
+    errorMsg.value = '' // Clear any previous errors
+    showTrackingModal.value = false // Only closes on success
   } catch (e) {
     errorMsg.value = '追蹤預約設定失敗'
+    // Modal stays open so user can retry or cancel
   }
 }
 
-function getStatusName(status: any): string {
+function getStatusName(status: { id?: string | number; identifier?: string; Name?: string } | string | number | null | undefined): string {
   if (status && typeof status === 'object') {
-    return status.identifier || status.Name || status.id || '待處理'
+    return status.identifier || status.Name || String(status.id) || '待處理'
   }
   return '待處理'
 }

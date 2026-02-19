@@ -105,9 +105,8 @@ describe('StatusUpdateModal', () => {
       },
     })
 
-    // Should display hardcoded statuses instead of empty state
-    expect(wrapper.text()).toContain('待處理')
-    expect(wrapper.text()).toContain('已完成')
+    // Should display empty state when no statuses provided (API has none)
+    expect(wrapper.text()).toContain('無可用狀態')
   })
 
   it('handles numeric currentStatusId correctly', () => {

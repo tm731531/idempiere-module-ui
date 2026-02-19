@@ -82,18 +82,9 @@ const emit = defineEmits<{
 const selectedStatusId = ref<number | null>(null)
 const showError = ref(false)
 
-// 硬編碼的狀態選項
-const HARDCODED_STATUSES: Status[] = [
-  { R_Status_ID: 1, Name: '待處理' },
-  { R_Status_ID: 2, Name: '討論中' },
-  { R_Status_ID: 3, Name: '等待回應' },
-  { R_Status_ID: 4, Name: '已指派' },
-  { R_Status_ID: 5, Name: '已完成' },
-]
-
-// 優先使用父組件傳入的狀態，否則使用硬編碼的狀態
+// 直接使用父組件傳入的狀態，不假設任何硬編碼數據
 const displayStatuses = computed(() => {
-  return props.statuses.length > 0 ? props.statuses : HARDCODED_STATUSES
+  return props.statuses
 })
 
 // Computed to normalize currentStatusId to number

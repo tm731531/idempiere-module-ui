@@ -223,13 +223,9 @@ async function handleSubmit() {
   try {
     if (isEdit.value && requestId.value) {
       console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
-      // For status-only updates, use a minimal payload with just the key fields
-      // This prevents validation errors from other fields
-      const updatePayload = cleanPayload.R_Status_ID !== undefined
-        ? { R_Status_ID: cleanPayload.R_Status_ID, Summary: cleanPayload.Summary, Description: cleanPayload.Description }
-        : cleanPayload
-      console.log('🔄 Final updatePayload:', updatePayload)
-      await updateRequest(requestId.value, updatePayload)
+      // Send complete payload - API needs all mandatory fields
+      console.log('🔄 Final updatePayload:', cleanPayload)
+      await updateRequest(requestId.value, cleanPayload)
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0

@@ -555,7 +555,12 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 1.5rem;
-  margin-bottom: 8rem;
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 1rem;
+  border-top: 1px solid #e5e7eb;
+  z-index: 10;
 }
 
 .form-actions button {

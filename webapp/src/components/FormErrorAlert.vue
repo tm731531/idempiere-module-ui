@@ -97,10 +97,11 @@ function handleDismiss() {
 }
 
 .error-title {
-  font-weight: 600;
+  font-weight: 700;
   color: #991b1b;
-  font-size: 14px;
+  font-size: 15px;
   flex: 1;
+  line-height: 1.4;
 }
 
 .error-close {
@@ -110,18 +111,24 @@ function handleDismiss() {
   cursor: pointer;
   font-size: 18px;
   padding: 0;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 6px;
   transition: background-color 0.2s;
   flex-shrink: 0;
+  min-height: 32px;
+  min-width: 32px;
 }
 
 .error-close:hover {
   background-color: rgba(220, 38, 38, 0.1);
+}
+
+.error-close:active {
+  background-color: rgba(220, 38, 38, 0.2);
 }
 
 .error-list {
@@ -134,9 +141,10 @@ function handleDismiss() {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: #7f1d1d;
-  line-height: 1.5;
+  line-height: 1.6;
+  padding: 4px 0;
 }
 
 .error-field {
@@ -151,24 +159,50 @@ function handleDismiss() {
 
 @media (max-width: 640px) {
   .error-alert {
-    padding: 12px;
-    margin-bottom: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 8px;
   }
 
   .error-header {
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    gap: 10px;
   }
 
   .error-item {
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 4px 0;
   }
 
   .error-icon {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
   }
 
   .error-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .error-close {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+
+  .error-list {
+    gap: 10px;
+  }
+}
+
+@media (min-width: 641px) {
+  .error-alert {
+    padding: 16px;
+  }
+
+  .error-item {
     font-size: 13px;
   }
 }

@@ -319,61 +319,74 @@ onMounted(async () => {
 .form-header h2 {
   font-size: 1.25rem;
   margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .loading-state {
   text-align: center;
   padding: 2rem;
   color: #64748b;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .form-error {
   background: #fef2f2;
   color: var(--color-error);
-  padding: 0.75rem;
+  padding: 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  display: block;
 }
 
 .form-group label {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  line-height: 1.4;
 }
 
 .field-error {
   display: block;
   color: var(--color-error);
-  font-size: 0.8125rem;
-  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  margin-top: 0.375rem;
+  line-height: 1.4;
 }
 
 .attachment-section {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
 .attachment-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
 }
 
 .attachment-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem;
   background: #f8fafc;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  min-height: var(--min-touch);
+  min-height: 56px;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .attachment-thumb {
@@ -385,54 +398,79 @@ onMounted(async () => {
 }
 
 .attachment-name {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 100px;
+  line-height: 1.4;
 }
 
 .attachment-delete {
-  padding: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   background: transparent;
   border: 1px solid var(--color-error);
   color: var(--color-error);
   border-radius: 6px;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   cursor: pointer;
   flex-shrink: 0;
-  margin-left: 0.5rem;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.attachment-delete:active {
+  background: rgba(220, 38, 38, 0.05);
 }
 
 .attachment-empty {
   color: #94a3b8;
-  font-size: 0.875rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.9375rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  padding: 0.75rem;
+  text-align: center;
+  background: #f9fafb;
+  border-radius: 6px;
 }
 
 .file-input {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  width: 100%;
 }
 
 .upload-status {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--color-primary);
-  margin-top: 0.25rem;
+  margin-top: 0.5rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .form-actions {
   display: flex;
+  flex-direction: column;
   gap: 0.75rem;
   margin-top: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .form-actions button {
-  flex: 1;
-  padding: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
   border-radius: 8px;
   font-size: 1rem;
-  min-height: var(--min-touch);
+  min-height: 44px;
   cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  line-height: 1.4;
 }
 
 .form-actions button[type="submit"] {
@@ -445,14 +483,27 @@ onMounted(async () => {
   background: var(--color-primary-hover);
 }
 
+.form-actions button[type="submit"]:active {
+  transform: scale(0.98);
+}
+
 .form-actions button[type="submit"]:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
 .cancel-btn {
-  background: transparent;
+  background: white;
   border: 1px solid var(--color-border);
+  color: #1f2937;
+}
+
+.cancel-btn:hover {
+  background: #f9fafb;
+}
+
+.cancel-btn:active {
+  background: #f3f4f6;
 }
 
 .back-btn {
@@ -461,22 +512,89 @@ onMounted(async () => {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
-  min-height: var(--min-touch);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+.back-btn:active {
+  background: #f9fafb;
 }
 
 .timeline-section {
   margin-top: 2rem;
-  margin-bottom: 6rem;
-  padding: 1rem 0;
+  margin-bottom: 8rem;
+  padding: 1.25rem 0;
   border-top: 1px solid var(--color-border);
 }
 
 .timeline-section h3 {
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 640px) {
+  .request-form-page {
+    padding: 1rem;
+  }
+
+  .form-header {
+    gap: 0.75rem;
+  }
+
+  .form-header h2 {
+    font-size: 1.125rem;
+  }
+
+  .form-actions {
+    margin-bottom: 2rem;
+  }
+
+  .attachment-item {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .attachment-name {
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .timeline-section {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 1rem 0;
+    margin-bottom: 8rem;
+  }
+}
+
+@media (min-width: 641px) {
+  .request-form-page {
+    padding: 2rem;
+  }
+
+  .form-actions {
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .form-actions button {
+    flex: 1;
+    width: auto;
+  }
+
+  .timeline-section {
+    max-height: 400px;
+    overflow-y: auto;
+  }
 }
 </style>

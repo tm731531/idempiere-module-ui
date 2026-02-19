@@ -255,12 +255,14 @@ function handleConfirm() {
 
 .form-input,
 .form-textarea {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
+  min-height: 44px;
+  line-height: 1.5;
 }
 
 .form-input:focus,
@@ -271,14 +273,16 @@ function handleConfirm() {
 }
 
 .form-textarea {
-  min-height: 100px;
+  min-height: 120px;
   resize: vertical;
+  padding: 12px 14px;
 }
 
 .char-counter {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   text-align: right;
+  font-weight: 500;
 }
 
 .dialog-actions {
@@ -329,25 +333,113 @@ function handleConfirm() {
 
 @media (max-width: 640px) {
   .dialog-overlay {
-    padding: 8px;
+    padding: 0;
+    align-items: flex-end;
+    animation: slideUpIn 0.3s ease-out;
   }
 
   .dialog-modal {
-    max-height: calc(100vh - 16px);
+    width: 100%;
+    max-height: calc(100vh - 60px);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .dialog-header {
+    padding: 24px 20px;
+  }
+
+  .dialog-title {
+    font-size: 20px;
+  }
+
+  .dialog-close {
+    width: 44px;
+    height: 44px;
+    font-size: 28px;
   }
 
   .dialog-content {
-    padding: 16px;
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .form-group {
+    gap: 8px;
+  }
+
+  .form-label {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .form-input {
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  .form-textarea {
+    font-size: 16px;
+    min-height: 140px;
+    padding: 12px 14px;
   }
 
   .dialog-actions {
-    padding: 12px 16px;
-    gap: 8px;
+    padding: 16px 20px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  @keyframes slideUpIn {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .dialog-modal {
+    max-width: 90vw;
+    max-width: 500px;
+  }
+
+  .dialog-content {
+    padding: 20px;
   }
 
   .btn {
     flex: 1;
     min-height: 44px;
+  }
+
+  .form-input,
+  .form-textarea {
+    min-height: 44px;
+  }
+
+  .form-textarea {
+    min-height: 130px;
+  }
+}
+
+@media (min-width: 1025px) {
+  .dialog-modal {
+    max-width: 450px;
+  }
+
+  .btn {
+    min-height: 40px;
   }
 }
 </style>

@@ -150,9 +150,17 @@ function handleTrackingClick() {
   margin: 0 auto;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 641px) and (max-width: 1023px) {
+  .action-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
   .action-grid {
     grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
   }
 }
 
@@ -202,22 +210,60 @@ function handleTrackingClick() {
 
 @media (max-width: 640px) {
   .quick-action-bar {
-    padding: 8px;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
   .action-grid {
-    gap: 6px;
+    gap: 8px;
   }
 
   .action-btn {
-    min-height: 52px;
-    padding: 6px 8px;
-    font-size: 0.7rem;
+    min-height: 56px;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    flex-direction: column;
+    gap: 6px;
   }
 
   .action-btn svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+  }
+
+  .action-btn span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: center;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+  .quick-action-bar {
+    padding: 14px;
+  }
+
+  .action-btn {
+    min-height: 48px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .action-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .quick-action-bar {
+    padding: 16px;
+  }
+
+  .action-btn {
+    min-height: 56px;
+    padding: 10px 16px;
+    font-size: 0.875rem;
   }
 }
 </style>

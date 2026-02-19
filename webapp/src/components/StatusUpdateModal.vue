@@ -307,25 +307,89 @@ watch(
 
 @media (max-width: 640px) {
   .dialog-overlay {
-    padding: 8px;
+    padding: 0;
+    align-items: flex-end;
+    animation: slideUpIn 0.3s ease-out;
   }
 
   .dialog-modal {
-    max-height: calc(100vh - 16px);
+    width: 100%;
+    max-height: calc(100vh - 60px);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .dialog-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
   }
 
   .dialog-content {
-    padding: 16px;
+    padding: 20px;
+    gap: 12px;
   }
 
   .dialog-actions {
-    padding: 12px 16px;
-    gap: 8px;
+    padding: 16px 20px;
+    gap: 12px;
   }
 
   .btn {
     flex: 1;
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .status-item {
+    padding: 16px;
+    min-height: 56px;
+  }
+
+  .status-label {
+    font-size: 16px;
+  }
+
+  .dialog-close {
+    width: 40px;
+    height: 40px;
+    font-size: 28px;
+  }
+
+  @keyframes slideUpIn {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .dialog-modal {
+    max-width: 90vw;
+    max-width: 500px;
+  }
+
+  .btn {
     min-height: 44px;
+  }
+
+  .status-item {
+    padding: 14px;
+    min-height: 48px;
+  }
+}
+
+@media (min-width: 1025px) {
+  .dialog-modal {
+    max-width: 400px;
+  }
+
+  .btn {
+    min-height: 40px;
   }
 }
 </style>

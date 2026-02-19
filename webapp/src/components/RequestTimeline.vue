@@ -102,7 +102,7 @@ function getTypeBadgeClass(type: string): string {
 <style scoped>
 .timeline-container {
   width: 100%;
-  padding: 16px;
+  padding: 16px 0;
 }
 
 /* 空狀態 */
@@ -110,7 +110,8 @@ function getTypeBadgeClass(type: string): string {
   text-align: center;
   padding: 32px 16px;
   color: #9ca3af;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 /* 時間軸容器 */
@@ -249,43 +250,95 @@ function getTypeBadgeClass(type: string): string {
 /* 行動設備適配 */
 @media (max-width: 640px) {
   .timeline-container {
-    padding: 12px;
+    padding: 12px 12px;
+  }
+
+  .empty-state {
+    padding: 24px 12px;
+    font-size: 14px;
   }
 
   .timeline-item {
     gap: 12px;
+    margin-bottom: 4px;
   }
 
   .timeline-dot {
     width: 10px;
     height: 10px;
     border-width: 2px;
+    margin-top: 6px;
   }
 
   .timeline-card {
-    padding: 10px;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
   }
 
   .card-header {
     flex-direction: column;
     align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 6px;
   }
 
   .timestamp {
-    font-size: 11px;
+    font-size: 13px;
+    font-weight: 500;
   }
 
   .type-badge {
-    font-size: 11px;
-    padding: 3px 8px;
+    font-size: 12px;
+    padding: 4px 10px;
   }
 
   .action-type {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 600;
   }
 
   .content {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .metadata {
+    margin-top: 8px;
+    padding-top: 8px;
     font-size: 12px;
+  }
+}
+
+@media (min-width: 641px) {
+  .timeline-container {
+    padding: 16px 0;
+  }
+
+  .timeline-item {
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .card-header {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .timestamp {
+    font-size: 13px;
+  }
+
+  .type-badge {
+    font-size: 12px;
+  }
+
+  .action-type {
+    font-size: 15px;
+  }
+
+  .content {
+    font-size: 14px;
   }
 }
 </style>

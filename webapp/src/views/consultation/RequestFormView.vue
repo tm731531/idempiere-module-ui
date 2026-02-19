@@ -124,10 +124,11 @@ import {
 } from '@/api/request'
 
 // Fallback statuses when API returns empty
+// These IDs must match actual R_Status records in the database
 const FALLBACK_STATUSES = [
-  { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
-  { R_Status_ID: 2, Name: '等待回應', SeqNo: 2 },
-  { R_Status_ID: 3, Name: '已完成', SeqNo: 3 },
+  { R_Status_ID: 100, Name: 'Open', SeqNo: 1 },
+  { R_Status_ID: 101, Name: 'Waiting on customer', SeqNo: 2 },
+  { R_Status_ID: 102, Name: 'Closed', SeqNo: 3 },
 ]
 
 const router = useRouter()

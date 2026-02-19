@@ -1,41 +1,66 @@
 <template>
   <div class="request-list-page">
-    <div class="filter-tabs">
+    <!-- View mode tabs: List vs Dashboard -->
+    <div class="view-tabs">
       <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['tab-btn', { active: activeTab === tab.key }]"
-        @click="switchTab(tab.key)"
+        :class="['view-tab', { active: viewMode === 'list' }]"
+        @click="viewMode = 'list'"
       >
-        {{ tab.label }}
+        📋 列表
+      </button>
+      <button
+        :class="['view-tab', { active: viewMode === 'dashboard' }]"
+        @click="viewMode = 'dashboard'"
+      >
+        📊 儀表板
       </button>
     </div>
 
-    <div v-if="loading" class="loading-state">載入中...</div>
+    <!-- List View -->
+    <div v-if="viewMode === 'list'" class="list-view">
+      <div class="filter-tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          :class="['tab-btn', { active: activeTab === tab.key }]"
+          @click="switchTab(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
 
-    <div v-else-if="requests.length === 0" class="empty-state">
-      <p>目前沒有諮詢紀錄</p>
-    </div>
+      <div v-if="loading" class="loading-state">載入中...</div>
 
-    <div v-else class="request-cards">
-      <div
-        v-for="r in requests"
-        :key="r.id"
-        class="request-card"
-        @click="goToEdit(r)"
-      >
-        <div class="card-main">
-          <div class="card-summary-title">{{ r.Summary }}</div>
-          <div v-if="getCustomerName(r)" class="card-customer">{{ getCustomerName(r) }}</div>
-        </div>
-        <div class="card-meta">
-          <span class="card-status">{{ getStatusName(r) }}</span>
-          <span class="card-date">{{ formatDate(r.Created) }}</span>
+      <div v-else-if="requests.length === 0" class="empty-state">
+        <p>目前沒有諮詢紀錄</p>
+      </div>
+
+      <div v-else class="request-cards">
+        <div
+          v-for="r in requests"
+          :key="r.id"
+          class="request-card"
+          @click="goToEdit(r)"
+        >
+          <div class="card-main">
+            <div class="card-summary-title">{{ r.Summary }}</div>
+            <div v-if="getCustomerName(r)" class="card-customer">{{ getCustomerName(r) }}</div>
+          </div>
+          <div class="card-meta">
+            <span class="card-status">{{ getStatusName(r) }}</span>
+            <span class="card-date">{{ formatDate(r.Created) }}</span>
+          </div>
         </div>
       </div>
+
+      <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增諮詢</button>
     </div>
 
-    <button class="fab" @click="goToNew"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> 新增諮詢</button>
+    <!-- Dashboard View -->
+    <div v-else class="dashboard-view">
+      <div v-if="dashboardLoading" class="loading-state">載入儀表板中...</div>
+      <ConsultationDashboard v-else :requests="allRequests" />
+    </div>
   </div>
 </template>
 
@@ -43,8 +68,10 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
+import ConsultationDashboard from '@/components/ConsultationDashboard.vue'
 
 type TabKey = 'all' | 'active' | 'done'
+type ViewMode = 'list' | 'dashboard'
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'all', label: '全部' },
@@ -54,9 +81,12 @@ const tabs: { key: TabKey; label: string }[] = [
 
 const router = useRouter()
 
+const viewMode = ref<ViewMode>('list')
 const activeTab = ref<TabKey>('all')
 const requests = ref<any[]>([])
+const allRequests = ref<any[]>([])
 const loading = ref(false)
+const dashboardLoading = ref(false)
 
 function getFilterForTab(tab: TabKey): string | undefined {
   if (tab === 'active') return 'Processed eq false'
@@ -73,6 +103,18 @@ async function loadRequests() {
     requests.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAllRequests() {
+  dashboardLoading.value = true
+  try {
+    // Load all requests without filter for dashboard
+    allRequests.value = await listRequests()
+  } catch {
+    allRequests.value = []
+  } finally {
+    dashboardLoading.value = false
   }
 }
 
@@ -122,6 +164,7 @@ function goToNew() {
 
 onMounted(() => {
   loadRequests()
+  loadAllRequests()  // Pre-load all requests for dashboard
 })
 </script>
 
@@ -131,6 +174,53 @@ onMounted(() => {
   padding-bottom: 5rem;
   max-width: 600px;
   margin: 0 auto;
+}
+
+/* View mode tabs (List vs Dashboard) */
+.view-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.view-tab {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #94a3b8;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.view-tab:hover {
+  color: #64748b;
+}
+
+.view-tab.active {
+  color: #3f3f46;
+  border-bottom-color: #3f3f46;
+}
+
+.list-view,
+.dashboard-view {
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .filter-tabs {

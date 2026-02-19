@@ -82,6 +82,24 @@
         @set-tracking="handleSetTracking"
       />
     </div>
+
+    <!-- Status Update Modal -->
+    <StatusUpdateModal
+      v-if="showStatusModal"
+      :request-id="requestId || 0"
+      :current-status-id="getCurrentStatusId()"
+      :statuses="availableStatuses"
+      @status-selected="handleStatusSelected"
+      @close="showStatusModal = false"
+    />
+
+    <!-- Tracking Date Modal -->
+    <TrackingDateModal
+      v-if="showTrackingModal"
+      :request-id="requestId || 0"
+      @tracking-set="handleTrackingSet"
+      @close="showTrackingModal = false"
+    />
   </div>
 </template>
 
@@ -94,6 +112,8 @@ import { useDocumentForm } from '@/composables/useDocumentForm'
 import DynamicForm from '@/components/DynamicForm.vue'
 import RequestTimeline from '@/components/RequestTimeline.vue'
 import QuickActionBar from '@/components/QuickActionBar.vue'
+import StatusUpdateModal from '@/components/StatusUpdateModal.vue'
+import TrackingDateModal from '@/components/TrackingDateModal.vue'
 import { parseActivities, stringifyActivities, type Activity } from '@/utils/requestActivity'
 import {
   getRequest,
@@ -133,6 +153,10 @@ const highlightColumns = ['C_BPartner_ID']
 
 const submitting = ref(false)
 const errorMsg = ref('')
+
+const showStatusModal = ref(false)
+const showTrackingModal = ref(false)
+const availableStatuses = ref<Array<{ R_Status_ID: number; Name: string }>>([])
 
 const {
   attachments,
@@ -206,13 +230,35 @@ function handleAddActivity(activity: Partial<Activity>) {
 }
 
 function handleUpdateStatus() {
-  // TODO: 在 Task 7 實作 modal
-  console.log('Update status - will implement in Task 7')
+  showStatusModal.value = true
 }
 
 function handleSetTracking() {
-  // TODO: 在 Task 7 實作 modal
-  console.log('Set tracking - will implement in Task 7')
+  showTrackingModal.value = true
+}
+
+function handleStatusSelected(statusId: number) {
+  formData.value.R_Status_ID = statusId
+  showStatusModal.value = false
+}
+
+function handleTrackingSet(data: { date: string; time: string; description: string }) {
+  try {
+    const activities = parseActivities(formData.value.Description || '[]')
+    const isoDateTime = `${data.date}T${data.time}:00Z`
+
+    activities.push({
+      type: '預約追蹤',
+      actionType: '設定追蹤',
+      content: data.description,
+      timestamp: isoDateTime,
+      createdBy: auth.user?.name || 'Unknown',
+    })
+    formData.value.Description = stringifyActivities(activities)
+    showTrackingModal.value = false
+  } catch (e) {
+    errorMsg.value = '追蹤預約設定失敗'
+  }
 }
 
 function getStatusName(status: any): string {
@@ -222,8 +268,29 @@ function getStatusName(status: any): string {
   return '待處理'
 }
 
+function getCurrentStatusId(): string | number {
+  const status = formData.value.R_Status_ID
+  if (status && typeof status === 'object') {
+    return status.id || 0
+  }
+  return status || 0
+}
+
+function loadAvailableStatuses() {
+  // TODO: Fetch from API when status lookup is available
+  // For now, using placeholder statuses
+  availableStatuses.value = [
+    { R_Status_ID: 1, Name: '待處理' },
+    { R_Status_ID: 2, Name: '討論中' },
+    { R_Status_ID: 3, Name: '等待回應' },
+    { R_Status_ID: 4, Name: '已指派' },
+    { R_Status_ID: 5, Name: '已完成' },
+  ]
+}
+
 onMounted(async () => {
   await load()
+  loadAvailableStatuses()
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)
   }

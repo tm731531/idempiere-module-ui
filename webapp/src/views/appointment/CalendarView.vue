@@ -78,29 +78,19 @@
           <div
             v-for="layout in dayApptLayout"
             :key="layout.appt.id"
-            class="appt-block"
-            :class="{
-              'conflict': dragState.hasConflict && dragState.appointmentId === layout.appt.id,
-              'dragging': dragState.dragging && dragState.appointmentId === layout.appt.id,
+            :style="{
+              ...getApptBlockStyle(layout),
+              position: 'absolute',
+              color: 'white',
+              padding: '5px',
+              fontSize: '12px',
+              zIndex: '10',
+              borderRadius: '4px',
+              overflow: 'hidden'
             }"
-            :style="getApptBlockStyle(layout)"
-            :title="`${getResourceName(layout.appt)} — ${layout.appt.Name}`"
             @click.stop="onApptClick(layout.appt)"
-            @contextmenu.stop="onApptContextMenu($event, layout.appt)"
-            @mousedown="startDragAppt($event, layout.appt)"
-            @touchstart="startDragAppt($event, layout.appt)"
           >
-            <span class="appt-resource">{{ getResourceName(layout.appt) }}</span>
-            <span class="appt-name">{{ layout.appt.Name }}</span>
-            <span class="appt-time">{{ formatApptTime(layout.appt) }}</span>
-
-            <!-- Conflict tooltip -->
-            <div
-              v-if="dragState.hasConflict && dragState.appointmentId === layout.appt.id"
-              class="conflict-tooltip"
-            >
-              與「{{ dragState.conflictingNames.join('」「') }}」衝突
-            </div>
+            {{ layout.appt.Name }}
           </div>
         </div>
       </div>
@@ -286,8 +276,15 @@ function toggleAll() {
 }
 
 function getResourceColor(resourceId: number): string {
+  // First try to find in resources list (for already-loaded resources)
   const idx = resources.value.findIndex(r => r.id === resourceId)
-  const colorIdx = Math.max(0, idx) % CALENDAR_CONFIG.COLORS.length
+  if (idx !== -1) {
+    const colorIdx = idx % CALENDAR_CONFIG.COLORS.length
+    return CALENDAR_CONFIG.COLORS[colorIdx]!
+  }
+  // Fallback: use resource ID itself as stable hash for color assignment
+  // This ensures even newly-created resources get consistent colors
+  const colorIdx = Math.abs(resourceId) % CALENDAR_CONFIG.COLORS.length
   return CALENDAR_CONFIG.COLORS[colorIdx]!
 }
 
@@ -923,7 +920,8 @@ async function handleCopyAppt() {
 async function onCopySuccess() {
   showCopyDialog.value = false
   selectedAppt.value = null
-  await loadAssignments()
+  // Reload both assignments and resources in case new resource was used
+  await Promise.all([loadAssignments(), reloadResources()])
 }
 
 async function handleDeleteAppt() {

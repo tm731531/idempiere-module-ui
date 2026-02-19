@@ -35,12 +35,9 @@ export async function listAssignments(
 }
 
 export async function createAssignment(data: AssignmentData): Promise<any> {
-  const payload = {
-    ...data,
-    AssignDateFrom: toIdempiereDateTime(new Date(data.AssignDateFrom)),
-    AssignDateTo: toIdempiereDateTime(new Date(data.AssignDateTo)),
-  }
-  const resp = await apiClient.post('/api/v1/models/S_ResourceAssignment', payload)
+  // AssignDateFrom/To should already be in iDempiere format (fake-Z format)
+  // from the caller (CopyDialog uses toIdempiereDateTime already)
+  const resp = await apiClient.post('/api/v1/models/S_ResourceAssignment', data)
   return resp.data
 }
 
@@ -62,7 +59,9 @@ export async function checkConflict(
   excludeId?: number,
 ): Promise<boolean> {
   // Check for overlapping assignments for the same resource
-  let filter = `S_Resource_ID eq ${resourceId} and AssignDateFrom lt '${toIdempiereDateTime(dateTo)}' and AssignDateTo gt '${toIdempiereDateTime(dateFrom)}'`
+  const fromStr = toIdempiereDateTime(dateFrom)
+  const toStr = toIdempiereDateTime(dateTo)
+  let filter = `S_Resource_ID eq ${resourceId} and AssignDateFrom lt '${toStr}' and AssignDateTo gt '${fromStr}'`
   if (excludeId) filter += ` and S_ResourceAssignment_ID ne ${excludeId}`
 
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {

@@ -261,8 +261,8 @@ async function handleSave() {
       // Create new
       await createAssignment({
         S_Resource_ID: form.resourceId,
-        AssignDateFrom: form.dateFrom,
-        AssignDateTo: form.dateTo,
+        AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
+        AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
         AD_Org_ID: orgId,

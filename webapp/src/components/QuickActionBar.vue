@@ -130,11 +130,11 @@ function handleTrackingClick() {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--color-background, #fff);
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-background, var(--color-bg));
+  border-top: 1px solid var(--color-border);
   padding: 12px;
   z-index: 50;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -2px 8px var(--color-shadow-neutral);
 }
 
 .action-grid {
@@ -159,7 +159,7 @@ function handleTrackingClick() {
   gap: 6px;
   min-height: var(--min-touch, 56px);
   padding: 8px 12px;
-  background: linear-gradient(135deg, var(--color-primary, #3b82f6), var(--color-primary-light, #60a5fa));
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -182,7 +182,7 @@ function handleTrackingClick() {
 .action-btn:hover:not(:disabled) {
   opacity: 0.85;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px var(--color-shadow-primary);
 }
 
 .action-btn:active:not(:disabled) {

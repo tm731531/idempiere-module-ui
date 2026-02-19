@@ -19,12 +19,22 @@
           </div>
         </div>
 
-        <!-- Date picker -->
+        <!-- Date/Time picker -->
         <div class="form-group">
-          <label class="form-label">選擇日期 *</label>
+          <label class="form-label">開始時間 *</label>
           <input
-            v-model="selectedDate"
-            type="date"
+            v-model="selectedStartTime"
+            type="datetime-local"
+            class="form-input"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">結束時間 *</label>
+          <input
+            v-model="selectedEndTime"
+            type="datetime-local"
             class="form-input"
             required
           />
@@ -78,7 +88,7 @@
         </button>
         <button
           class="btn btn-primary"
-          :disabled="saving || selectedResourceIds.size === 0 || !selectedDate"
+          :disabled="saving || selectedResourceIds.size === 0 || !selectedStartTime || !selectedEndTime"
           @click="handleCopy"
         >
           {{ saving ? '複製中...' : '複製' }}
@@ -94,8 +104,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { createAssignment } from '@/api/assignment'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { createAssignment, checkConflict } from '@/api/assignment'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 
 interface Props {
@@ -111,11 +121,34 @@ const emit = defineEmits<{
 }>()
 
 // State
-const selectedDate = ref(new Date().toISOString().split('T')[0])
+const selectedStartTime = ref('')
+const selectedEndTime = ref('')
 const selectedResourceIds = reactive(new Set<number>())
 const copyName = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
+
+// Initialize default times based on source appointment
+const initializeDefaultTimes = () => {
+  try {
+    const sourceFrom = parseIdempiereDateTime(props.sourceAppt.AssignDateFrom)
+    const sourceTo = parseIdempiereDateTime(props.sourceAppt.AssignDateTo)
+
+    // Set defaults to today at the same time as source
+    const today = new Date()
+    const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(),
+      sourceFrom.getHours(), sourceFrom.getMinutes())
+    const endDate = new Date(startDate.getTime() + (sourceTo.getTime() - sourceFrom.getTime()))
+
+    selectedStartTime.value = startDate.toISOString().slice(0, 16)
+    selectedEndTime.value = endDate.toISOString().slice(0, 16)
+  } catch (e) {
+    // Fallback to now if parsing fails
+    const now = new Date()
+    selectedStartTime.value = now.toISOString().slice(0, 16)
+    selectedEndTime.value = new Date(now.getTime() + 3600000).toISOString().slice(0, 16)
+  }
+}
 
 // Pre-select the original resource
 const originalResourceId = computed(() => {
@@ -156,38 +189,45 @@ async function handleCopy() {
     return
   }
 
-  if (!selectedDate.value) {
-    errorMsg.value = '請選擇日期'
+  if (!selectedStartTime.value || !selectedEndTime.value) {
+    errorMsg.value = '請選擇開始和結束時間'
+    return
+  }
+
+  const startDate = new Date(selectedStartTime.value)
+  const endDate = new Date(selectedEndTime.value)
+
+  if (startDate >= endDate) {
+    errorMsg.value = '結束時間必須晚於開始時間'
     return
   }
 
   saving.value = true
 
   try {
-    // Parse original appointment times
-    const sourceFrom = parseIdempiereDateTime(props.sourceAppt.AssignDateFrom)
-    const sourceTo = parseIdempiereDateTime(props.sourceAppt.AssignDateTo)
-
-    // Calculate duration
-    const durationMs = sourceTo.getTime() - sourceFrom.getTime()
-
-    // Create new appointments for each selected resource
-    const createdCount = ref(0)
+    // Use the selected start and end times directly
+    const selectedFromDate = startDate
+    const selectedToDate = endDate
 
     for (const resourceId of selectedResourceIds) {
-      // Build new appointment date times
-      const [yearStr, monthStr, dayStr] = selectedDate.value.split('-')
-      const year = parseInt(yearStr!, 10)
-      const month = parseInt(monthStr!, 10)
-      const day = parseInt(dayStr!, 10)
-      const newFrom = new Date(year, month - 1, day, sourceFrom.getHours(), sourceFrom.getMinutes())
-      const newTo = new Date(newFrom.getTime() + durationMs)
+      // Check for conflicts with existing appointments
+      const excludeId = resourceId === (typeof props.sourceAppt.S_Resource_ID === 'object' ? props.sourceAppt.S_Resource_ID.id : props.sourceAppt.S_Resource_ID)
+        ? props.sourceAppt.id
+        : undefined
+
+      const hasConflict = await checkConflict(resourceId, selectedFromDate, selectedToDate, excludeId)
+      if (hasConflict) {
+        const resName = props.resources.find(r => r.id === resourceId)?.Name || `服務人員 ${resourceId}`
+        errorMsg.value = `❌ ${resName} 在 ${selectedStartTime.value} 至 ${selectedEndTime.value} 時間已有預約，無法複製`
+        saving.value = false
+        return
+      }
 
       // Prepare payload
       const payload = {
         S_Resource_ID: resourceId,
-        AssignDateFrom: toIdempiereDateTime(newFrom),
-        AssignDateTo: toIdempiereDateTime(newTo),
+        AssignDateFrom: toIdempiereDateTime(selectedFromDate),
+        AssignDateTo: toIdempiereDateTime(selectedToDate),
         Name: copyName.value || props.sourceAppt.Name,
         AD_Org_ID: props.sourceAppt.AD_Org_ID,
       } as any
@@ -200,29 +240,61 @@ async function handleCopy() {
       // API call
       try {
         await createAssignment(payload)
-        createdCount.value++
-      } catch (e) {
-        console.error(`Failed to copy for resource ${resourceId}:`, e)
-        errorMsg.value = `複製失敗：${selectedResourceIds.size === 1 ? '' : `部分`}服務人員複製失敗`
-        throw e
+      } catch (e: any) {
+        const resName = props.resources.find(r => r.id === resourceId)?.Name || `服務人員 ${resourceId}`
+
+        // Convert error codes to user-friendly messages
+        let userMsg = '複製失敗'
+        if (e.response?.status === 400) {
+          userMsg = '資料不完整或格式不正確'
+        } else if (e.response?.status === 401) {
+          userMsg = '登入已過期，請重新登入'
+        } else if (e.response?.status === 403) {
+          userMsg = '沒有權限執行此操作'
+        } else if (e.response?.status === 404) {
+          userMsg = '找不到指定的資源'
+        } else if (e.response?.status === 409) {
+          userMsg = '時間衝突或資源已被占用'
+        } else if (e.response?.status === 500) {
+          userMsg = '伺服器錯誤，請稍後重試'
+        }
+
+        errorMsg.value = `❌ ${resName} 複製失敗：${userMsg}`
+        saving.value = false
+        return
       }
     }
 
     // Success
     emit('success')
-  } catch (error) {
+  } catch (error: any) {
+    // Only show error if not already set by specific error handler
     if (!errorMsg.value) {
-      errorMsg.value = '複製失敗，請重試'
+      let userMsg = '複製失敗'
+      if (error.response?.status === 400) {
+        userMsg = '資料不完整或格式不正確'
+      } else if (error.response?.status === 401) {
+        userMsg = '登入已過期，請重新登入'
+      } else if (error.response?.status === 403) {
+        userMsg = '沒有權限執行此操作'
+      } else if (error.response?.status === 500) {
+        userMsg = '伺服器錯誤，請稍後重試'
+      }
+      errorMsg.value = `❌ ${userMsg}`
     }
   } finally {
     saving.value = false
   }
 }
 
-// Initialize with original resource selected
-if (!selectedResourceIds.has(originalResourceId.value)) {
-  selectedResourceIds.add(originalResourceId.value)
-}
+// Initialize on component mount
+onMounted(() => {
+  initializeDefaultTimes()
+  // Pre-select the original resource by default
+  if (!selectedResourceIds.has(originalResourceId.value)) {
+    selectedResourceIds.add(originalResourceId.value)
+  }
+})
 </script>
 
 <style scoped>

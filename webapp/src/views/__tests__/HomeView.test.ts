@@ -36,7 +36,7 @@ describe('HomeView', () => {
     mockPush.mockClear()
   })
 
-  it('displays consultation dashboard card in business section', () => {
+  it('displays consultation record card in customer service section', () => {
     const wrapper = mount(HomeView, {
       global: {
         stubs: {
@@ -45,18 +45,18 @@ describe('HomeView', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('諮詢儀表板')
-    expect(wrapper.text()).toContain('追蹤諮詢狀態與客戶旅程')
+    expect(wrapper.text()).toContain('諮詢記錄')
+    expect(wrapper.text()).toContain('諮詢與評估記錄')
   })
 
-  it('dashboard card is in the 業務流程 section', () => {
+  it('consultation record card is in the 客戶服務 section', () => {
     const wrapper = mount(HomeView)
 
     const sections = wrapper.findAll('.section')
     let found = false
 
     for (const section of sections) {
-      if (section.text().includes('業務流程') && section.text().includes('諮詢儀表板')) {
+      if (section.text().includes('客戶服務') && section.text().includes('諮詢記錄')) {
         found = true
         break
       }
@@ -65,24 +65,24 @@ describe('HomeView', () => {
     expect(found).toBe(true)
   })
 
-  it('navigates to dashboard view when card clicked', async () => {
+  it('navigates to consultation list view when card clicked', async () => {
     const wrapper = mount(HomeView)
 
     const cards = wrapper.findAll('.module-card')
-    let dashboardCard = null
+    let consultationCard = null
 
     for (const card of cards) {
-      if (card.text().includes('諮詢儀表板')) {
-        dashboardCard = card
+      if (card.text().includes('諮詢記錄')) {
+        consultationCard = card
         break
       }
     }
 
-    expect(dashboardCard).not.toBe(null)
+    expect(consultationCard).not.toBe(null)
 
-    if (dashboardCard) {
-      await dashboardCard.find('.card-body').trigger('click')
-      expect(mockPush).toHaveBeenCalledWith({ path: '/consultation-dashboard', query: undefined })
+    if (consultationCard) {
+      await consultationCard.find('.card-body').trigger('click')
+      expect(mockPush).toHaveBeenCalledWith({ path: '/consultation', query: undefined })
     }
   })
 })

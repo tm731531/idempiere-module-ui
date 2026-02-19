@@ -152,6 +152,7 @@ const {
   isCreate,
   load,
   getFormPayload,
+  getUpdatePayload,
   populateFromRecord,
   docStatus,
   loadFields,
@@ -185,7 +186,11 @@ const {
 
 async function handleSubmit() {
   errorMsg.value = ''
-  const payload = getFormPayload()
+  // For updates, use getUpdatePayload() to include all non-system fields
+  // For creates, use getFormPayload() to only include updateable fields
+  const payload = isEdit.value ? getUpdatePayload() : getFormPayload()
+  console.log('📤 handleSubmit - payload:', payload)
+  console.log('📤 handleSubmit - R_Status_ID:', payload.R_Status_ID, 'type:', typeof payload.R_Status_ID)
 
   if (!payload.R_RequestType_ID) {
     errorMsg.value = '請選擇諮詢類型'
@@ -199,14 +204,17 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (isEdit.value && requestId.value) {
+      console.log('🔄 Updating request', requestId.value, 'with payload:', payload)
       await updateRequest(requestId.value, payload)
       router.push({ name: 'consultation-list' })
     } else {
       payload.AD_Org_ID = auth.context?.organizationId ?? 0
+      console.log('➕ Creating new request with payload:', payload)
       await createRequest(payload as RequestData)
       router.push({ name: 'consultation-list' })
     }
-  } catch {
+  } catch (e) {
+    console.error('❌ Submit error:', e)
     errorMsg.value = isEdit.value ? '更新諮詢失敗' : '建立諮詢失敗'
   } finally {
     submitting.value = false
@@ -261,7 +269,9 @@ function handleSetTracking() {
 }
 
 function handleStatusSelected(statusId: number) {
+  console.log('🔄 handleStatusSelected called with statusId:', statusId, 'type:', typeof statusId)
   formData.value.R_Status_ID = statusId
+  console.log('📝 Updated formData.R_Status_ID to:', formData.value.R_Status_ID)
   showStatusModal.value = false
 }
 
@@ -313,20 +323,24 @@ async function loadAvailableStatuses() {
   try {
     // Fetch actual statuses from API
     const apiStatuses = await listRequestStatuses()
-    console.log('Loaded statuses from API:', apiStatuses)
+    console.log('🔍 Loaded statuses from API:', apiStatuses)
+    console.log('📋 Using FALLBACK_STATUSES as:', FALLBACK_STATUSES)
 
     // If API returns statuses, use them; otherwise use fallback
     if (apiStatuses && apiStatuses.length > 0) {
       availableStatuses.value = apiStatuses
+      console.log('✅ Using API statuses:', availableStatuses.value)
     } else {
-      console.warn('No statuses from API, using fallback statuses')
+      console.warn('⚠️ No statuses from API, using fallback statuses')
       availableStatuses.value = FALLBACK_STATUSES
+      console.log('✅ Using FALLBACK_STATUSES:', availableStatuses.value)
     }
   } catch (e: any) {
     // Fallback if API call fails
-    console.error('Failed to load statuses from API:', e)
-    console.warn('Using fallback statuses')
+    console.error('❌ Failed to load statuses from API:', e)
+    console.warn('⚠️ Using fallback statuses')
     availableStatuses.value = FALLBACK_STATUSES
+    console.log('✅ Using FALLBACK_STATUSES:', availableStatuses.value)
   }
 }
 

@@ -51,7 +51,20 @@ export async function updateRequest(id: number, data: Record<string, any>): Prom
 }
 
 export async function updateRequestStatus(id: number, statusId: number): Promise<any> {
-  return updateRequest(id, { R_Status_ID: statusId })
+  const url = `/api/v1/models/R_Request/${id}`
+  const payload = { R_Status_ID: statusId }
+  console.log(`📡 updateRequestStatus - PUT ${url}`)
+  console.log(`📡 updateRequestStatus - payload:`, payload)
+  try {
+    const resp = await apiClient.put(url, payload)
+    console.log(`✅ updateRequestStatus - success`)
+    return resp.data
+  } catch (error: any) {
+    console.error(`❌ updateRequestStatus - error:`, error.message)
+    console.error(`❌ updateRequestStatus - status:`, error.response?.status)
+    console.error(`❌ updateRequestStatus - response:`, error.response?.data)
+    throw error
+  }
 }
 
 export async function listRequestStatuses(requestTypeId?: number): Promise<any[]> {

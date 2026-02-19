@@ -222,7 +222,13 @@ async function handleSubmit() {
   try {
     if (isEdit.value && requestId.value) {
       console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
-      await updateRequest(requestId.value, cleanPayload)
+      // For status-only updates, use a minimal payload with just the key fields
+      // This prevents validation errors from other fields
+      const updatePayload = cleanPayload.R_Status_ID !== undefined
+        ? { R_Status_ID: cleanPayload.R_Status_ID, Summary: cleanPayload.Summary, Description: cleanPayload.Description }
+        : cleanPayload
+      console.log('🔄 Final updatePayload:', updatePayload)
+      await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
@@ -230,9 +236,15 @@ async function handleSubmit() {
       await createRequest(cleanPayload as RequestData)
       router.push({ name: 'consultation-list' })
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('❌ Submit error:', e)
-    errorMsg.value = isEdit.value ? '更新諮詢失敗' : '建立諮詢失敗'
+    console.error('❌ Error response:', e.response?.data)
+    console.error('❌ Error status:', e.response?.status)
+    console.error('❌ Error message:', e.message)
+
+    // Try to extract API error message
+    const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
+    errorMsg.value = isEdit.value ? `更新諮詢失敗: ${apiError}` : `建立諮詢失敗: ${apiError}`
   } finally {
     submitting.value = false
   }

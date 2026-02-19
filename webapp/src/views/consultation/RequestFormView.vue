@@ -20,6 +20,12 @@
         @update:modelValue="formData = $event"
       />
 
+      <!-- Activity Timeline Section -->
+      <div v-if="isEdit" class="timeline-section">
+        <h3>活動記錄</h3>
+        <RequestTimeline :activities="formData.Description || '[]'" />
+      </div>
+
       <!-- Attachment section (custom, not from metadata) -->
       <div v-if="isEdit" class="form-group attachment-section">
         <label>附件 / 照片</label>
@@ -64,6 +70,18 @@
         </button>
       </div>
     </form>
+
+    <!-- Quick Action Bar (sticky bottom) -->
+    <div v-if="isEdit" class="quick-actions-wrapper">
+      <QuickActionBar
+        :request-id="requestId"
+        :current-status="getStatusName(formData.R_Status_ID)"
+        :disabled="submitting || !isEdit"
+        @add-activity="handleAddActivity"
+        @update-status="handleUpdateStatus"
+        @set-tracking="handleSetTracking"
+      />
+    </div>
   </div>
 </template>
 
@@ -74,6 +92,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useAttachment } from '@/composables/useAttachment'
 import { useDocumentForm } from '@/composables/useDocumentForm'
 import DynamicForm from '@/components/DynamicForm.vue'
+import RequestTimeline from '@/components/RequestTimeline.vue'
+import QuickActionBar from '@/components/QuickActionBar.vue'
+import { parseActivities } from '@/utils/requestActivity'
 import {
   getRequest,
   createRequest,
@@ -83,7 +104,7 @@ import {
 
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
+const auth = useAuthStore()
 
 const requestId = computed(() => {
   const id = route.params.id
@@ -142,7 +163,7 @@ async function handleSubmit() {
       await updateRequest(requestId.value, payload)
       router.push({ name: 'consultation-list' })
     } else {
-      payload.AD_Org_ID = authStore.context?.organizationId ?? 0
+      payload.AD_Org_ID = auth.context?.organizationId ?? 0
       await createRequest(payload as RequestData)
       router.push({ name: 'consultation-list' })
     }
@@ -168,6 +189,37 @@ async function handleRemoveAttachment(fileName: string) {
 
 function goBack() {
   router.push({ name: 'consultation-list' })
+}
+
+function handleAddActivity(activity: any) {
+  try {
+    const activities = parseActivities(formData.value.Description || '[]')
+    activities.push({
+      ...activity,
+      timestamp: activity.timestamp || new Date().toISOString(),
+      createdBy: activity.createdBy || auth.user?.name || 'Unknown',
+    })
+    formData.value.Description = JSON.stringify(activities)
+  } catch (e) {
+    errorMsg.value = '活動記錄新增失敗'
+  }
+}
+
+function handleUpdateStatus() {
+  // TODO: 在 Task 7 實作 modal
+  console.log('Update status - will implement in Task 7')
+}
+
+function handleSetTracking() {
+  // TODO: 在 Task 7 實作 modal
+  console.log('Set tracking - will implement in Task 7')
+}
+
+function getStatusName(status: any): string {
+  if (status && typeof status === 'object') {
+    return status.identifier || status.Name || status.id || '待處理'
+  }
+  return '待處理'
 }
 
 onMounted(async () => {
@@ -338,5 +390,21 @@ onMounted(async () => {
   border-radius: 8px;
   cursor: pointer;
   min-height: var(--min-touch);
+}
+
+.timeline-section {
+  margin-top: 2rem;
+  margin-bottom: 6rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.timeline-section h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
 }
 </style>

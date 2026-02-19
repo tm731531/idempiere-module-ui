@@ -3,6 +3,13 @@
  * Calculates consultation metrics and analytics
  */
 
+import {
+  REQUEST_STATUS_IDS,
+  isCompletedStatus,
+  isWaitingStatus,
+  STATISTICS_CONFIG,
+} from '@/config/requestStatusConfig'
+
 export interface RequestStats {
   totalThisMonth: number
   conversionRate: string
@@ -37,24 +44,24 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   // 計算狀態分布
   const statusDist: Record<string, number> = {}
   filtered.forEach((r) => {
-    const status = r.R_Status_ID?.id || '待處理'
+    const status = r.R_Status_ID?.id || REQUEST_STATUS_IDS.PENDING
     statusDist[status] = (statusDist[status] || 0) + 1
   })
 
   // 計算沉默諮詢（等待回應 > 7 天）
   const silentCount = filtered.filter((r) => {
     const status = r.R_Status_ID?.id
-    if (status !== '等待回應') return false
+    if (!isWaitingStatus(status)) return false
     try {
       const activities = JSON.parse(r.Description || '[]')
       if (activities.length === 0) {
         const daysSince = (now - new Date(r.Created).getTime()) / (1000 * 24 * 3600)
-        return daysSince > 7
+        return daysSince > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
       }
       const lastActivity = activities[activities.length - 1]?.timestamp
       if (!lastActivity) return false
       const daysSilent = (now - new Date(lastActivity).getTime()) / (1000 * 24 * 3600)
-      return daysSilent > 7
+      return daysSilent > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
     } catch {
       return false
     }
@@ -81,11 +88,11 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     }
   })
 
-  // Count customers with last consultation 90+ days ago
+  // Count customers with last consultation exceeding threshold days ago
   let lostCount = 0
   customerLastActivity.forEach(({ lastTime }) => {
-    // Check if the time elapsed since last activity exceeds 90 days
-    if (now - lastTime > 90 * 24 * 60 * 60 * 1000) {
+    // Check if the time elapsed since last activity exceeds configured threshold
+    if (now - lastTime > STATISTICS_CONFIG.LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000) {
       lostCount++
     }
   })
@@ -94,7 +101,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     totalThisMonth: thisMonth.length,
     conversionRate: calculateConversionRate(thisMonth),
     avgResponseTime: calculateAvgResponseTime(filtered),
-    pendingCount: filtered.filter((r) => r.R_Status_ID?.id !== '已完成').length,
+    pendingCount: filtered.filter((r) => !isCompletedStatus(r.R_Status_ID?.id)).length,
     silentCount,
     lostCustomerCount: lostCount,
     statusDistribution: statusDist,
@@ -107,7 +114,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
  */
 function calculateConversionRate(requests: any[]): string {
   if (requests.length === 0) return '0%'
-  const completed = requests.filter((r) => r.R_Status_ID?.id === '已完成').length
+  const completed = requests.filter((r) => isCompletedStatus(r.R_Status_ID?.id)).length
   const rate = Math.round((completed / requests.length) * 100)
   return `${rate}%`
 }

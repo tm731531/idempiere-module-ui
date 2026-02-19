@@ -311,13 +311,27 @@ async function handleStatusSelected(statusId: number) {
     const freshRecord = await getRequest(requestId.value)
     console.log('📦 Fresh record from API:', JSON.stringify(freshRecord, null, 2))
 
-    // 2. Build complete update payload from fresh record
-    // Copy all fields except system fields that shouldn't be sent back
-    const systemFields = ['R_Request_ID', 'AD_Org_ID', 'Created', 'CreatedBy', 'Updated', 'UpdatedBy', 'Processing', 'SalesRep_ID']
+    // 2. Build update payload from fresh record, excluding non-updatable fields
+    // iDempiere REST API rejects attempts to update read-only columns like IsSelfService
+    const excludedFields = [
+      'R_Request_ID',   // Primary key
+      'AD_Org_ID',      // Organization
+      'Created',        // Audit field
+      'CreatedBy',      // Audit field
+      'Updated',        // Audit field
+      'UpdatedBy',      // Audit field
+      'Processing',     // System field
+      'SalesRep_ID',    // System-managed field
+      'IsSelfService',  // ← API cannot update this
+      'C_BPartner_ID_Ref',    // Relation field
+      'R_RequestType_ID_Ref', // Relation field
+      'R_Status_ID_Ref',      // Relation field
+    ]
+
     const updatePayload: Record<string, any> = {}
 
     for (const [key, value] of Object.entries(freshRecord)) {
-      if (!systemFields.includes(key) && value !== undefined && value !== null) {
+      if (!excludedFields.includes(key) && value !== undefined && value !== null) {
         // Extract ID from expanded objects (API returns {id: ..., Name: ...})
         if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
           updatePayload[key] = value.id
@@ -335,8 +349,8 @@ async function handleStatusSelected(statusId: number) {
     updatePayload.R_Status_ID = statusId
     console.log('🎯 Updated R_Status_ID to:', statusId)
 
-    // 4. Send complete update payload
-    console.log('📤 Complete payload being sent:', JSON.stringify(updatePayload, null, 2))
+    // 4. Send clean update payload (no non-updatable columns)
+    console.log('📤 Clean payload being sent:', JSON.stringify(updatePayload, null, 2))
     await updateRequest(requestId.value, updatePayload)
     console.log('✅ Status updated successfully via API')
 

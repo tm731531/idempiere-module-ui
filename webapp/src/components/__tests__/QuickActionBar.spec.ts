@@ -26,11 +26,13 @@ describe('QuickActionBar', () => {
     })
 
     const buttons = wrapper.findAll('.action-btn')
-    await buttons[0].trigger('click')
+    await buttons[0]!.trigger('click')
     await wrapper.vm.$nextTick()
 
     // Modal should be shown
+    // @ts-ignore
     expect(wrapper.vm.showActivityModal).toBe(true)
+    // @ts-ignore
     expect(wrapper.vm.activityActionType).toBe('電話')
   })
 
@@ -43,11 +45,13 @@ describe('QuickActionBar', () => {
     })
 
     const buttons = wrapper.findAll('.action-btn')
-    await buttons[1].trigger('click')
+    await buttons[1]!.trigger('click')
     await wrapper.vm.$nextTick()
 
     // Modal should be shown
+    // @ts-ignore
     expect(wrapper.vm.showActivityModal).toBe(true)
+    // @ts-ignore
     expect(wrapper.vm.activityActionType).toBe('訊息')
   })
 
@@ -68,11 +72,12 @@ describe('QuickActionBar', () => {
     }
 
     // Call the handler directly
+    // @ts-ignore
     wrapper.vm.handleActivityAdded(activity)
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('add-activity')).toBeTruthy()
-    expect(wrapper.emitted('add-activity')[0][0]).toEqual(activity)
+    expect(wrapper.emitted('add-activity')?.[0]?.[0]).toEqual(activity)
   })
 
   it('emits update-status event when status button clicked', async () => {
@@ -84,11 +89,11 @@ describe('QuickActionBar', () => {
     })
 
     const buttons = wrapper.findAll('button')
-    await buttons[2].trigger('click')
+    await buttons[2]!.trigger('click')
 
     expect(wrapper.emitted('update-status')).toBeTruthy()
-    const emitted = wrapper.emitted('update-status')[0] as any[]
-    expect(emitted[0].requestId).toBe(123)
+    const emitted = wrapper.emitted('update-status')?.[0] as any[]
+    expect(emitted?.[0]?.requestId).toBe(123)
   })
 
   it('emits set-tracking event when tracking button clicked', async () => {
@@ -100,11 +105,11 @@ describe('QuickActionBar', () => {
     })
 
     const buttons = wrapper.findAll('button')
-    await buttons[3].trigger('click')
+    await buttons[3]!.trigger('click')
 
     expect(wrapper.emitted('set-tracking')).toBeTruthy()
-    const emitted = wrapper.emitted('set-tracking')[0] as any[]
-    expect(emitted[0].requestId).toBe(123)
+    const emitted = wrapper.emitted('set-tracking')?.[0] as any[]
+    expect(emitted?.[0]?.requestId).toBe(123)
   })
 
   it('disables all buttons when disabled prop is true', () => {

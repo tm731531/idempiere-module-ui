@@ -39,7 +39,7 @@ describe('StatusUpdateModal', () => {
 
     const radios = wrapper.findAll('input[type="radio"]')
     expect(radios.length).toBe(5)
-    expect((radios[1].element as HTMLInputElement).checked).toBe(true)
+    expect((radios[1]!.element as HTMLInputElement).checked).toBe(true)
   })
 
   it('emits status-selected when confirm button is clicked', async () => {
@@ -53,7 +53,7 @@ describe('StatusUpdateModal', () => {
 
     // Select a different status
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[3].setValue(true)
+    await radios[3]!.setValue(true)
 
     // Click confirm button
     const buttons = wrapper.findAll('button')
@@ -61,7 +61,7 @@ describe('StatusUpdateModal', () => {
     await confirmBtn?.trigger('click')
 
     expect(wrapper.emitted('status-selected')).toBeTruthy()
-    const emitted = wrapper.emitted('status-selected')[0] as any[]
+    const emitted = wrapper.emitted('status-selected')?.[0] as any[]
     expect(emitted[0]).toBe(4)
   })
 
@@ -118,7 +118,7 @@ describe('StatusUpdateModal', () => {
     })
 
     const radios = wrapper.findAll('input[type="radio"]')
-    expect((radios[2].element as HTMLInputElement).checked).toBe(true)
+    expect((radios[2]!.element as HTMLInputElement).checked).toBe(true)
   })
 
   it('handles string currentStatusId correctly', () => {
@@ -131,7 +131,7 @@ describe('StatusUpdateModal', () => {
     })
 
     const radios = wrapper.findAll('input[type="radio"]')
-    expect((radios[1].element as HTMLInputElement).checked).toBe(true)
+    expect((radios[1]!.element as HTMLInputElement).checked).toBe(true)
   })
 
   it('shows error when confirm button is clicked without selection', async () => {
@@ -144,13 +144,16 @@ describe('StatusUpdateModal', () => {
     })
 
     // Deselect all radios by setting selectedStatusId to null
+    // @ts-ignore
     wrapper.vm.selectedStatusId = null
     await wrapper.vm.$nextTick()
 
     // Call handleConfirm directly to simulate click
+    // @ts-ignore
     wrapper.vm.handleConfirm()
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.showError).toBe(true)
     expect(wrapper.text()).toContain('請選擇狀態')
   })
@@ -165,12 +168,13 @@ describe('StatusUpdateModal', () => {
     })
 
     // Clear error state
+    // @ts-ignore
     wrapper.vm.showError = true
     await wrapper.vm.$nextTick()
 
     // Select a status
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[2].setValue(true)
+    await radios[2]!.setValue(true)
     await wrapper.vm.$nextTick()
 
     // Click confirm
@@ -179,6 +183,7 @@ describe('StatusUpdateModal', () => {
     await confirmBtn?.trigger('click')
 
     // Error should be cleared and event emitted
+    // @ts-ignore
     expect(wrapper.vm.showError).toBe(false)
     expect(wrapper.emitted('status-selected')).toBeTruthy()
   })
@@ -193,6 +198,7 @@ describe('StatusUpdateModal', () => {
     })
 
     // Reset selection
+    // @ts-ignore
     wrapper.vm.selectedStatusId = null
     await wrapper.vm.$nextTick()
 
@@ -212,7 +218,7 @@ describe('StatusUpdateModal', () => {
 
     // Select a different status
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[3].setValue(true)
+    await radios[3]!.setValue(true)
     await wrapper.vm.$nextTick()
 
     const buttons = wrapper.findAll('button')

@@ -84,9 +84,9 @@ export function validateTrackingTime(timeStr: string): ValidationResult {
     return { isValid: false, errors }
   }
 
-  const [hoursStr, minutesStr] = timeStr.split(':')
-  const hours = parseInt(hoursStr, 10)
-  const minutes = parseInt(minutesStr, 10)
+  const [hoursStr = '', minutesStr = ''] = timeStr.split(':')
+  const hours = parseInt(hoursStr || '0', 10)
+  const minutes = parseInt(minutesStr || '0', 10)
 
   // Validate format
   if (isNaN(hours) || isNaN(minutes)) {

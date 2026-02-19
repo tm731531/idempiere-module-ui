@@ -55,7 +55,7 @@ describe('Tracking Date Validation', () => {
   it('rejects past date', () => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
-    const dateStr = yesterday.toISOString().split('T')[0]
+    const dateStr = yesterday.toISOString().split('T')[0]!!
 
     const result = validateTrackingDate(dateStr)
     expect(result.isValid).toBe(false)
@@ -64,7 +64,7 @@ describe('Tracking Date Validation', () => {
 
   it('accepts today date', () => {
     const today = new Date()
-    const dateStr = today.toISOString().split('T')[0]
+    const dateStr = today.toISOString().split('T')[0]!
 
     const result = validateTrackingDate(dateStr)
     expect(result.isValid).toBe(true)
@@ -73,7 +73,7 @@ describe('Tracking Date Validation', () => {
   it('accepts future date within 90 days', () => {
     const future = new Date()
     future.setDate(future.getDate() + 30)
-    const dateStr = future.toISOString().split('T')[0]
+    const dateStr = future.toISOString().split('T')[0]!
 
     const result = validateTrackingDate(dateStr)
     expect(result.isValid).toBe(true)
@@ -82,7 +82,7 @@ describe('Tracking Date Validation', () => {
   it('rejects date more than 90 days in future', () => {
     const future = new Date()
     future.setDate(future.getDate() + 91)
-    const dateStr = future.toISOString().split('T')[0]
+    const dateStr = future.toISOString().split('T')[0]!
 
     const result = validateTrackingDate(dateStr)
     expect(result.isValid).toBe(false)
@@ -92,7 +92,7 @@ describe('Tracking Date Validation', () => {
   it('accepts exactly 90 days in future', () => {
     const future = new Date()
     future.setDate(future.getDate() + 90)
-    const dateStr = future.toISOString().split('T')[0]
+    const dateStr = future.toISOString().split('T')[0]!
 
     const result = validateTrackingDate(dateStr)
     expect(result.isValid).toBe(true)
@@ -179,7 +179,7 @@ describe('Tracking Description Validation', () => {
 describe('Tracking Form Validation', () => {
   it('validates complete tracking form', () => {
     const today = new Date()
-    const dateStr = today.toISOString().split('T')[0]
+    const dateStr = today.toISOString().split('T')[0]!
 
     const result = validateTrackingForm({
       date: dateStr,

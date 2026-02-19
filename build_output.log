@@ -1,0 +1,100 @@
+==========================================
+  iDempiere Aesthetics UI - Build Script
+  Build: 202602192104
+==========================================
+
+[1/4] Building Vue frontend...
+
+> idempiere-aesthetics-ui@1.0.0 build
+> vue-tsc -b && vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 252 modules transformed.
+rendering chunks...
+computing gzip size...
+../osgi-bundle/web/assets/StatusBadge-DMjtT7cJ.css                  0.54 kB │ gzip:  0.25 kB
+../osgi-bundle/web/assets/CustomerListView-D49xDVYB.css             1.21 kB │ gzip:  0.48 kB
+../osgi-bundle/web/assets/CustomerDetailView-DyJKAXkT.css           1.39 kB │ gzip:  0.51 kB
+../osgi-bundle/web/assets/DocActionBar-CMl1ESgi.css                 1.49 kB │ gzip:  0.43 kB
+../osgi-bundle/web/assets/main-BatCU1Vk.css                         1.51 kB │ gzip:  0.69 kB
+../osgi-bundle/web/assets/TableListView-DVQ_Hx_C.css                1.60 kB │ gzip:  0.56 kB
+../osgi-bundle/web/assets/LoginView-URfh68O7.css                    1.61 kB │ gzip:  0.55 kB
+../osgi-bundle/web/assets/RequestListView-EvyeFjYc.css              1.76 kB │ gzip:  0.63 kB
+../osgi-bundle/web/assets/ProductionListView-C4vAIErH.css           1.83 kB │ gzip:  0.64 kB
+../osgi-bundle/web/assets/CustomerFormView-Bs7a8fur.css             1.88 kB │ gzip:  0.57 kB
+../osgi-bundle/web/assets/InOutListView-BiUnkU5R.css                2.10 kB │ gzip:  0.68 kB
+../osgi-bundle/web/assets/PaymentFormView-CyVSgh6G.css              2.12 kB │ gzip:  0.67 kB
+../osgi-bundle/web/assets/OrderListView-Bwwtn7Us.css                2.18 kB │ gzip:  0.69 kB
+../osgi-bundle/web/assets/ProductListView-C4L887t-.css              2.20 kB │ gzip:  0.73 kB
+../osgi-bundle/web/assets/PaymentListView-Cqum4piw.css              2.26 kB │ gzip:  0.71 kB
+../osgi-bundle/web/assets/HomeView-CIpGj3IR.css                     2.41 kB │ gzip:  0.76 kB
+../osgi-bundle/web/assets/AppointmentForm-Csu480Ds.css              2.63 kB │ gzip:  0.76 kB
+../osgi-bundle/web/assets/DimensionDataView-CxW23q4D.css            3.34 kB │ gzip:  0.85 kB
+../osgi-bundle/web/assets/ProductionFormView-b36wVn6W.css           4.22 kB │ gzip:  0.99 kB
+../osgi-bundle/web/assets/ColumnListView-CFqZsaJd.css               4.25 kB │ gzip:  1.14 kB
+../osgi-bundle/web/assets/DynamicForm-DvexkUFz.css                  4.35 kB │ gzip:  1.18 kB
+../osgi-bundle/web/assets/ReferenceDataView-CcSB6bin.css            4.55 kB │ gzip:  1.01 kB
+../osgi-bundle/web/assets/ProductFormView-CLKrzGdm.css              5.03 kB │ gzip:  1.11 kB
+../osgi-bundle/web/assets/InOutFormView-CbjGRhEB.css                5.13 kB │ gzip:  1.07 kB
+../osgi-bundle/web/assets/ConsultationDashboardView-BIpSaQDw.css    5.68 kB │ gzip:  1.31 kB
+../osgi-bundle/web/assets/OrderFormView-Bzi6W3q1.css                6.77 kB │ gzip:  1.32 kB
+../osgi-bundle/web/assets/CalendarView-zmAcYhH5.css                13.67 kB │ gzip:  2.87 kB
+../osgi-bundle/web/assets/RequestFormView-BIcHq6Vg.css             23.37 kB │ gzip:  3.88 kB
+../osgi-bundle/web/assets/PlaceholderView-k3nPsD3p.js               0.37 kB │ gzip:  0.31 kB
+../osgi-bundle/web/assets/utils-lQEj1xw0.js                         0.41 kB │ gzip:  0.24 kB
+../osgi-bundle/web/assets/product-BGCf3Zep.js                       0.43 kB │ gzip:  0.30 kB
+../osgi-bundle/web/assets/StatusBadge-jdXKKz-u.js                   0.50 kB │ gzip:  0.41 kB
+../osgi-bundle/web/assets/request-DeLohI7U.js                       0.65 kB │ gzip:  0.33 kB
+../osgi-bundle/web/assets/production-C48h9SQ_.js                    0.92 kB │ gzip:  0.40 kB
+../osgi-bundle/web/assets/payment-C5-8El-f.js                       1.14 kB │ gzip:  0.62 kB
+../osgi-bundle/web/assets/inout-DzMHBPhC.js                         1.55 kB │ gzip:  0.73 kB
+../osgi-bundle/web/assets/CustomerListView-BEGsNtsP.js              1.75 kB │ gzip:  1.08 kB
+../osgi-bundle/web/assets/dictionary-CRGAypoo.js                    1.90 kB │ gzip:  0.74 kB
+../osgi-bundle/web/assets/DocActionBar-Do5P7ipe.js                  1.96 kB │ gzip:  1.03 kB
+../osgi-bundle/web/assets/TableListView-BWJU8V1B.js                 1.98 kB │ gzip:  1.08 kB
+../osgi-bundle/web/assets/bpartner-mIoaeADU.js                      2.11 kB │ gzip:  0.78 kB
+../osgi-bundle/web/assets/RequestListView-CBUcSIcF.js               2.38 kB │ gzip:  1.31 kB
+../osgi-bundle/web/assets/LoginView-CHs2oQBg.js                     2.51 kB │ gzip:  1.22 kB
+../osgi-bundle/web/assets/ProductionListView-BPvmLyWl.js            2.55 kB │ gzip:  1.37 kB
+../osgi-bundle/web/assets/order-Ti_RcZyh.js                         2.59 kB │ gzip:  1.07 kB
+../osgi-bundle/web/assets/CustomerDetailView-BLIp0xPq.js            2.80 kB │ gzip:  1.22 kB
+../osgi-bundle/web/assets/InOutListView-DVm4qsfs.js                 2.92 kB │ gzip:  1.55 kB
+../osgi-bundle/web/assets/ProductListView-DZp825aa.js               3.02 kB │ gzip:  1.53 kB
+../osgi-bundle/web/assets/OrderListView-Dc1S2pww.js                 3.03 kB │ gzip:  1.59 kB
+../osgi-bundle/web/assets/PaymentListView-CpC5SEGL.js               3.22 kB │ gzip:  1.67 kB
+../osgi-bundle/web/assets/PaymentFormView-CXx-fynt.js               3.59 kB │ gzip:  1.81 kB
+../osgi-bundle/web/assets/CustomerFormView-CI111drg.js              3.87 kB │ gzip:  1.68 kB
+../osgi-bundle/web/assets/HomeView-DN0VhRY8.js                      4.58 kB │ gzip:  2.00 kB
+../osgi-bundle/web/assets/ColumnListView-C4_O4RpL.js                5.57 kB │ gzip:  2.14 kB
+../osgi-bundle/web/assets/DimensionDataView-BZVSctRA.js             5.99 kB │ gzip:  2.52 kB
+../osgi-bundle/web/assets/ConsultationDashboardView-wPRjsTi-.js     6.66 kB │ gzip:  2.68 kB
+../osgi-bundle/web/assets/ProductionFormView-Dio-WEh0.js            7.22 kB │ gzip:  2.95 kB
+../osgi-bundle/web/assets/InOutFormView-9KldmwiA.js                 7.86 kB │ gzip:  3.10 kB
+../osgi-bundle/web/assets/AppointmentForm-C_ycYfXl.js               8.08 kB │ gzip:  3.06 kB
+../osgi-bundle/web/assets/ReferenceDataView-Bvm1DCyB.js            11.05 kB │ gzip:  4.20 kB
+../osgi-bundle/web/assets/ProductFormView-Cw9cZHHK.js              12.68 kB │ gzip:  4.35 kB
+../osgi-bundle/web/assets/OrderFormView-Bj-1dBTc.js                18.05 kB │ gzip:  5.68 kB
+../osgi-bundle/web/assets/CalendarView-D05fm9Ho.js                 21.52 kB │ gzip:  7.31 kB
+../osgi-bundle/web/assets/DynamicForm-CRpcHGtF.js                  28.00 kB │ gzip: 10.05 kB
+../osgi-bundle/web/assets/primevue-vendor-BlONuj2K.js              33.43 kB │ gzip: 10.52 kB
+../osgi-bundle/web/assets/main-D1exXGzj.js                         66.88 kB │ gzip: 22.47 kB
+../osgi-bundle/web/assets/RequestFormView-i1RfRxze.js              71.95 kB │ gzip: 26.58 kB
+../osgi-bundle/web/assets/vue-vendor-DCv6PpBN.js                  103.61 kB │ gzip: 38.95 kB
+✓ built in 8.30s
+Vue build complete
+
+[1b/4] Updating index.html asset hashes...
+Found assets: main-D1exXGzj.js, vue-vendor-DCv6PpBN.js, primevue-vendor-BlONuj2K.js, main-BatCU1Vk.css
+✓ index.html updated with latest hashes
+
+[2/4] Preparing MANIFEST (version → 1.0.0.202602192104)...
+[3/4] Building OSGi JAR...
+JAR built: org.idempiere.ui.aesthetics_1.0.0.202602192104.jar
+Size: 206K
+
+[4/4] Skipping deploy (use --deploy flag)
+
+URL: https://<host>:8443/aesthetics/#/
+==========================================
+

@@ -16,7 +16,7 @@ describe('requestActivity utilities', () => {
     ])
     const result = parseActivities(json)
     expect(result).toHaveLength(1)
-    expect(result[0].actionType).toBe('打電話')
+    expect(result[0]!.actionType).toBe('打電話')
   })
 
   it('returns empty array for invalid JSON', () => {
@@ -34,7 +34,7 @@ describe('requestActivity utilities', () => {
     })
     const parsed = parseActivities(result)
     expect(parsed).toHaveLength(1)
-    expect(parsed[0].type).toBe('前台行動')
+    expect(parsed[0]!.type).toBe('前台行動')
   })
 
   it('checks if string is valid activity JSON', () => {
@@ -62,7 +62,7 @@ describe('requestActivity utilities', () => {
     ])
     const frontendActions = getActivitiesByType(json, '前台行動')
     expect(frontendActions).toHaveLength(2)
-    expect(frontendActions[0].actionType).toBe('打電話')
+    expect(frontendActions[0]!.actionType).toBe('打電話')
   })
 
   it('detects activity conflicts (overlapping timestamps)', () => {

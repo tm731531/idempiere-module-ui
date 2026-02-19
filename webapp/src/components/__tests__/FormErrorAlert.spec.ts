@@ -120,10 +120,10 @@ describe('FormErrorAlert', () => {
     })
 
     const items = wrapper.findAll('.error-item')
-    expect(items[0].text()).toContain('Summary')
-    expect(items[0].text()).toContain('摘要必填')
-    expect(items[1].text()).toContain('date')
-    expect(items[1].text()).toContain('日期不能是過去的日期')
+    expect(items[0]!.text()).toContain('Summary')
+    expect(items[0]!.text()).toContain('摘要必填')
+    expect(items[1]!.text()).toContain('date')
+    expect(items[1]!.text()).toContain('日期不能是過去的日期')
   })
 
   it('updates when errors prop changes', async () => {

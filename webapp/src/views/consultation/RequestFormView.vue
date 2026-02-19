@@ -119,6 +119,7 @@ import {
   getRequest,
   createRequest,
   updateRequest,
+  listRequestStatuses,
   type RequestData,
 } from '@/api/request'
 
@@ -300,16 +301,14 @@ function getCurrentStatusId(): number {
   return 0
 }
 
-function loadAvailableStatuses() {
-  // TODO: Fetch from API when status lookup is available
-  // For now, using placeholder statuses
-  availableStatuses.value = [
-    { R_Status_ID: 1, Name: '待處理' },
-    { R_Status_ID: 2, Name: '討論中' },
-    { R_Status_ID: 3, Name: '等待回應' },
-    { R_Status_ID: 4, Name: '已指派' },
-    { R_Status_ID: 5, Name: '已完成' },
-  ]
+async function loadAvailableStatuses() {
+  try {
+    // Fetch actual statuses from API instead of hardcoded values
+    availableStatuses.value = await listRequestStatuses()
+  } catch {
+    // Fallback if API call fails
+    availableStatuses.value = []
+  }
 }
 
 onMounted(async () => {
@@ -335,7 +334,7 @@ onMounted(async () => {
     pageLoading.value = false
   }
 
-  loadAvailableStatuses()
+  await loadAvailableStatuses()
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)
   }

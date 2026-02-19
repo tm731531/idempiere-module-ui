@@ -157,7 +157,8 @@ describe('Mobile Responsive Design - Modal Content', () => {
 
     items.forEach((item, index) => {
       const label = item.find('.status-label')
-      expect(label.text()).toBe(statuses[index].Name)
+      expect(label.exists()).toBe(true)
+      expect(label.text()).toBe(statuses[index]!.Name)
     })
   })
 
@@ -177,7 +178,8 @@ describe('Mobile Responsive Design - Modal Content', () => {
     expect(radios.length).toBe(2)
 
     // Click second radio
-    await radios[1].setValue(true)
+    await radios[1]!.setValue(true)
+    // @ts-ignore
     expect(wrapper.vm.selectedStatusId).toBe(2)
   })
 
@@ -308,7 +310,7 @@ describe('Mobile Responsive Design - User Interactions', () => {
     })
 
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[1].setValue(true)
+    await radios[1]!.setValue(true)
 
     const confirmBtn = wrapper.find('.btn-primary')
     await confirmBtn.trigger('click')
@@ -328,23 +330,27 @@ describe('Mobile Responsive Design - User Interactions', () => {
     const buttons = wrapper.findAll('.action-btn')
 
     // Phone button
-    await buttons[0].trigger('click')
+    await buttons[0]!.trigger('click')
+    // @ts-ignore
     expect(wrapper.vm.showActivityModal).toBe(true)
 
+    // @ts-ignore
     wrapper.vm.showActivityModal = false
 
     // Message button
-    await buttons[1].trigger('click')
+    await buttons[1]!.trigger('click')
+    // @ts-ignore
     expect(wrapper.vm.showActivityModal).toBe(true)
 
+    // @ts-ignore
     wrapper.vm.showActivityModal = false
 
     // Status button
-    await buttons[2].trigger('click')
+    await buttons[2]!.trigger('click')
     expect(wrapper.emitted('update-status')).toBeTruthy()
 
     // Tracking button
-    await buttons[3].trigger('click')
+    await buttons[3]!.trigger('click')
     expect(wrapper.emitted('set-tracking')).toBeTruthy()
   })
 
@@ -362,12 +368,14 @@ describe('Mobile Responsive Design - User Interactions', () => {
 
     // Verify status is initialized
     await wrapper.vm.$nextTick()
+    // @ts-ignore
     expect(wrapper.vm.selectedStatusId).toBe(1)
 
     // Verify we can select a different status
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[1].setValue(true)
+    await radios[1]!.setValue(true)
 
+    // @ts-ignore
     expect(wrapper.vm.selectedStatusId).toBe(2)
   })
 })
@@ -456,6 +464,7 @@ describe('Mobile Responsive Design - Modal State Management', () => {
     // Wait for watch to initialize
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.selectedStatusId).toBe(2)
   })
 })

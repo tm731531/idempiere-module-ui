@@ -76,8 +76,8 @@ describe('TrackingDateModal', () => {
     await confirmBtn?.trigger('click')
 
     expect(wrapper.emitted('tracking-set')).toBeTruthy()
-    const emitted = wrapper.emitted('tracking-set')[0] as any[]
-    expect(emitted[0].date).toBe(tomorrowStr)
+    const emitted = wrapper.emitted('tracking-set')?.[0] as any[]
+    expect(emitted?.[0]?.date).toBe(tomorrowStr)
     expect(emitted[0].time).toBe('14:00')
     expect(emitted[0].description).toBe('追蹤護理進度')
   })
@@ -206,9 +206,11 @@ describe('TrackingDateModal', () => {
     await wrapper.find('textarea').setValue('')
 
     // Call validate
+    // @ts-ignore
     wrapper.vm.validateForm()
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.validationErrors.description).toContain('請輸入追蹤說明')
   })
 
@@ -227,9 +229,11 @@ describe('TrackingDateModal', () => {
     await wrapper.find('input[type="time"]').setValue('21:00') // Outside business hours
     await wrapper.find('textarea').setValue('Test')
 
+    // @ts-ignore
     wrapper.vm.validateForm()
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.validationErrors.time).toContain('08:00-20:00')
   })
 
@@ -248,9 +252,11 @@ describe('TrackingDateModal', () => {
     await wrapper.find('input[type="time"]').setValue('14:00')
     await wrapper.find('textarea').setValue('Test')
 
+    // @ts-ignore
     wrapper.vm.validateForm()
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.validationErrors.date).toContain('超過90天')
   })
 
@@ -290,6 +296,7 @@ describe('TrackingDateModal', () => {
     await wrapper.find('textarea').setValue('')
 
     // Trigger validation
+    // @ts-ignore
     wrapper.vm.validateForm()
     await wrapper.vm.$nextTick()
 
@@ -305,6 +312,7 @@ describe('TrackingDateModal', () => {
     })
 
     // Set an error manually
+    // @ts-ignore
     wrapper.vm.validationErrors = { time: 'Test error' }
     await wrapper.vm.$nextTick()
 
@@ -333,9 +341,11 @@ describe('TrackingDateModal', () => {
     await wrapper.find('input[type="time"]').setValue('14:00')
     await wrapper.find('textarea').setValue('')
 
+    // @ts-ignore
     const isValid = wrapper.vm.validateForm()
 
     expect(isValid).toBe(false)
+    // @ts-ignore
     expect(Object.keys(wrapper.vm.validationErrors).length).toBeGreaterThan(0)
   })
 
@@ -355,10 +365,13 @@ describe('TrackingDateModal', () => {
     await wrapper.find('input[type="time"]').setValue('25:00') // Invalid time
     await wrapper.find('textarea').setValue('') // Empty description
 
+    // @ts-ignore
     wrapper.vm.validateForm()
     await wrapper.vm.$nextTick()
 
+    // @ts-ignore
     expect(wrapper.vm.validationErrors.time).toBeDefined()
+    // @ts-ignore
     expect(wrapper.vm.validationErrors.description).toBeDefined()
   })
 })

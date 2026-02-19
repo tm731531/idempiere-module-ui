@@ -234,10 +234,10 @@ describe('dashboardStats utilities', () => {
 
       const stats = calculateStats(requests)
       expect(stats.topCustomers.length).toBeGreaterThan(0)
-      expect(stats.topCustomers[0].customerId).toBe(2)
-      expect(stats.topCustomers[0].count).toBe(3)
-      expect(stats.topCustomers[1].customerId).toBe(1)
-      expect(stats.topCustomers[1].count).toBe(2)
+      expect(stats.topCustomers[0]!.customerId).toBe(2)
+      expect(stats.topCustomers[0]!.count).toBe(3)
+      expect(stats.topCustomers[1]!.customerId).toBe(1)
+      expect(stats.topCustomers[1]!.count).toBe(2)
     })
 
     it('limits top customers to specified count', () => {
@@ -259,8 +259,8 @@ describe('dashboardStats utilities', () => {
       ]
 
       const stats = calculateStats(requests)
-      expect(stats.topCustomers[0].customerId).toBe(123)
-      expect(stats.topCustomers[0].name).toBe('#123')
+      expect(stats.topCustomers[0]!.customerId).toBe(123)
+      expect(stats.topCustomers[0]!.name).toBe('#123')
     })
 
     it('prefers C_BPartner_ID.id over numeric value', () => {
@@ -271,8 +271,8 @@ describe('dashboardStats utilities', () => {
       ]
 
       const stats = calculateStats(requests)
-      expect(stats.topCustomers[0].customerId).toBe(456)
-      expect(stats.topCustomers[0].name).toBe('客戶名稱')
+      expect(stats.topCustomers[0]!.customerId).toBe(456)
+      expect(stats.topCustomers[0]!.name).toBe('客戶名稱')
     })
 
     it('uses display name from C_BPartner_ID.Name', () => {
@@ -283,7 +283,7 @@ describe('dashboardStats utilities', () => {
       ]
 
       const stats = calculateStats(requests)
-      expect(stats.topCustomers[0].name).toBe('特定客戶名稱')
+      expect(stats.topCustomers[0]!.name).toBe('特定客戶名稱')
     })
   })
 

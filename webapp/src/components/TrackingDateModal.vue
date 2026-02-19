@@ -105,7 +105,7 @@ const emit = defineEmits<{
 // Get today's date as ISO string (YYYY-MM-DD)
 const getTodayStr = (): string => {
   const today = new Date()
-  return today.toISOString().split('T')[0]
+  return today.toISOString().split('T')[0] ?? ''
 }
 
 // Get current time as HH:MM
@@ -117,7 +117,7 @@ const getCurrentTimeStr = (): string => {
 }
 
 const todayStr = computed(() => getTodayStr())
-const selectedDate = ref(props.initialDate || getTodayStr())
+const selectedDate = ref<string>(props.initialDate ?? getTodayStr())
 const selectedTime = ref(getCurrentTimeStr())
 const _description = ref('')
 const validationErrors = ref<Record<string, string>>({})

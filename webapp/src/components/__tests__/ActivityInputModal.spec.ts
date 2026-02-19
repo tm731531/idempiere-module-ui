@@ -64,7 +64,7 @@ describe('ActivityInputModal', () => {
       },
     })
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     expect(confirmBtn.attributes('disabled')).toBeDefined()
   })
 
@@ -79,7 +79,7 @@ describe('ActivityInputModal', () => {
     const textarea = wrapper.find('.form-textarea')
     await textarea.setValue('Valid content')
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     expect(confirmBtn.attributes('disabled')).toBeUndefined()
   })
 
@@ -130,12 +130,12 @@ describe('ActivityInputModal', () => {
     const textarea = wrapper.find('.form-textarea')
     await textarea.setValue('Test activity content')
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     await confirmBtn.trigger('click')
 
     expect(wrapper.emitted('activity-added')).toHaveLength(1)
-    const emitted = wrapper.emitted('activity-added')[0][0] as any
-    expect(emitted.content).toBe('Test activity content')
+    const emitted = wrapper.emitted('activity-added')?.[0]?.[0] as any
+    expect(emitted?.content).toBe('Test activity content')
     expect(emitted.actionType).toBe('電話')
     expect(emitted.type).toBe('前台行動')
     expect(emitted.createdBy).toBe('Test User')
@@ -152,7 +152,7 @@ describe('ActivityInputModal', () => {
     const textarea = wrapper.find('.form-textarea')
     await textarea.setValue('Test activity')
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     await confirmBtn.trigger('click')
 
     expect(wrapper.emitted('close')).toHaveLength(1)
@@ -166,7 +166,7 @@ describe('ActivityInputModal', () => {
       },
     })
 
-    const cancelBtn = wrapper.findAll('.btn')[0]
+    const cancelBtn = wrapper.findAll('.btn')[0]!
     await cancelBtn.trigger('click')
 
     expect(wrapper.emitted('close')).toHaveLength(1)
@@ -223,12 +223,12 @@ describe('ActivityInputModal', () => {
     const textarea = wrapper.find('.form-textarea')
     await textarea.setValue('Test message')
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     await confirmBtn.trigger('click')
 
-    const emitted = wrapper.emitted('activity-added')[0][0] as any
-    expect(emitted.timestamp).toBeDefined()
-    expect(typeof emitted.timestamp).toBe('string')
+    const emitted = wrapper.emitted('activity-added')?.[0]?.[0] as any
+    expect(emitted?.timestamp).toBeDefined()
+    expect(typeof emitted?.timestamp).toBe('string')
   })
 
   it('displays different placeholder for phone', () => {
@@ -276,6 +276,7 @@ describe('ActivityInputModal', () => {
     })
 
     // Manually set errors to test dismiss functionality
+    // @ts-ignore
     wrapper.vm.errors = { content: 'Test error' }
     await wrapper.vm.$nextTick()
 
@@ -299,7 +300,7 @@ describe('ActivityInputModal', () => {
     const textarea = wrapper.find('.form-textarea')
     await textarea.setValue('Test')
 
-    const confirmBtn = wrapper.findAll('.btn')[1]
+    const confirmBtn = wrapper.findAll('.btn')[1]!
     expect(confirmBtn.text()).toBe('確認')
   })
 })

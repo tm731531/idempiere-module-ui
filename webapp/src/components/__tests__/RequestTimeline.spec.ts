@@ -27,8 +27,8 @@ describe('RequestTimeline', () => {
 
     const items = wrapper.findAll('.timeline-item')
     expect(items).toHaveLength(2)
-    expect(items[0].text()).toContain('打電話')
-    expect(items[1].text()).toContain('已指派')
+    expect(items[0]!.text()).toContain('打電話')
+    expect(items[1]!.text()).toContain('已指派')
   })
 
   it('handles empty activities gracefully', () => {

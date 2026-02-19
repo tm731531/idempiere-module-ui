@@ -5,9 +5,9 @@
 
 export interface Activity {
   timestamp: string
-  type: string
-  actionType: string
-  content: string
+  type?: string
+  actionType?: string
+  content?: string
   createdBy: string
 }
 
@@ -78,7 +78,8 @@ export function isActivityJSON(json: string): boolean {
 export function getLastActivityTime(json: string): string | null {
   const activities = parseActivities(json)
   if (activities.length === 0) return null
-  return activities[activities.length - 1].timestamp
+  const lastActivity = activities[activities.length - 1]
+  return lastActivity?.timestamp ?? null
 }
 
 /**

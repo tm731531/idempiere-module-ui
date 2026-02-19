@@ -305,37 +305,9 @@ async function handleStatusSelected(statusId: number) {
   if (!requestId.value) return
 
   try {
-    // SIMPLEST approach: only send the MINIMUM required fields
-    // Just send what we know is updateable from the existing form data
-    // Extract values from current form, converting objects to IDs
-    const minimalPayload: Record<string, any> = {
-      R_Status_ID: statusId,
-      Summary: formData.value.Summary,
-    }
-
-    // Only add optional fields if they exist and have values
-    if (formData.value.Description) {
-      minimalPayload.Description = formData.value.Description
-    }
-
-    // Handle R_RequestType_ID - convert from object to ID if needed
-    const requestTypeId = formData.value.R_RequestType_ID
-    if (requestTypeId) {
-      minimalPayload.R_RequestType_ID = typeof requestTypeId === 'object' && requestTypeId.id
-        ? requestTypeId.id
-        : requestTypeId
-    }
-
-    // Handle C_BPartner_ID - convert from object to ID if needed
-    const bPartnerId = formData.value.C_BPartner_ID
-    if (bPartnerId) {
-      minimalPayload.C_BPartner_ID = typeof bPartnerId === 'object' && bPartnerId.id
-        ? bPartnerId.id
-        : bPartnerId
-    }
-
-    console.log('📤 Sending minimal payload:', JSON.stringify(minimalPayload, null, 2))
-    await updateRequest(requestId.value, minimalPayload)
+    // Use the dedicated updateRequestStatus function which sends only R_Status_ID
+    console.log(`📡 Updating status to ${statusId} via updateRequestStatus()`)
+    await updateRequestStatus(requestId.value, statusId)
     console.log('✅ Status updated successfully')
 
     // Update formData with new status

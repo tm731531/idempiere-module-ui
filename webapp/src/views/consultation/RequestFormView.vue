@@ -299,69 +299,51 @@ function handleSetTracking() {
 }
 
 async function handleStatusSelected(statusId: number) {
-  console.log('🔄 handleStatusSelected called with statusId:', statusId, 'type:', typeof statusId)
+  console.log('🔄 handleStatusSelected called with statusId:', statusId)
   showStatusModal.value = false
 
   if (!requestId.value) return
 
   try {
-    // GET-then-PUT strategy:
-    // 1. Fetch fresh record from API to ensure we have all fields
-    console.log(`📥 Fetching fresh record for ID ${requestId.value}...`)
-    const freshRecord = await getRequest(requestId.value)
-    console.log('📦 Fresh record from API:', JSON.stringify(freshRecord, null, 2))
-
-    // 2. Build update payload from fresh record, excluding non-updatable fields
-    // iDempiere REST API rejects attempts to update read-only columns like IsSelfService
-    const excludedFields = [
-      'R_Request_ID',   // Primary key
-      'AD_Org_ID',      // Organization
-      'Created',        // Audit field
-      'CreatedBy',      // Audit field
-      'Updated',        // Audit field
-      'UpdatedBy',      // Audit field
-      'Processing',     // System field
-      'SalesRep_ID',    // System-managed field
-      'IsSelfService',  // ← API cannot update this
-      'C_BPartner_ID_Ref',    // Relation field
-      'R_RequestType_ID_Ref', // Relation field
-      'R_Status_ID_Ref',      // Relation field
-    ]
-
-    const updatePayload: Record<string, any> = {}
-
-    for (const [key, value] of Object.entries(freshRecord)) {
-      if (!excludedFields.includes(key) && value !== undefined && value !== null) {
-        // Extract ID from expanded objects (API returns {id: ..., Name: ...})
-        if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
-          updatePayload[key] = value.id
-          console.log(`🔄 Converted ${key}: object.id → ${value.id}`)
-        } else if (typeof value === 'object' && Array.isArray(value)) {
-          // Skip array fields
-          console.log(`⏭️  Skipping array field ${key}`)
-        } else {
-          updatePayload[key] = value
-        }
-      }
+    // SIMPLEST approach: only send the MINIMUM required fields
+    // Just send what we know is updateable from the existing form data
+    // Extract values from current form, converting objects to IDs
+    const minimalPayload: Record<string, any> = {
+      R_Status_ID: statusId,
+      Summary: formData.value.Summary,
     }
 
-    // 3. Update R_Status_ID to new status
-    updatePayload.R_Status_ID = statusId
-    console.log('🎯 Updated R_Status_ID to:', statusId)
+    // Only add optional fields if they exist and have values
+    if (formData.value.Description) {
+      minimalPayload.Description = formData.value.Description
+    }
 
-    // 4. Send clean update payload (no non-updatable columns)
-    console.log('📤 Clean payload being sent:', JSON.stringify(updatePayload, null, 2))
-    await updateRequest(requestId.value, updatePayload)
-    console.log('✅ Status updated successfully via API')
+    // Handle R_RequestType_ID - convert from object to ID if needed
+    const requestTypeId = formData.value.R_RequestType_ID
+    if (requestTypeId) {
+      minimalPayload.R_RequestType_ID = typeof requestTypeId === 'object' && requestTypeId.id
+        ? requestTypeId.id
+        : requestTypeId
+    }
 
-    // 5. Update formData with new status
+    // Handle C_BPartner_ID - convert from object to ID if needed
+    const bPartnerId = formData.value.C_BPartner_ID
+    if (bPartnerId) {
+      minimalPayload.C_BPartner_ID = typeof bPartnerId === 'object' && bPartnerId.id
+        ? bPartnerId.id
+        : bPartnerId
+    }
+
+    console.log('📤 Sending minimal payload:', JSON.stringify(minimalPayload, null, 2))
+    await updateRequest(requestId.value, minimalPayload)
+    console.log('✅ Status updated successfully')
+
+    // Update formData with new status
     formData.value.R_Status_ID = statusId
     errorMsg.value = ''
-    console.log('✅ Form data refreshed with new status')
   } catch (e: any) {
-    console.error('❌ Status update failed:', e)
-    console.error('❌ Error details:', e.message)
-    console.error('❌ Response data:', e.response?.data)
+    console.error('❌ Status update failed:', e.message)
+    console.error('❌ Response:', e.response?.data)
     const apiError = e.response?.data?.error || e.message || '未知錯誤'
     errorMsg.value = `更新狀態失敗: ${apiError}`
   }

@@ -223,9 +223,12 @@ async function handleSubmit() {
   try {
     if (isEdit.value && requestId.value) {
       console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
-      // Send complete payload - API needs all mandatory fields
-      console.log('🔄 Final updatePayload:', cleanPayload)
-      await updateRequest(requestId.value, cleanPayload)
+      // Don't send R_Status_ID to API - REST API has fundamental design flaw with it
+      // Status is managed only in frontend UI state
+      const updatePayload = { ...cleanPayload }
+      delete updatePayload.R_Status_ID
+      console.log('🔄 Final updatePayload (R_Status_ID excluded):', updatePayload)
+      await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0

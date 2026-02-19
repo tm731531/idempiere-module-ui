@@ -7,18 +7,24 @@ interface Props {
   disabled?: boolean
 }
 
-defineProps<Props>()
-
 interface ActivityPayload {
   type: string
   actionType: string
   content: string
+  timestamp?: string
+  createdBy?: string
 }
+
+interface StatusPayload {
+  requestId: number
+}
+
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'add-activity': [payload: ActivityPayload]
-  'update-status': []
-  'set-tracking': []
+  'update-status': [payload: StatusPayload]
+  'set-tracking': [payload: StatusPayload]
 }>()
 
 function handlePhoneClick() {
@@ -29,6 +35,8 @@ function handlePhoneClick() {
     type: '前台行動',
     actionType: '打電話',
     content: '',
+    timestamp,
+    createdBy,
   })
 }
 
@@ -40,15 +48,21 @@ function handleMessageClick() {
     type: '前台行動',
     actionType: '發訊息',
     content: '',
+    timestamp,
+    createdBy,
   })
 }
 
 function handleStatusClick() {
-  emit('update-status')
+  emit('update-status', {
+    requestId: props.requestId,
+  })
 }
 
 function handleTrackingClick() {
-  emit('set-tracking')
+  emit('set-tracking', {
+    requestId: props.requestId,
+  })
 }
 </script>
 
@@ -116,7 +130,7 @@ function handleTrackingClick() {
   bottom: 0;
   left: 0;
   right: 0;
-  background: #fff;
+  background: var(--color-background, #fff);
   border-top: 1px solid var(--color-border, #e5e7eb);
   padding: 12px;
   z-index: 50;
@@ -178,7 +192,7 @@ function handleTrackingClick() {
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #9ca3af;
+  background: var(--color-text-secondary, #9ca3af);
 }
 
 @media (max-width: 640px) {

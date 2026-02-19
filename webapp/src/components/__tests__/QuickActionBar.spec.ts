@@ -33,6 +33,8 @@ describe('QuickActionBar', () => {
     const emitted = wrapper.emitted('add-activity')[0] as any[]
     expect(emitted[0].type).toBe('前台行動')
     expect(emitted[0].actionType).toBe('打電話')
+    expect(emitted[0].timestamp).toBeTruthy()
+    expect(emitted[0].createdBy).toBeTruthy()
   })
 
   it('emits add-activity event when message button clicked', async () => {
@@ -49,6 +51,8 @@ describe('QuickActionBar', () => {
     expect(wrapper.emitted('add-activity')).toBeTruthy()
     const emitted = wrapper.emitted('add-activity')[0] as any[]
     expect(emitted[0].actionType).toBe('發訊息')
+    expect(emitted[0].timestamp).toBeTruthy()
+    expect(emitted[0].createdBy).toBeTruthy()
   })
 
   it('emits update-status event when status button clicked', async () => {
@@ -63,6 +67,8 @@ describe('QuickActionBar', () => {
     await buttons[2].trigger('click')
 
     expect(wrapper.emitted('update-status')).toBeTruthy()
+    const emitted = wrapper.emitted('update-status')[0] as any[]
+    expect(emitted[0].requestId).toBe(123)
   })
 
   it('emits set-tracking event when tracking button clicked', async () => {
@@ -77,6 +83,8 @@ describe('QuickActionBar', () => {
     await buttons[3].trigger('click')
 
     expect(wrapper.emitted('set-tracking')).toBeTruthy()
+    const emitted = wrapper.emitted('set-tracking')[0] as any[]
+    expect(emitted[0].requestId).toBe(123)
   })
 
   it('disables all buttons when disabled prop is true', () => {

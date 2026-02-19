@@ -5,7 +5,7 @@
     </div>
 
     <div v-else class="timeline">
-      <div v-for="(activity, index) in parsedActivities" :key="index" class="timeline-item">
+      <div v-for="(activity, index) in parsedActivities" :key="getActivityKey(activity, index)" class="timeline-item">
         <!-- 時間軸線 -->
         <div class="timeline-line">
           <div class="timeline-dot"></div>
@@ -43,7 +43,7 @@ interface Activity {
   type: string
   actionType: string
   content: string
-  createdBy: number
+  createdBy: string
 }
 
 interface Props {
@@ -61,6 +61,10 @@ const parsedActivities = computed(() => {
   }
 })
 
+/**
+ * 格式化時間戳，失敗時返回原始值
+ * 確保 parseIdempiereDateTime() 異常不會影響整個組件
+ */
 function formatTime(timestamp: string): string {
   try {
     const date = parseIdempiereDateTime(timestamp)
@@ -70,9 +74,18 @@ function formatTime(timestamp: string): string {
       hour: '2-digit',
       minute: '2-digit',
     })
-  } catch {
+  } catch (error) {
+    console.warn(`Failed to format timestamp: ${timestamp}`, error)
     return timestamp
   }
+}
+
+/**
+ * 生成穩定的 activity key (替代 index)
+ * 防止列表重新排序時造成狀態混亂
+ */
+function getActivityKey(activity: Activity, index: number): string {
+  return `${activity.timestamp}-${activity.type}-${activity.actionType}-${index}`
 }
 
 function getTypeBadgeClass(type: string): string {

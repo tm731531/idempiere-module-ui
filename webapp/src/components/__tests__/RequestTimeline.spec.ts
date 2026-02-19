@@ -10,14 +10,14 @@ describe('RequestTimeline', () => {
         type: '前台行動',
         actionType: '打電話',
         content: '客戶確認',
-        createdBy: 1000123,
+        createdBy: '陳醫生',
       },
       {
         timestamp: '2026-02-19T14:00:00Z',
         type: '狀態改變',
         actionType: '已指派',
         content: '已指派給銷售',
-        createdBy: 1000124,
+        createdBy: '李護士',
       },
     ])
 

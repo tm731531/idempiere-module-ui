@@ -72,9 +72,9 @@
     </form>
 
     <!-- Quick Action Bar (sticky bottom) -->
-    <div v-if="isEdit" class="quick-actions-wrapper">
+    <div v-if="isEdit && requestId" class="quick-actions-wrapper">
       <QuickActionBar
-        :request-id="requestId"
+        :request-id="requestId!"
         :current-status="getStatusName(formData.R_Status_ID)"
         :disabled="submitting || !isEdit"
         @add-activity="handleAddActivity"
@@ -131,6 +131,8 @@ const requestId = computed(() => {
   return id ? Number(id) : null
 })
 const isEdit = computed(() => requestId.value !== null)
+
+const preloadedData = (route as any).state?.preloadedData
 
 const {
   visibleFieldDefs,
@@ -280,12 +282,18 @@ function getStatusName(status: { id?: string | number; identifier?: string; Name
   return '待處理'
 }
 
-function getCurrentStatusId(): string | number {
+function getCurrentStatusId(): number {
   const status = formData.value.R_Status_ID
-  if (status && typeof status === 'object') {
-    return status.id || 0
+  if (status && typeof status === 'object' && status.id) {
+    return typeof status.id === 'number' ? status.id : Number(status.id)
   }
-  return status || 0
+  if (typeof status === 'string') {
+    return Number(status)
+  }
+  if (typeof status === 'number') {
+    return status
+  }
+  return 0
 }
 
 function loadAvailableStatuses() {
@@ -301,7 +309,13 @@ function loadAvailableStatuses() {
 }
 
 onMounted(async () => {
-  await load()
+  if (preloadedData) {
+    // Use preloaded data from list instead of fetching
+    formData.value = preloadedData
+  } else {
+    // Only fetch if no preloaded data
+    await load()
+  }
   loadAvailableStatuses()
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)

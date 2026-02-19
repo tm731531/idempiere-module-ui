@@ -22,7 +22,7 @@
         v-for="r in requests"
         :key="r.id"
         class="request-card"
-        @click="goToEdit(r.id)"
+        @click="goToEdit(r)"
       >
         <div class="card-main">
           <div class="card-summary-title">{{ r.Summary }}</div>
@@ -108,8 +108,12 @@ function formatDate(dateStr: string): string {
   return `${y}-${m}-${day}`
 }
 
-function goToEdit(id: number) {
-  router.push({ name: 'consultation-edit', params: { id } })
+function goToEdit(r: any) {
+  router.push({
+    name: 'consultation-edit',
+    params: { id: r.id },
+    state: { preloadedData: r }
+  })
 }
 
 function goToNew() {

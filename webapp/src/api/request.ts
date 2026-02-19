@@ -44,15 +44,17 @@ export async function updateRequestStatus(id: number, statusId: number): Promise
 
 export async function listRequestStatuses(requestTypeId?: number): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Status_ID,Name,SeqNo',
+    '$select': 'R_Status_ID,Name,SeqNo,IsActive',
     '$orderby': 'SeqNo',
-    '$filter': 'IsActive eq true',
+    // Include all statuses, not just active ones (some may be inactive but still needed)
   }
   if (requestTypeId) {
-    params['$filter'] += ` and R_RequestType_ID eq ${requestTypeId}`
+    params['$filter'] = `R_RequestType_ID eq ${requestTypeId}`
   }
   const resp = await apiClient.get('/api/v1/models/R_Status', { params })
-  return resp.data.records || []
+  const statuses = resp.data.records || []
+  console.log('R_Status API response:', resp.data)
+  return statuses
 }
 
 export async function listRequestTypes(): Promise<any[]> {

@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
 import ConsultationDashboard from '@/components/ConsultationDashboard.vue'
@@ -29,6 +29,8 @@ const router = useRouter()
 const requests = ref<any[]>([])
 const loading = ref(false)
 const error = ref('')
+
+let interval: ReturnType<typeof setInterval> | null = null
 
 async function loadData() {
   loading.value = true
@@ -51,8 +53,11 @@ function goBack() {
 onMounted(() => {
   loadData()
   // 可選：每 5 分鐘自動刷新一次
-  const interval = setInterval(loadData, 5 * 60 * 1000)
-  return () => clearInterval(interval)  // cleanup
+  interval = setInterval(loadData, 5 * 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (interval) clearInterval(interval)
 })
 </script>
 

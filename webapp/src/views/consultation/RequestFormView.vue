@@ -119,6 +119,7 @@ import {
   getRequest,
   createRequest,
   updateRequest,
+  updateRequestStatus,
   listRequestStatuses,
   type RequestData,
 } from '@/api/request'
@@ -297,11 +298,27 @@ function handleSetTracking() {
   showTrackingModal.value = true
 }
 
-function handleStatusSelected(statusId: number) {
+async function handleStatusSelected(statusId: number) {
   console.log('🔄 handleStatusSelected called with statusId:', statusId, 'type:', typeof statusId)
-  formData.value.R_Status_ID = statusId
-  console.log('📝 Updated formData.R_Status_ID to:', formData.value.R_Status_ID)
   showStatusModal.value = false
+
+  // For status updates, call the API directly instead of modifying formData
+  // This avoids validation errors from missing NOT NULL fields
+  if (!requestId.value) return
+
+  try {
+    console.log('📤 Calling updateRequestStatus with statusId:', statusId)
+    await updateRequestStatus(requestId.value, statusId)
+    console.log('✅ Status updated successfully')
+    // Reload the form to show the new status
+    const record = await getRequest(requestId.value)
+    populateFromRecord(record)
+    errorMsg.value = ''
+  } catch (e: any) {
+    console.error('❌ Status update failed:', e)
+    const apiError = e.response?.data?.error || e.message || '未知錯誤'
+    errorMsg.value = `更新狀態失敗: ${apiError}`
+  }
 }
 
 function handleTrackingSet(data: { date: string; time: string; description: string }) {

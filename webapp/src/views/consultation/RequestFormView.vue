@@ -479,7 +479,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 8rem;
 }
 
 .form-actions button {
@@ -577,7 +577,7 @@ onMounted(async () => {
   }
 
   .form-actions {
-    margin-bottom: 2rem;
+    margin-bottom: 8rem;
   }
 
   .attachment-item {

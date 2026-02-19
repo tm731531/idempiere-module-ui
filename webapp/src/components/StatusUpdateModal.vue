@@ -17,12 +17,15 @@
           <span>請選擇狀態</span>
         </div>
 
-        <div v-if="props.statuses.length === 0" class="empty-state">
+        <div v-if="loading" class="loading-state">
+          加載狀態中...
+        </div>
+        <div v-else-if="displayStatuses.length === 0" class="empty-state">
           無可用狀態
         </div>
         <div v-else class="status-list">
           <label
-            v-for="status in props.statuses"
+            v-for="status in displayStatuses"
             :key="status.R_Status_ID"
             class="status-item"
           >
@@ -48,7 +51,7 @@
         <button
           type="button"
           class="btn btn-primary"
-          :disabled="props.statuses.length === 0 || selectedStatusId === null"
+          :disabled="loading || displayStatuses.length === 0 || selectedStatusId === null"
           @click="handleConfirm"
         >
           確認
@@ -59,7 +62,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { listRequestStatuses } from '@/api/request'
 
 interface Status {
   R_Status_ID: number
@@ -81,6 +85,13 @@ const emit = defineEmits<{
 
 const selectedStatusId = ref<number | null>(null)
 const showError = ref(false)
+const loadedStatuses = ref<Status[]>([])
+const loading = ref(false)
+
+// Use passed-in statuses if available, otherwise use loaded statuses
+const displayStatuses = computed(() => {
+  return props.statuses.length > 0 ? props.statuses : loadedStatuses.value
+})
 
 // Computed to normalize currentStatusId to number
 const normalizedCurrentStatusId = computed(() => {
@@ -100,6 +111,23 @@ function handleConfirm() {
   showError.value = false
   emit('status-selected', selectedStatusId.value)
 }
+
+// Load statuses if not provided by parent
+onMounted(async () => {
+  if (props.statuses.length === 0) {
+    loading.value = true
+    try {
+      const statuses = await listRequestStatuses()
+      loadedStatuses.value = statuses
+      console.log('Loaded statuses in modal:', statuses)
+    } catch (e: any) {
+      console.error('Failed to load statuses in modal:', e)
+      loadedStatuses.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+})
 
 // Initialize and watch for prop changes
 watch(
@@ -225,6 +253,13 @@ watch(
   font-size: 14px;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.loading-state {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
 }
 
 .error-alert {

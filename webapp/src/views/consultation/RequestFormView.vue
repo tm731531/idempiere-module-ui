@@ -305,8 +305,10 @@ async function loadAvailableStatuses() {
   try {
     // Fetch actual statuses from API instead of hardcoded values
     availableStatuses.value = await listRequestStatuses()
-  } catch {
+    console.log('Loaded statuses:', availableStatuses.value)
+  } catch (e: any) {
     // Fallback if API call fails
+    console.error('Failed to load statuses:', e)
     availableStatuses.value = []
   }
 }

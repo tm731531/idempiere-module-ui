@@ -60,8 +60,10 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     }
   }).length
 
-  // 計算流失客戶（90 天無新諮詢）
-  // 使用所有歷史數據，不只是 filtered（90 天內）
+  // Calculate lost customers: identify customers with no consultation for 90+ days
+  // IMPORTANT: Use ALL historical records to find LAST consultation per customer,
+  // not just filtered (90-day) records. A customer with one very old consultation
+  // but recent activity should NOT be marked lost.
   const customerLastActivity = new Map()
   requests.forEach((r) => {
     const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
@@ -71,7 +73,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     if (!customerLastActivity.has(customerId)) {
       customerLastActivity.set(customerId, { customerId, name, lastTime: createdTime })
     } else {
-      // 更新為最新時間
+      // Update to the most recent consultation time for this customer
       const existing = customerLastActivity.get(customerId)
       if (createdTime > existing.lastTime) {
         existing.lastTime = createdTime
@@ -79,10 +81,12 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     }
   })
 
+  // Count customers with last consultation 90+ days ago
   let lostCount = 0
   customerLastActivity.forEach(({ lastTime }) => {
+    // Check if the time elapsed since last activity exceeds 90 days
     if (now - lastTime > 90 * 24 * 60 * 60 * 1000) {
-      lostCount++  // 正確：判斷最後活動距今超過 90 天
+      lostCount++
     }
   })
 

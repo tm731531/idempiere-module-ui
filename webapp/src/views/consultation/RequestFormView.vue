@@ -217,16 +217,21 @@ function goBack() {
 
 function handleAddActivity(activity: Partial<Activity>) {
   try {
+    // Parse existing activities from JSON string in Description field
+    // Empty array if no activities yet
     const activities = parseActivities(formData.value.Description || '[]')
+
+    // Add new activity with automatic timestamp and user ID
     activities.push({
       ...activity,
       timestamp: activity.timestamp || new Date().toISOString(),
       createdBy: activity.createdBy || auth.user?.name || 'Unknown',
     })
+
+    // Re-serialize activities back to JSON string for storage
     formData.value.Description = stringifyActivities(activities)
     errorMsg.value = '' // Clear previous errors
-    // Note: handleAddActivity is called from QuickActionBar, so modal doesn't need to close
-    // The sidebar bar stays open for multiple quick actions
+    // Note: QuickActionBar modal doesn't auto-close to allow multiple quick actions
   } catch (e) {
     errorMsg.value = '活動記錄新增失敗'
   }
@@ -248,13 +253,15 @@ function handleStatusSelected(statusId: number) {
 function handleTrackingSet(data: { date: string; time: string; description: string }) {
   try {
     const activities = parseActivities(formData.value.Description || '[]')
+    // Convert date (YYYY-MM-DD) and time (HH:MM) to iDempiere datetime format
+    // Per iDempiere convention: Z suffix indicates local time (not UTC), stored as ISO string
     const isoDateTime = `${data.date}T${data.time}:00Z`
 
     activities.push({
       type: '預約追蹤',
       actionType: '設定追蹤',
       content: data.description,
-      timestamp: isoDateTime,
+      timestamp: isoDateTime,    // ISO datetime in local time with Z suffix
       createdBy: auth.user?.name || 'Unknown',
     })
     formData.value.Description = stringifyActivities(activities)

@@ -38,6 +38,7 @@ export function validateActivityContent(content: string): ValidationResult {
 }
 
 // Tracking Date Validation
+// Validates that selected date is within valid range: today to 90 days from today
 export function validateTrackingDate(dateStr: string): ValidationResult {
   const errors: Record<string, string> = {}
 
@@ -49,18 +50,21 @@ export function validateTrackingDate(dateStr: string): ValidationResult {
   const selected = new Date(dateStr)
   const today = new Date()
 
-  // Normalize to midnight for date comparison
+  // Normalize both dates to midnight (00:00:00) for accurate date comparison
+  // This prevents time-of-day from affecting the comparison
   selected.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
 
-  // Date must not be in the past
+  // Reject any date before today (no past dates allowed)
   if (selected < today) {
     errors.date = '日期不能是過去的日期'
   }
 
-  // Date must not be more than 90 days in the future
+  // Calculate maximum allowed date: today + 90 days
   const maxDate = new Date(today)
   maxDate.setDate(maxDate.getDate() + 90)
+
+  // Reject dates more than 90 days in the future
   if (selected > maxDate) {
     errors.date = '日期不能超過90天後'
   }

@@ -13,13 +13,17 @@ export interface Activity {
 
 /**
  * Parse activities from JSON string
- * Returns empty array if parsing fails
+ * Returns empty array if parsing fails (graceful degradation)
+ * Called when loading consultation to display timeline
  */
 export function parseActivities(jsonString: string): Activity[] {
   try {
     const parsed = JSON.parse(jsonString)
+    // Ensure result is always an array (some corrupted data might not be)
     return Array.isArray(parsed) ? parsed : []
   } catch (error) {
+    // Silent failure (warn in console only, don't throw)
+    // This allows the form to still load and display other data
     console.warn('Failed to parse activities:', error)
     return []
   }
@@ -39,7 +43,9 @@ export function stringifyActivities(activities: Activity[]): string {
 
 /**
  * Add a new activity to the JSON string
- * Automatically assigns current timestamp
+ * Automatically assigns current timestamp (ISO format)
+ * This is the main function used by QuickActionBar components
+ * @returns Updated JSON string with new activity appended
  */
 export function addActivity(
   existingJson: string,

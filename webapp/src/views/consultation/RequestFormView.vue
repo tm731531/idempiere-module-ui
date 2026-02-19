@@ -302,17 +302,35 @@ async function handleStatusSelected(statusId: number) {
   console.log('🔄 handleStatusSelected called with statusId:', statusId, 'type:', typeof statusId)
   showStatusModal.value = false
 
-  // For status updates, call the API directly instead of modifying formData
-  // This avoids validation errors from missing NOT NULL fields
   if (!requestId.value) return
 
   try {
-    console.log('📤 Calling updateRequestStatus with statusId:', statusId)
-    await updateRequestStatus(requestId.value, statusId)
+    // Update formData with new status first
+    formData.value.R_Status_ID = statusId
+    console.log('📝 Updated formData.R_Status_ID to:', statusId)
+
+    // Get full payload including all current fields
+    let payload = getUpdatePayload()
+    console.log('📤 Full payload before cleaning:', JSON.stringify(payload, null, 2))
+
+    // Clean payload: convert expanded objects to their IDs
+    const cleanPayload: Record<string, any> = {}
+    for (const [key, value] of Object.entries(payload)) {
+      if (value === null || value === undefined) {
+        continue
+      }
+      // If value is an object with 'id' property, extract the ID
+      if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
+        cleanPayload[key] = value.id
+        console.log(`🔄 Converted ${key}: object → ${value.id}`)
+      } else {
+        cleanPayload[key] = value
+      }
+    }
+
+    console.log('📤 Clean payload being sent:', JSON.stringify(cleanPayload, null, 2))
+    await updateRequest(requestId.value, cleanPayload)
     console.log('✅ Status updated successfully')
-    // Reload the form to show the new status
-    const record = await getRequest(requestId.value)
-    populateFromRecord(record)
     errorMsg.value = ''
   } catch (e: any) {
     console.error('❌ Status update failed:', e)

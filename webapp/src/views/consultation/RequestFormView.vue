@@ -122,7 +122,13 @@ import {
   listRequestStatuses,
   type RequestData,
 } from '@/api/request'
-import { REQUEST_STATUSES } from '@/config/requestStatusConfig'
+
+// Fallback statuses when API returns empty
+const FALLBACK_STATUSES = [
+  { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
+  { R_Status_ID: 2, Name: '等待回應', SeqNo: 2 },
+  { R_Status_ID: 3, Name: '已完成', SeqNo: 3 },
+]
 
 const router = useRouter()
 const route = useRoute()
@@ -304,31 +310,22 @@ function getCurrentStatusId(): number {
 
 async function loadAvailableStatuses() {
   try {
-    // Fetch actual statuses from API instead of hardcoded values
+    // Fetch actual statuses from API
     const apiStatuses = await listRequestStatuses()
     console.log('Loaded statuses from API:', apiStatuses)
 
-    // If API returns empty, use UI configuration as fallback
+    // If API returns statuses, use them; otherwise use fallback
     if (apiStatuses && apiStatuses.length > 0) {
       availableStatuses.value = apiStatuses
     } else {
-      console.warn('No statuses from API, using UI configuration as fallback')
-      // Convert requestStatusConfig to API response format for consistency
-      availableStatuses.value = REQUEST_STATUSES.map((status, index) => ({
-        R_Status_ID: index + 1,  // Generate synthetic IDs
-        Name: status.label,
-        SeqNo: index + 1,
-      }))
+      console.warn('No statuses from API, using fallback statuses')
+      availableStatuses.value = FALLBACK_STATUSES
     }
   } catch (e: any) {
-    // Fallback if API call fails: use UI configuration
+    // Fallback if API call fails
     console.error('Failed to load statuses from API:', e)
-    console.warn('Using UI configuration as fallback')
-    availableStatuses.value = REQUEST_STATUSES.map((status, index) => ({
-      R_Status_ID: index + 1,  // Generate synthetic IDs
-      Name: status.label,
-      SeqNo: index + 1,
-    }))
+    console.warn('Using fallback statuses')
+    availableStatuses.value = FALLBACK_STATUSES
   }
 }
 

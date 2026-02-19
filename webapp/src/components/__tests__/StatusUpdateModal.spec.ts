@@ -96,7 +96,7 @@ describe('StatusUpdateModal', () => {
     expect(wrapper.emitted('close')).toBeTruthy()
   })
 
-  it('renders empty state when no statuses provided', () => {
+  it('renders hardcoded statuses when no statuses provided', () => {
     const wrapper = mount(StatusUpdateModal, {
       props: {
         requestId: 123,
@@ -105,7 +105,9 @@ describe('StatusUpdateModal', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('無可用狀態')
+    // Should display hardcoded statuses instead of empty state
+    expect(wrapper.text()).toContain('待處理')
+    expect(wrapper.text()).toContain('已完成')
   })
 
   it('handles numeric currentStatusId correctly', () => {

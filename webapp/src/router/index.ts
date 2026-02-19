@@ -34,6 +34,12 @@ const router = createRouter({
       ],
     },
     {
+      path: '/consultation-dashboard',
+      name: 'consultation-dashboard',
+      component: () => import('@/views/consultation/ConsultationDashboardView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/customer',
       meta: { requiresAuth: true, pageKey: 'customer' },
       children: [

@@ -116,6 +116,7 @@ const sections: CardSection[] = [
           { label: '收貨', query: { type: 'po' } },
         ],
       },
+      { icon: '📊', label: '諮詢儀表板', desc: '追蹤諮詢狀態與客戶旅程', route: '/consultation-dashboard', pageKey: null },
     ],
   },
   {

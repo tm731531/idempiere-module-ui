@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 import RequestFormView from '../RequestFormView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter, useRoute } from 'vue-router'
@@ -15,7 +16,6 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 vi.mock('@/composables/useDocumentForm', () => {
-  const { ref } = require('vue')
   return {
     useDocumentForm: vi.fn(() => {
       const formData = ref({
@@ -27,11 +27,14 @@ vi.mock('@/composables/useDocumentForm', () => {
       return {
         visibleFieldDefs: [],
         formData,
-        pageLoading: false,
-        pageError: '',
+        pageLoading: ref(false),
+        pageError: ref(''),
+        docStatus: ref('DR'),
         readOnly: false,
         isCreate: false,
         load: vi.fn(),
+        loadFields: vi.fn(),
+        initDefaults: vi.fn(),
         getFormPayload: vi.fn(() => ({
           R_RequestType_ID: 1,
           Summary: 'Test summary',
@@ -98,6 +101,7 @@ describe('RequestFormView', () => {
       },
     })
 
+    await flushPromises()
     await wrapper.vm.$nextTick()
 
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })
@@ -115,6 +119,7 @@ describe('RequestFormView', () => {
       },
     })
 
+    await flushPromises()
     await wrapper.vm.$nextTick()
 
     const actionBar = wrapper.findComponent({ name: 'QuickActionBar' })
@@ -159,6 +164,7 @@ describe('RequestFormView', () => {
     await wrapper.vm.$nextTick()
 
     // Directly call the handler method instead of triggering emit
+    // @ts-ignore
     wrapper.vm.handleAddActivity({
       type: '前台行動',
       actionType: '打電話',
@@ -168,6 +174,7 @@ describe('RequestFormView', () => {
     })
 
     // Verify formData.Description was updated
+    // @ts-ignore
     const activities = JSON.parse(wrapper.vm.formData.Description || '[]')
     expect(activities).toHaveLength(1)
     expect(activities[0].actionType).toBe('打電話')
@@ -204,6 +211,7 @@ describe('RequestFormView', () => {
       },
     })
 
+    await flushPromises()
     await wrapper.vm.$nextTick()
 
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })

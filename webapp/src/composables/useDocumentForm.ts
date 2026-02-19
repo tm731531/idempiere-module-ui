@@ -203,6 +203,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
     mandatoryErrors,
     isValid,
     load,
+    loadFields,
     initDefaults,
     populateFromRecord,
     getFormPayload,

@@ -143,6 +143,10 @@ const {
   isCreate,
   load,
   getFormPayload,
+  populateFromRecord,
+  docStatus,
+  loadFields,
+  initDefaults,
 } = useDocumentForm({
   tabId: 344,  // R_Request
   recordId: requestId,
@@ -309,13 +313,28 @@ function loadAvailableStatuses() {
 }
 
 onMounted(async () => {
-  if (preloadedData) {
-    // Use preloaded data from list instead of fetching
-    formData.value = preloadedData
-  } else {
-    // Only fetch if no preloaded data
-    await load()
+  // Load metadata (required for field definitions)
+  pageLoading.value = true
+  pageError.value = ''
+  try {
+    await loadFields(344)  // Load metadata for R_Request tab
+
+    // If preloaded data exists, use it; otherwise fetch from API
+    if (preloadedData) {
+      populateFromRecord(preloadedData)
+    } else if (!isCreate.value && requestId.value) {
+      const record = await getRequest(requestId.value)
+      populateFromRecord(record)
+    } else {
+      // New record: initialize with defaults
+      initDefaults()
+    }
+  } catch (e: any) {
+    pageError.value = e.message || '載入失敗'
+  } finally {
+    pageLoading.value = false
   }
+
   loadAvailableStatuses()
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)

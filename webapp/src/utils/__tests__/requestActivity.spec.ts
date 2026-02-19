@@ -80,4 +80,20 @@ describe('requestActivity utilities', () => {
     ])
     expect(noConflict).toBe(false)
   })
+
+  it('returns null for last activity on empty JSON', () => {
+    expect(getLastActivityTime('[]')).toBeNull()
+  })
+
+  it('handles single activity without conflict', () => {
+    expect(hasConflict([
+      {
+        timestamp: '2026-02-19T10:00:00Z',
+        type: '前台行動',
+        actionType: '打電話',
+        content: 'call',
+        createdBy: 'John',
+      },
+    ])).toBe(false)
+  })
 })

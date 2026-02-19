@@ -54,15 +54,18 @@ export async function updateRequestStatus(id: number, statusId: number): Promise
   const url = `/api/v1/models/R_Request/${id}`
   const payload = { R_Status_ID: statusId }
   console.log(`📡 updateRequestStatus - PUT ${url}`)
-  console.log(`📡 updateRequestStatus - payload:`, payload)
+  console.log(`📡 updateRequestStatus - payload:`, JSON.stringify(payload))
   try {
     const resp = await apiClient.put(url, payload)
     console.log(`✅ updateRequestStatus - success`)
+    console.log(`✅ updateRequestStatus - response:`, resp.data)
     return resp.data
   } catch (error: any) {
     console.error(`❌ updateRequestStatus - error:`, error.message)
-    console.error(`❌ updateRequestStatus - status:`, error.response?.status)
-    console.error(`❌ updateRequestStatus - response:`, error.response?.data)
+    console.error(`❌ updateRequestStatus - status code:`, error.response?.status)
+    console.error(`❌ updateRequestStatus - status text:`, error.response?.statusText)
+    console.error(`❌ updateRequestStatus - error field:`, error.response?.data?.error)
+    console.error(`❌ updateRequestStatus - full response:`, JSON.stringify(error.response?.data, null, 2))
     throw error
   }
 }

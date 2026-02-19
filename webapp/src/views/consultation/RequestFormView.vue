@@ -188,15 +188,32 @@ async function handleSubmit() {
   errorMsg.value = ''
   // For updates, use getUpdatePayload() to include all non-system fields
   // For creates, use getFormPayload() to only include updateable fields
-  const payload = isEdit.value ? getUpdatePayload() : getFormPayload()
-  console.log('📤 handleSubmit - payload:', payload)
-  console.log('📤 handleSubmit - R_Status_ID:', payload.R_Status_ID, 'type:', typeof payload.R_Status_ID)
+  let rawPayload = isEdit.value ? getUpdatePayload() : getFormPayload()
 
-  if (!payload.R_RequestType_ID) {
+  // Clean payload: convert expanded objects to their IDs
+  // This prevents sending nested objects like { id: 100, Name: 'Open' } instead of just 100
+  const cleanPayload: Record<string, any> = {}
+  for (const [key, value] of Object.entries(rawPayload)) {
+    if (value === null || value === undefined) {
+      continue
+    }
+    // If value is an object with 'id' property, extract the ID
+    if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
+      cleanPayload[key] = value.id
+      console.log(`🔄 Converted ${key}: object → ${value.id}`)
+    } else {
+      cleanPayload[key] = value
+    }
+  }
+
+  console.log('📤 handleSubmit - cleanPayload:', cleanPayload)
+  console.log('📤 handleSubmit - R_Status_ID:', cleanPayload.R_Status_ID, 'type:', typeof cleanPayload.R_Status_ID)
+
+  if (!cleanPayload.R_RequestType_ID) {
     errorMsg.value = '請選擇諮詢類型'
     return
   }
-  if (!payload.Summary || !String(payload.Summary).trim()) {
+  if (!cleanPayload.Summary || !String(cleanPayload.Summary).trim()) {
     errorMsg.value = '請輸入摘要'
     return
   }
@@ -204,13 +221,13 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (isEdit.value && requestId.value) {
-      console.log('🔄 Updating request', requestId.value, 'with payload:', payload)
-      await updateRequest(requestId.value, payload)
+      console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
+      await updateRequest(requestId.value, cleanPayload)
       router.push({ name: 'consultation-list' })
     } else {
-      payload.AD_Org_ID = auth.context?.organizationId ?? 0
-      console.log('➕ Creating new request with payload:', payload)
-      await createRequest(payload as RequestData)
+      cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
+      console.log('➕ Creating new request with cleanPayload:', cleanPayload)
+      await createRequest(cleanPayload as RequestData)
       router.push({ name: 'consultation-list' })
     }
   } catch (e) {

@@ -305,34 +305,48 @@ async function handleStatusSelected(statusId: number) {
   if (!requestId.value) return
 
   try {
-    // Build minimal payload with only essential fields for status update
-    const minimalPayload: Record<string, any> = {
-      R_Status_ID: statusId,
-    }
+    // GET-then-PUT strategy:
+    // 1. Fetch fresh record from API to ensure we have all fields
+    console.log(`📥 Fetching fresh record for ID ${requestId.value}...`)
+    const freshRecord = await getRequest(requestId.value)
+    console.log('📦 Fresh record from API:', JSON.stringify(freshRecord, null, 2))
 
-    // Add other fields if they exist in formData, but only simple values (not objects)
-    const essentialFields = ['Summary', 'Description', 'R_RequestType_ID', 'C_BPartner_ID']
-    for (const field of essentialFields) {
-      const value = formData.value[field]
-      if (value !== null && value !== undefined && value !== '') {
-        // Extract ID from objects
+    // 2. Build complete update payload from fresh record
+    // Copy all fields except system fields that shouldn't be sent back
+    const systemFields = ['R_Request_ID', 'AD_Org_ID', 'Created', 'CreatedBy', 'Updated', 'UpdatedBy', 'Processing', 'SalesRep_ID']
+    const updatePayload: Record<string, any> = {}
+
+    for (const [key, value] of Object.entries(freshRecord)) {
+      if (!systemFields.includes(key) && value !== undefined && value !== null) {
+        // Extract ID from expanded objects (API returns {id: ..., Name: ...})
         if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
-          minimalPayload[field] = value.id
-          console.log(`🔄 Converted ${field}: object → ${value.id}`)
+          updatePayload[key] = value.id
+          console.log(`🔄 Converted ${key}: object.id → ${value.id}`)
+        } else if (typeof value === 'object' && Array.isArray(value)) {
+          // Skip array fields
+          console.log(`⏭️  Skipping array field ${key}`)
         } else {
-          minimalPayload[field] = value
+          updatePayload[key] = value
         }
       }
     }
 
-    console.log('📤 Minimal payload being sent:', JSON.stringify(minimalPayload, null, 2))
-    await updateRequest(requestId.value, minimalPayload)
-    console.log('✅ Status updated successfully')
-    // Update formData with new status
+    // 3. Update R_Status_ID to new status
+    updatePayload.R_Status_ID = statusId
+    console.log('🎯 Updated R_Status_ID to:', statusId)
+
+    // 4. Send complete update payload
+    console.log('📤 Complete payload being sent:', JSON.stringify(updatePayload, null, 2))
+    await updateRequest(requestId.value, updatePayload)
+    console.log('✅ Status updated successfully via API')
+
+    // 5. Update formData with new status
     formData.value.R_Status_ID = statusId
     errorMsg.value = ''
+    console.log('✅ Form data refreshed with new status')
   } catch (e: any) {
     console.error('❌ Status update failed:', e)
+    console.error('❌ Error details:', e.message)
     console.error('❌ Response data:', e.response?.data)
     const apiError = e.response?.data?.error || e.message || '未知錯誤'
     errorMsg.value = `更新狀態失敗: ${apiError}`

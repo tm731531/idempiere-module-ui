@@ -94,7 +94,7 @@ import { useDocumentForm } from '@/composables/useDocumentForm'
 import DynamicForm from '@/components/DynamicForm.vue'
 import RequestTimeline from '@/components/RequestTimeline.vue'
 import QuickActionBar from '@/components/QuickActionBar.vue'
-import { parseActivities } from '@/utils/requestActivity'
+import { parseActivities, stringifyActivities, type Activity } from '@/utils/requestActivity'
 import {
   getRequest,
   createRequest,
@@ -191,7 +191,7 @@ function goBack() {
   router.push({ name: 'consultation-list' })
 }
 
-function handleAddActivity(activity: any) {
+function handleAddActivity(activity: Partial<Activity>) {
   try {
     const activities = parseActivities(formData.value.Description || '[]')
     activities.push({
@@ -199,7 +199,7 @@ function handleAddActivity(activity: any) {
       timestamp: activity.timestamp || new Date().toISOString(),
       createdBy: activity.createdBy || auth.user?.name || 'Unknown',
     })
-    formData.value.Description = JSON.stringify(activities)
+    formData.value.Description = stringifyActivities(activities)
   } catch (e) {
     errorMsg.value = '活動記錄新增失敗'
   }

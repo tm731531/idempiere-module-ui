@@ -61,19 +61,28 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   }).length
 
   // 計算流失客戶（90 天無新諮詢）
-  const customerMap = new Map()
-  filtered.forEach((r) => {
-    const customerId = r.C_BPartner_ID?.id || r.C_BPartner_ID
+  // 使用所有歷史數據，不只是 filtered（90 天內）
+  const customerLastActivity = new Map()
+  requests.forEach((r) => {
+    const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
     const name = r.C_BPartner_ID?.Name || `#${customerId}`
-    if (!customerMap.has(customerId)) {
-      customerMap.set(customerId, { customerId, name, created: new Date(r.Created).getTime() })
+    const createdTime = new Date(r.Created).getTime()
+
+    if (!customerLastActivity.has(customerId)) {
+      customerLastActivity.set(customerId, { customerId, name, lastTime: createdTime })
+    } else {
+      // 更新為最新時間
+      const existing = customerLastActivity.get(customerId)
+      if (createdTime > existing.lastTime) {
+        existing.lastTime = createdTime
+      }
     }
   })
 
   let lostCount = 0
-  customerMap.forEach(({ created }) => {
-    if (now - created > 90 * 24 * 60 * 60 * 1000) {
-      lostCount++
+  customerLastActivity.forEach(({ lastTime }) => {
+    if (now - lastTime > 90 * 24 * 60 * 60 * 1000) {
+      lostCount++  // 正確：判斷最後活動距今超過 90 天
     }
   })
 
@@ -134,7 +143,7 @@ function getTopCustomers(
 ): Array<{ customerId: number; name: string; count: number }> {
   const customerMap = new Map()
   requests.forEach((r) => {
-    const customerId = r.C_BPartner_ID?.id || r.C_BPartner_ID
+    const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
     const name = r.C_BPartner_ID?.Name || `#${customerId}`
     if (!customerMap.has(customerId)) {
       customerMap.set(customerId, { customerId, name, count: 0 })

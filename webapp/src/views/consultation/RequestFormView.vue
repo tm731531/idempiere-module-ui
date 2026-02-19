@@ -298,27 +298,10 @@ function handleSetTracking() {
   showTrackingModal.value = true
 }
 
-async function handleStatusSelected(statusId: number) {
-  console.log('🔄 handleStatusSelected called with statusId:', statusId)
+function handleStatusSelected(statusId: number) {
+  // Just update UI state - frontend manages status
+  formData.value.R_Status_ID = statusId
   showStatusModal.value = false
-
-  if (!requestId.value) return
-
-  try {
-    // Use the dedicated updateRequestStatus function which sends only R_Status_ID
-    console.log(`📡 Updating status to ${statusId} via updateRequestStatus()`)
-    await updateRequestStatus(requestId.value, statusId)
-    console.log('✅ Status updated successfully')
-
-    // Update formData with new status
-    formData.value.R_Status_ID = statusId
-    errorMsg.value = ''
-  } catch (e: any) {
-    console.error('❌ Status update failed:', e.message)
-    console.error('❌ Response:', e.response?.data)
-    const apiError = e.response?.data?.error || e.message || '未知錯誤'
-    errorMsg.value = `更新狀態失敗: ${apiError}`
-  }
 }
 
 function handleTrackingSet(data: { date: string; time: string; description: string }) {

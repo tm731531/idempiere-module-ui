@@ -122,6 +122,7 @@ import {
   listRequestStatuses,
   type RequestData,
 } from '@/api/request'
+import { REQUEST_STATUSES } from '@/config/requestStatusConfig'
 
 const router = useRouter()
 const route = useRoute()
@@ -304,12 +305,30 @@ function getCurrentStatusId(): number {
 async function loadAvailableStatuses() {
   try {
     // Fetch actual statuses from API instead of hardcoded values
-    availableStatuses.value = await listRequestStatuses()
-    console.log('Loaded statuses:', availableStatuses.value)
+    const apiStatuses = await listRequestStatuses()
+    console.log('Loaded statuses from API:', apiStatuses)
+
+    // If API returns empty, use UI configuration as fallback
+    if (apiStatuses && apiStatuses.length > 0) {
+      availableStatuses.value = apiStatuses
+    } else {
+      console.warn('No statuses from API, using UI configuration as fallback')
+      // Convert requestStatusConfig to API response format for consistency
+      availableStatuses.value = REQUEST_STATUSES.map((status, index) => ({
+        R_Status_ID: index + 1,  // Generate synthetic IDs
+        Name: status.label,
+        SeqNo: index + 1,
+      }))
+    }
   } catch (e: any) {
-    // Fallback if API call fails
-    console.error('Failed to load statuses:', e)
-    availableStatuses.value = []
+    // Fallback if API call fails: use UI configuration
+    console.error('Failed to load statuses from API:', e)
+    console.warn('Using UI configuration as fallback')
+    availableStatuses.value = REQUEST_STATUSES.map((status, index) => ({
+      R_Status_ID: index + 1,  // Generate synthetic IDs
+      Name: status.label,
+      SeqNo: index + 1,
+    }))
   }
 }
 

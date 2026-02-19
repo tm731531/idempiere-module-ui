@@ -34,8 +34,20 @@ export async function createRequest(data: RequestData): Promise<any> {
 }
 
 export async function updateRequest(id: number, data: Record<string, any>): Promise<any> {
-  const resp = await apiClient.put(`/api/v1/models/R_Request/${id}`, data)
-  return resp.data
+  const url = `/api/v1/models/R_Request/${id}`
+  console.log(`📡 updateRequest - PUT ${url}`)
+  console.log(`📡 updateRequest - payload:`, JSON.stringify(data, null, 2))
+  try {
+    const resp = await apiClient.put(url, data)
+    console.log(`✅ updateRequest - success, response:`, resp.data)
+    return resp.data
+  } catch (error: any) {
+    console.error(`❌ updateRequest - error:`, error)
+    console.error(`❌ updateRequest - status:`, error.response?.status)
+    console.error(`❌ updateRequest - statusText:`, error.response?.statusText)
+    console.error(`❌ updateRequest - responseData:`, error.response?.data)
+    throw error
+  }
 }
 
 export async function updateRequestStatus(id: number, statusId: number): Promise<any> {

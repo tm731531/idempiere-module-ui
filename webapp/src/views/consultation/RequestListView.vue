@@ -166,7 +166,13 @@ function goToEdit(r: any) {
 }
 
 function goToNew() {
-  router.push({ name: 'consultation-new' })
+  console.log('🆕 goToNew clicked - navigating to consultation-new')
+  try {
+    router.push({ name: 'consultation-new' })
+    console.log('✅ Navigation initiated')
+  } catch (e) {
+    console.error('❌ Navigation error:', e)
+  }
 }
 
 onMounted(async () => {

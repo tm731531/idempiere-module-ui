@@ -79,11 +79,13 @@ const drillIntoStatus = (status: string, count: number) => {
 
 // 鑽取函式 - 按客戶
 const drillIntoCustomer = (customerId: number, name: string, count: number) => {
+  console.log('🔍 drillIntoCustomer called:', { customerId, name, count })
   drillDown.value = {
     type: 'customer',
     label: `客戶: ${name} (${count} 筆)`,
     value: customerId,
   }
+  console.log('✅ drillDown set to:', drillDown.value)
 }
 
 // 鑽取函式 - 按警告類型

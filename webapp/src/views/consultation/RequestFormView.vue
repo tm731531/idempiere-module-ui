@@ -327,9 +327,20 @@ function handleTrackingSet(data: { date: string; time: string; description: stri
 }
 
 function getStatusName(status: { id?: string | number; identifier?: string; Name?: string } | string | number | null | undefined): string {
-  if (status && typeof status === 'object') {
+  if (!status) return '待處理'
+
+  // If status is an object with Name or identifier
+  if (typeof status === 'object') {
     return status.identifier || status.Name || String(status.id) || '待處理'
   }
+
+  // If status is a number, look it up in availableStatuses
+  if (typeof status === 'number' || typeof status === 'string') {
+    const statusId = typeof status === 'string' ? Number(status) : status
+    const found = availableStatuses.value.find(s => s.R_Status_ID === statusId)
+    if (found) return found.Name
+  }
+
   return '待處理'
 }
 

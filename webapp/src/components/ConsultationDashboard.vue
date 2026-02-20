@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { calculateStats } from '@/utils/dashboardStats'
+import { REQUEST_STATUS_IDS, isWaitingStatus, STATISTICS_CONFIG } from '@/config/requestStatusConfig'
 
 interface Props {
   requests: any[]
@@ -105,23 +106,22 @@ const filteredRequests = computed(() => {
 
     case 'warning':
       const now = Date.now()
-      const SILENT_DAYS_THRESHOLD = 7
-      const LOST_CUSTOMER_DAYS_THRESHOLD = 90
 
       if (drillDown.value.value === 'silent') {
         return props.requests.filter((r) => {
           const status = r.R_Status_ID?.id
-          if (status && status !== 'PD' && status !== 'WA') return false // Not in waiting status
+          // Only include consultations in WAITING status
+          if (!isWaitingStatus(status)) return false
           try {
             const activities = JSON.parse(r.Description || '[]')
             if (activities.length === 0) {
               const daysSince = (now - new Date(r.Created).getTime()) / (1000 * 24 * 3600)
-              return daysSince > SILENT_DAYS_THRESHOLD
+              return daysSince > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
             }
             const lastActivity = activities[activities.length - 1]?.timestamp
             if (!lastActivity) return false
             const daysSilent = (now - new Date(lastActivity).getTime()) / (1000 * 24 * 3600)
-            return daysSilent > SILENT_DAYS_THRESHOLD
+            return daysSilent > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
           } catch {
             return false
           }
@@ -146,7 +146,7 @@ const filteredRequests = computed(() => {
           const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
           const lastTime = customerLastActivity.get(customerId)?.lastTime
           if (!lastTime) return false
-          return now - lastTime > LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000
+          return now - lastTime > STATISTICS_CONFIG.LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000
         })
       }
       return []

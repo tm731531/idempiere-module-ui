@@ -41,6 +41,13 @@ const toggleSection = (sectionId: string) => {
 const isExpanded = (sectionId: string) => {
   return expandedSections.value.has(sectionId)
 }
+
+// 計算百分比用於進度條
+const calculatePercentage = (value: number, items: any[]) => {
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+  if (total === 0) return 0
+  return Math.round((value / total) * 100)
+}
 </script>
 
 <template>
@@ -51,7 +58,25 @@ const isExpanded = (sectionId: string) => {
         <span class="toggle-icon">{{ isExpanded('metrics') ? '▼' : '▶' }}</span>
         關鍵指標
       </h2>
-      <div v-if="isExpanded('metrics')" class="metrics-grid">
+
+      <!-- Summary View (when collapsed) -->
+      <div v-if="!isExpanded('metrics')" class="summary-view">
+        <div class="summary-item">
+          <span class="summary-label">本月</span>
+          <span class="summary-value">{{ stats.totalThisMonth }} 筆</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">轉化率</span>
+          <span class="summary-value">{{ stats.conversionRate }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">未完成</span>
+          <span class="summary-value warning-text">{{ stats.pendingCount }} 筆</span>
+        </div>
+      </div>
+
+      <!-- Detailed View (when expanded) -->
+      <div v-else class="metrics-grid">
         <!-- 本月諮詢數 -->
         <div class="metric-card">
           <div class="metric-label">本月諮詢數</div>
@@ -102,11 +127,30 @@ const isExpanded = (sectionId: string) => {
         <span class="toggle-icon">{{ isExpanded('status') ? '▼' : '▶' }}</span>
         狀態分布
       </h2>
+
+      <!-- Summary View (when collapsed) -->
+      <div v-if="!isExpanded('status') && statusItems.length > 0" class="summary-view">
+        <div class="status-summary">
+          <div v-for="item in statusItems.slice(0, 3)" :key="item.status" class="summary-item">
+            <span class="summary-label">{{ item.status }}</span>
+            <span class="summary-value">{{ item.count }}</span>
+          </div>
+          <div v-if="statusItems.length > 3" class="summary-item">
+            <span class="summary-label">其他</span>
+            <span class="summary-value">+{{ statusItems.slice(3).reduce((sum, item) => sum + item.count, 0) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detailed View (when expanded) -->
       <div v-if="isExpanded('status')">
         <div v-if="statusItems.length > 0" class="status-list">
           <div v-for="item in statusItems" :key="item.status" class="status-item">
             <span class="status-name">{{ item.status }}</span>
             <span class="status-count">{{ item.count }}</span>
+            <div class="status-bar">
+              <div class="status-bar-fill" :style="{ width: calculatePercentage(item.count, statusItems) + '%' }"></div>
+            </div>
           </div>
         </div>
         <div v-else class="empty-state">暫無資料</div>
@@ -119,6 +163,27 @@ const isExpanded = (sectionId: string) => {
         <span class="toggle-icon">{{ isExpanded('customers') ? '▼' : '▶' }}</span>
         活躍客戶排行
       </h2>
+
+      <!-- Summary View (when collapsed) -->
+      <div v-if="!isExpanded('customers')" class="summary-view">
+        <div class="customer-summary">
+          <div v-if="stats.topCustomers[0]" class="summary-item">
+            <span class="summary-label">Top 1</span>
+            <span class="summary-value">{{ stats.topCustomers[0]?.name }}</span>
+            <span class="summary-count">{{ stats.topCustomers[0]?.count }} 筆</span>
+          </div>
+          <div v-if="stats.topCustomers[1]" class="summary-item">
+            <span class="summary-label">Top 2</span>
+            <span class="summary-value">{{ stats.topCustomers[1]?.name }}</span>
+            <span class="summary-count">{{ stats.topCustomers[1]?.count }} 筆</span>
+          </div>
+          <div v-if="stats.topCustomers.length > 2" class="summary-item">
+            <span class="summary-label">+{{ stats.topCustomers.length - 2 }} 更多</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detailed View (when expanded) -->
       <div v-if="isExpanded('customers')">
         <div class="customers-list">
           <div v-for="(customer, index) in stats.topCustomers" :key="customer.customerId" class="customer-item">
@@ -136,6 +201,24 @@ const isExpanded = (sectionId: string) => {
         <span class="toggle-icon">{{ isExpanded('warnings') ? '▼' : '▶' }}</span>
         預警清單
       </h2>
+
+      <!-- Summary View (when collapsed) -->
+      <div v-if="!isExpanded('warnings') && hasWarnings" class="summary-view">
+        <div class="warning-summary">
+          <div v-if="stats.silentCount > 0" class="summary-item warning-item silent">
+            <span class="warning-icon">⏱️</span>
+            <span class="summary-label">未回應</span>
+            <span class="summary-value">{{ stats.silentCount }}</span>
+          </div>
+          <div v-if="stats.lostCustomerCount > 0" class="summary-item warning-item lost">
+            <span class="warning-icon">📉</span>
+            <span class="summary-label">流失客戶</span>
+            <span class="summary-value">{{ stats.lostCustomerCount }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detailed View (when expanded) -->
       <div v-if="isExpanded('warnings')">
         <div v-if="hasWarnings" class="warning-list">
           <div v-if="stats.silentCount > 0" class="warning-item silent">
@@ -186,6 +269,127 @@ const isExpanded = (sectionId: string) => {
 
 .collapsible:hover .section-title {
   opacity: 0.8;
+}
+
+/* Summary View */
+.summary-view {
+  padding: 12px 0;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 0.938rem;
+}
+
+.summary-label {
+  color: var(--color-text-secondary, #6b7280);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.summary-value {
+  font-weight: 700;
+  color: var(--color-primary, #3b82f6);
+  text-align: right;
+  flex: 1;
+  margin-left: 8px;
+}
+
+.summary-value.warning-text {
+  color: var(--color-error, #ef4444);
+}
+
+.summary-count {
+  margin-left: 8px;
+  color: var(--color-text-secondary, #9ca3af);
+  font-size: 0.85rem;
+}
+
+/* Status Summary */
+.status-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.status-summary .summary-item {
+  flex: 1;
+  min-width: 120px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+}
+
+.status-summary .summary-label {
+  margin-bottom: 4px;
+}
+
+.status-summary .summary-value {
+  margin-left: 0;
+}
+
+/* Customer Summary */
+.customer-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customer-summary .summary-item {
+  padding: 8px 0;
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.customer-summary .summary-label {
+  min-width: 60px;
+}
+
+.customer-summary .summary-value {
+  margin-left: 0;
+  margin-right: 12px;
+}
+
+/* Warning Summary */
+.warning-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.warning-summary .summary-item {
+  flex: 1;
+  min-width: 120px;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.warning-summary .summary-label {
+  min-width: auto;
+}
+
+.warning-summary .summary-value {
+  margin-left: 0;
+}
+
+/* Status Bar for detailed view */
+.status-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.status-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 4px;
+  transition: width 0.3s ease;
 }
 
 /* Metrics Section */
@@ -265,11 +469,12 @@ const isExpanded = (sectionId: string) => {
 
 .status-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--color-border, #f3f4f6);
   transition: background 0.2s ease;
+  gap: 12px;
 }
 
 .status-item:last-child {
@@ -283,6 +488,7 @@ const isExpanded = (sectionId: string) => {
 .status-name {
   font-weight: 600;
   color: var(--color-text-primary, #1f2937);
+  min-width: 100px;
 }
 
 .status-count {
@@ -291,6 +497,7 @@ const isExpanded = (sectionId: string) => {
   color: var(--color-primary, #3b82f6);
   min-width: 40px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 /* Customers Section */

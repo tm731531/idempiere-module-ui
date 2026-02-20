@@ -298,9 +298,22 @@ function handleSetTracking() {
 }
 
 function handleStatusSelected(statusId: number) {
+  console.log('🔄 handleStatusSelected called')
+  console.log('   statusId:', statusId, 'type:', typeof statusId)
+  console.log('   formData:', formData)
+  console.log('   formData.value:', formData.value)
+
   // Just update UI state - frontend manages status
-  formData.value.R_Status_ID = statusId
+  if (formData.value) {
+    formData.value.R_Status_ID = statusId
+    console.log('✅ Set R_Status_ID to:', statusId)
+    console.log('   formData.value.R_Status_ID is now:', formData.value.R_Status_ID)
+  } else {
+    console.error('❌ formData.value is undefined!')
+  }
+
   showStatusModal.value = false
+  console.log('✅ Modal closed')
 }
 
 function handleTrackingSet(data: { date: string; time: string; description: string }) {

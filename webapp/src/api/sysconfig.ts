@@ -51,15 +51,22 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
       return true
     } else {
       // Create new - requires AD_Org_ID, AD_Client_ID, Name, Value
-      await apiClient.post('/api/v1/models/AD_SysConfig', {
-        AD_Org_ID: 0,
-        AD_Client_ID: 0,
-        Name: name,
-        Value: value,
-        Description: 'Mobile consultation request statuses',
-      })
-      console.log('✅ Created SysConfig:', name)
-      return true
+      try {
+        await apiClient.post('/api/v1/models/AD_SysConfig', {
+          AD_Org_ID: 0,
+          AD_Client_ID: 0,
+          Name: name,
+          Value: value,
+          Description: 'Mobile consultation request statuses',
+        })
+        console.log('✅ Created SysConfig:', name)
+        return true
+      } catch (createError: any) {
+        if (createError.response?.status === 403) {
+          console.error('❌ Permission denied creating SysConfig. Please ask administrator to create:', name)
+        }
+        throw createError
+      }
     }
   } catch (e) {
     console.error('❌ Failed to update SysConfig:', name, e)

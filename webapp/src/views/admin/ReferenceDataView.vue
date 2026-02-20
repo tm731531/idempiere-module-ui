@@ -361,6 +361,11 @@ async function selectTable(t: ManagedTable) {
 
 async function loadRecords() {
   if (!selectedTable.value) return
+  // Skip loading for custom sections (they don't use standard table loading)
+  if (selectedTable.value.customSection) {
+    loading.value = false
+    return
+  }
   loading.value = true
   errorMsg.value = ''
   try {

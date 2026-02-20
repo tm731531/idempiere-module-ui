@@ -297,7 +297,7 @@ function handleSetTracking() {
   showTrackingModal.value = true
 }
 
-function handleStatusSelected(statusId: number) {
+function handleStatusSelected(statusId: string) {
   console.log('🔄 handleStatusSelected called with status name:', statusId)
 
   if (formData.value) {

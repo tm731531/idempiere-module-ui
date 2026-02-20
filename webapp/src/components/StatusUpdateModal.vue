@@ -96,12 +96,17 @@ const normalizedCurrentStatusId = computed(() => {
 })
 
 function handleConfirm() {
+  console.log('📋 StatusUpdateModal.handleConfirm called')
+  console.log('   selectedStatusId.value:', selectedStatusId.value)
+
   // Check if a status is selected
   if (selectedStatusId.value === null) {
+    console.warn('⚠️ No status selected')
     showError.value = true
     return
   }
 
+  console.log('✅ Emitting status-selected with:', selectedStatusId.value)
   showError.value = false
   emit('status-selected', selectedStatusId.value)
 }

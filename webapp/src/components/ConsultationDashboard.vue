@@ -186,8 +186,8 @@ const formatDate = (dateStr: string) => {
 <template>
   <div class="consultation-dashboard">
     <!-- Metrics Section -->
-    <section class="metrics-section collapsible" @click="toggleSection('metrics')">
-      <h2 class="section-title">
+    <section class="metrics-section collapsible">
+      <h2 class="section-title" @click="toggleSection('metrics')">
         <span class="toggle-icon">{{ isExpanded('metrics') ? '▼' : '▶' }}</span>
         關鍵指標
       </h2>
@@ -255,8 +255,8 @@ const formatDate = (dateStr: string) => {
     </section>
 
     <!-- Status Distribution Section -->
-    <section class="status-section collapsible" @click="toggleSection('status')">
-      <h2 class="section-title">
+    <section class="status-section collapsible">
+      <h2 class="section-title" @click="toggleSection('status')">
         <span class="toggle-icon">{{ isExpanded('status') ? '▼' : '▶' }}</span>
         狀態分布
       </h2>
@@ -297,8 +297,8 @@ const formatDate = (dateStr: string) => {
     </section>
 
     <!-- Top Customers Section -->
-    <section v-if="stats.topCustomers.length > 0" class="customers-section collapsible" @click="toggleSection('customers')">
-      <h2 class="section-title">
+    <section v-if="stats.topCustomers.length > 0" class="customers-section collapsible">
+      <h2 class="section-title" @click="toggleSection('customers')">
         <span class="toggle-icon">{{ isExpanded('customers') ? '▼' : '▶' }}</span>
         活躍客戶排行
       </h2>
@@ -341,8 +341,8 @@ const formatDate = (dateStr: string) => {
     </section>
 
     <!-- Warning Section -->
-    <section class="warning-section collapsible" @click="toggleSection('warnings')">
-      <h2 class="section-title">
+    <section class="warning-section collapsible">
+      <h2 class="section-title" @click="toggleSection('warnings')">
         <span class="toggle-icon">{{ isExpanded('warnings') ? '▼' : '▶' }}</span>
         預警清單
       </h2>

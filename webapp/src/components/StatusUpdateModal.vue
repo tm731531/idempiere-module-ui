@@ -106,9 +106,13 @@ function handleConfirm() {
     return
   }
 
-  console.log('✅ Emitting status-selected with:', selectedStatusId.value)
+  // Find the status object and emit the Name (string), not the ID
+  const selectedStatus = props.statuses.find(s => s.R_Status_ID === selectedStatusId.value)
+  const statusName = selectedStatus?.Name || String(selectedStatusId.value)
+
+  console.log('✅ Emitting status-selected with name:', statusName)
   showError.value = false
-  emit('status-selected', selectedStatusId.value)
+  emit('status-selected', statusName)
 }
 
 // Initialize and watch for prop changes

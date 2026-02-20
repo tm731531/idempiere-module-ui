@@ -223,11 +223,11 @@ async function handleSubmit() {
   try {
     if (isEdit.value && requestId.value) {
       console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
-      // Don't send R_Status_ID to API - REST API has fundamental design flaw with it
-      // Status is managed only in frontend UI state
+      // Don't send R_Status_ID (has REST API design flaw)
+      // Status stored in Result field instead
       const updatePayload = { ...cleanPayload }
       delete updatePayload.R_Status_ID
-      console.log('🔄 Final updatePayload (R_Status_ID excluded):', updatePayload)
+      console.log('🔄 Final updatePayload (Result field included):', updatePayload)
       await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
@@ -298,22 +298,17 @@ function handleSetTracking() {
 }
 
 function handleStatusSelected(statusId: number) {
-  console.log('🔄 handleStatusSelected called')
-  console.log('   statusId:', statusId, 'type:', typeof statusId)
-  console.log('   formData:', formData)
-  console.log('   formData.value:', formData.value)
+  console.log('🔄 handleStatusSelected called with status name:', statusId)
 
-  // Just update UI state - frontend manages status
   if (formData.value) {
-    formData.value.R_Status_ID = statusId
-    console.log('✅ Set R_Status_ID to:', statusId)
-    console.log('   formData.value.R_Status_ID is now:', formData.value.R_Status_ID)
+    // Store status name in Result field (text field, not problematic R_Status_ID)
+    formData.value.Result = statusId
+    console.log('✅ Set Result to:', statusId)
   } else {
     console.error('❌ formData.value is undefined!')
   }
 
   showStatusModal.value = false
-  console.log('✅ Modal closed')
 }
 
 function handleTrackingSet(data: { date: string; time: string; description: string }) {
@@ -339,22 +334,20 @@ function handleTrackingSet(data: { date: string; time: string; description: stri
   }
 }
 
-function getStatusName(status: { id?: string | number; identifier?: string; Name?: string } | string | number | null | undefined): string {
-  if (!status) return '待處理'
+function getStatusName(status: any): string {
+  if (!status) return ''
 
-  // If status is an object with Name or identifier
-  if (typeof status === 'object') {
-    return status.identifier || status.Name || String(status.id) || '待處理'
+  // Status is now stored as a string name in Result field (e.g., "waiting", "open", "closed")
+  if (typeof status === 'string') {
+    return status
   }
 
-  // If status is a number, look it up in availableStatuses
-  if (typeof status === 'number' || typeof status === 'string') {
-    const statusId = typeof status === 'string' ? Number(status) : status
-    const found = availableStatuses.value.find(s => s.R_Status_ID === statusId)
-    if (found) return found.Name
+  // Legacy support: if it's an object with Name
+  if (typeof status === 'object' && status.Name) {
+    return status.Name
   }
 
-  return '待處理'
+  return ''
 }
 
 function getCurrentStatusId(): number {

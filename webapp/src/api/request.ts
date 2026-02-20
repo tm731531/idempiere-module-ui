@@ -11,7 +11,7 @@ export interface RequestData {
 
 export async function listRequests(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Processed',
+    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Processed,LastResult',
     '$expand': 'R_Status_ID,C_BPartner_ID',
     '$orderby': 'Created desc',
     '$top': '100',

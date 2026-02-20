@@ -62,7 +62,7 @@ describe('StatusUpdateModal', () => {
 
     expect(wrapper.emitted('status-selected')).toBeTruthy()
     const emitted = wrapper.emitted('status-selected')?.[0] as any[]
-    expect(emitted[0]).toBe(4)
+    expect(emitted[0]).toBe('已指派')
   })
 
   it('emits close event when cancel button is clicked', async () => {

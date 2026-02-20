@@ -16,16 +16,11 @@ interface ActivityPayload {
   createdBy?: string
 }
 
-interface StatusPayload {
-  requestId: number
-}
-
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   'add-activity': [payload: ActivityPayload]
-  'update-status': [payload: StatusPayload]
-  'set-tracking': [payload: StatusPayload]
+  'set-tracking': [payload: { requestId: number }]
 }>()
 
 const showActivityModal = ref(false)
@@ -47,12 +42,6 @@ function handleActivityAdded(payload: ActivityPayload) {
 
 function closeActivityModal() {
   showActivityModal.value = false
-}
-
-function handleStatusClick() {
-  emit('update-status', {
-    requestId: props.requestId,
-  })
 }
 
 function handleTrackingClick() {
@@ -98,19 +87,6 @@ function handleTrackingClick() {
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
         <span>發訊息</span>
-      </button>
-
-      <!-- 更新狀態 -->
-      <button
-        class="action-btn"
-        :disabled="disabled"
-        @click="handleStatusClick"
-        title="更新狀態"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M9 11l3 3L22 4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span>更新狀態</span>
       </button>
 
       <!-- 預約追蹤 -->

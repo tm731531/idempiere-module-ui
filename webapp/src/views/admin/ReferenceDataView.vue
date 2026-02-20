@@ -76,6 +76,11 @@
           </p>
         </div>
 
+        <!-- Status management panel -->
+        <div v-if="selectedTable.customSection === 'request-status-management'" class="status-management-section">
+          <StatusManagementPanel />
+        </div>
+
         <!-- Add form -->
         <div class="add-section">
           <div class="add-form">
@@ -155,6 +160,7 @@ import { apiClient } from '@/api/client'
 import { lookupOrgWarehouse, lookupDefaultTaxCategoryId, clearLookupCache, updatePriceListTaxIncluded } from '@/api/lookup'
 import DynamicForm from '@/components/DynamicForm.vue'
 import { useDocumentForm } from '@/composables/useDocumentForm'
+import StatusManagementPanel from '@/components/StatusManagementPanel.vue'
 
 interface ExtraField {
   key: string
@@ -170,12 +176,12 @@ interface ManagedTable {
   tableName: string
   label: string
   description: string
-  idColumn: string
+  idColumn?: string | null        // optional for custom sections
   tabId: number                  // AD_Tab_ID for DynamicForm metadata
   nameField?: string             // default 'Name'
   extraFields?: ExtraField[]
   displayColumns?: (rec: any) => string
-  customSection?: 'tax-mode'
+  customSection?: 'tax-mode' | 'request-status-management'
   extraDefaults?: () => Promise<Record<string, any>>
 }
 
@@ -294,6 +300,14 @@ const managedTables: ManagedTable[] = [
         IsSameCurrency: false,
       }
     },
+  },
+  {
+    tableName: 'RequestStatusConfig',
+    label: '諮詢狀態',
+    description: '自訂諮詢狀態選項（待處理、處理中、已完成等）',
+    idColumn: null,
+    tabId: 0,
+    customSection: 'request-status-management',
   },
 ]
 

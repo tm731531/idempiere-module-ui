@@ -28,7 +28,7 @@ describe('Mobile Responsive Design - Touch Targets', () => {
     })
 
     const buttons = wrapper.findAll('.action-btn')
-    expect(buttons.length).toBe(4)
+    expect(buttons.length).toBe(3)
 
     // Verify each button has proper structure
     buttons.forEach((btn, index) => {
@@ -230,7 +230,6 @@ describe('Mobile Responsive Design - Text Content', () => {
 
     expect(labels).toContain('記錄打電話')
     expect(labels).toContain('發訊息')
-    expect(labels).toContain('更新狀態')
     expect(labels).toContain('預約追蹤')
   })
 
@@ -316,7 +315,7 @@ describe('Mobile Responsive Design - User Interactions', () => {
     await confirmBtn.trigger('click')
 
     expect(wrapper.emitted('status-selected')).toBeTruthy()
-    expect(wrapper.emitted('status-selected')?.[0]).toEqual([2])
+    expect(wrapper.emitted('status-selected')?.[0]).toEqual(['已完成'])
   })
 
   it('QuickActionBar emits events on button clicks', async () => {
@@ -345,12 +344,8 @@ describe('Mobile Responsive Design - User Interactions', () => {
     // @ts-ignore
     wrapper.vm.showActivityModal = false
 
-    // Status button
+    // Tracking button (now at index 2 after removing status button)
     await buttons[2]!.trigger('click')
-    expect(wrapper.emitted('update-status')).toBeTruthy()
-
-    // Tracking button
-    await buttons[3]!.trigger('click')
     expect(wrapper.emitted('set-tracking')).toBeTruthy()
   })
 
@@ -415,7 +410,6 @@ describe('Mobile Responsive Design - Accessibility', () => {
 
     expect(titles).toContain('記錄打電話')
     expect(titles).toContain('發訊息')
-    expect(titles).toContain('更新狀態')
     expect(titles).toContain('預約追蹤')
   })
 

@@ -13,7 +13,6 @@ describe('QuickActionBar', () => {
 
     expect(wrapper.text()).toContain('記錄打電話')
     expect(wrapper.text()).toContain('發訊息')
-    expect(wrapper.text()).toContain('更新狀態')
     expect(wrapper.text()).toContain('預約追蹤')
   })
 
@@ -80,22 +79,6 @@ describe('QuickActionBar', () => {
     expect(wrapper.emitted('add-activity')?.[0]?.[0]).toEqual(activity)
   })
 
-  it('emits update-status event when status button clicked', async () => {
-    const wrapper = mount(QuickActionBar, {
-      props: {
-        requestId: 123,
-        currentStatus: '待處理',
-      },
-    })
-
-    const buttons = wrapper.findAll('button')
-    await buttons[2]!.trigger('click')
-
-    expect(wrapper.emitted('update-status')).toBeTruthy()
-    const emitted = wrapper.emitted('update-status')?.[0] as any[]
-    expect(emitted?.[0]?.requestId).toBe(123)
-  })
-
   it('emits set-tracking event when tracking button clicked', async () => {
     const wrapper = mount(QuickActionBar, {
       props: {
@@ -105,7 +88,7 @@ describe('QuickActionBar', () => {
     })
 
     const buttons = wrapper.findAll('button')
-    await buttons[3]!.trigger('click')
+    await buttons[2]!.trigger('click')
 
     expect(wrapper.emitted('set-tracking')).toBeTruthy()
     const emitted = wrapper.emitted('set-tracking')?.[0] as any[]

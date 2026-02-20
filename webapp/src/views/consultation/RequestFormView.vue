@@ -10,6 +10,17 @@
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
 
     <form v-else @submit.prevent="handleSubmit">
+      <!-- Status Selector -->
+      <div class="form-group">
+        <label>狀態</label>
+        <select v-model="selectedStatus" class="status-select" @change="updateLastResultField">
+          <option value="">-- 選擇狀態 --</option>
+          <option value="待處理">待處理</option>
+          <option value="處理中">處理中</option>
+          <option value="已完成">已完成</option>
+        </select>
+      </div>
+
       <!-- Dynamic form from AD metadata -->
       <DynamicForm
         :fieldDefs="visibleFieldDefs"
@@ -123,6 +134,7 @@ import {
   listRequestStatuses,
   type RequestData,
 } from '@/api/request'
+import { getSysConfig } from '@/api/sysconfig'
 
 // Fallback statuses when API returns empty
 // These IDs must match actual R_Status records in the database
@@ -170,6 +182,7 @@ const highlightColumns = ['C_BPartner_ID']
 
 const submitting = ref(false)
 const errorMsg = ref('')
+const selectedStatus = ref('')
 
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
@@ -223,11 +236,22 @@ async function handleSubmit() {
   try {
     if (isEdit.value && requestId.value) {
       console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
-      // Don't send R_Status_ID (has REST API design flaw)
-      // Status stored in Result field instead
+      // Create payload with only updateable fields
       const updatePayload = { ...cleanPayload }
+      // Remove non-updateable system fields
       delete updatePayload.R_Status_ID
-      console.log('🔄 Final updatePayload (Result field included):', updatePayload)
+      delete updatePayload.DateLastAction
+      delete updatePayload.DateCreated
+      delete updatePayload.CreatedBy
+      delete updatePayload.Updated
+      delete updatePayload.UpdatedBy
+      delete updatePayload.Processed
+      // Explicitly include LastResult field for status
+      if (selectedStatus.value) {
+        updatePayload.LastResult = selectedStatus.value
+        console.log('📝 Added LastResult to payload:', updatePayload.LastResult)
+      }
+      console.log('🔄 Final updatePayload (system fields removed):', updatePayload)
       await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
@@ -263,6 +287,12 @@ async function handleRemoveAttachment(fileName: string) {
   await remove(requestId.value, fileName)
 }
 
+function updateLastResultField() {
+  // When user selects a status, update the LastResult field
+  formData.value.LastResult = selectedStatus.value
+  console.log('📝 Status updated to:', selectedStatus.value)
+}
+
 function goBack() {
   router.push({ name: 'consultation-list' })
 }
@@ -290,10 +320,7 @@ function handleAddActivity(activity: Partial<Activity>) {
 }
 
 function handleUpdateStatus() {
-  console.log('🔘 handleUpdateStatus called')
-  console.log('   availableStatuses.value:', availableStatuses.value)
   showStatusModal.value = true
-  console.log('   showStatusModal.value:', showStatusModal.value)
 }
 
 function handleSetTracking() {
@@ -369,26 +396,37 @@ function getCurrentStatusId(): number {
 
 async function loadAvailableStatuses() {
   try {
-    // Fetch actual statuses from API
-    const apiStatuses = await listRequestStatuses()
-    console.log('🔍 Loaded statuses from API:', apiStatuses)
-    console.log('📋 Using FALLBACK_STATUSES as:', FALLBACK_STATUSES)
+    // Load statuses from SysConfig (MobileSettingConfig)
+    const configValue = await getSysConfig('MobileSettingConfig')
 
-    // If API returns statuses, use them; otherwise use fallback
-    if (apiStatuses && apiStatuses.length > 0) {
-      availableStatuses.value = apiStatuses
-      console.log('✅ Using API statuses:', availableStatuses.value)
-    } else {
-      console.warn('⚠️ No statuses from API, using fallback statuses')
-      availableStatuses.value = FALLBACK_STATUSES
-      console.log('✅ Using FALLBACK_STATUSES:', availableStatuses.value)
+    if (configValue) {
+      try {
+        const statuses = JSON.parse(configValue)
+        availableStatuses.value = statuses
+        console.log('✅ Loaded statuses from SysConfig:', statuses)
+        return
+      } catch (e) {
+        console.error('❌ Failed to parse SysConfig JSON:', e)
+      }
     }
+
+    // Fallback: use hardcoded default statuses
+    console.warn('⚠️ No SysConfig found, using default statuses')
+    const defaultStatuses = [
+      { R_Status_ID: 0, Name: '待處理' },
+      { R_Status_ID: 1, Name: '處理中' },
+      { R_Status_ID: 2, Name: '已完成' },
+    ]
+    availableStatuses.value = defaultStatuses
+    console.log('✅ Using default statuses:', defaultStatuses)
   } catch (e: any) {
-    // Fallback if API call fails
-    console.error('❌ Failed to load statuses from API:', e)
-    console.warn('⚠️ Using fallback statuses')
-    availableStatuses.value = FALLBACK_STATUSES
-    console.log('✅ Using FALLBACK_STATUSES:', availableStatuses.value)
+    console.error('❌ Failed to load statuses:', e)
+    // Final fallback
+    availableStatuses.value = [
+      { R_Status_ID: 0, Name: '待處理' },
+      { R_Status_ID: 1, Name: '處理中' },
+      { R_Status_ID: 2, Name: '已完成' },
+    ]
   }
 }
 
@@ -416,6 +454,11 @@ onMounted(async () => {
   }
 
   await loadAvailableStatuses()
+
+  // Initialize status selector from LastResult field
+  selectedStatus.value = formData.value.LastResult || ''
+  console.log('📝 Initialized status selector:', selectedStatus.value)
+
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)
   }
@@ -425,6 +468,7 @@ onMounted(async () => {
 <style scoped>
 .request-form-page {
   padding: 1rem;
+  padding-bottom: 30rem;
   max-width: 600px;
   margin: 0 auto;
 }

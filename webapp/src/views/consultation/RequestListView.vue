@@ -68,16 +68,15 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
+import { getSysConfig } from '@/api/sysconfig'
 import ConsultationDashboard from '@/components/ConsultationDashboard.vue'
 
-type TabKey = 'all' | 'active' | 'done'
+type TabKey = string // Now dynamic based on SysConfig
 type ViewMode = 'list' | 'dashboard'
 
-const tabs: { key: TabKey; label: string }[] = [
+const tabs = ref<{ key: TabKey; label: string }[]>([
   { key: 'all', label: '全部' },
-  { key: 'active', label: '進行中' },
-  { key: 'done', label: '已完成' },
-]
+])
 
 const router = useRouter()
 
@@ -89,9 +88,11 @@ const loading = ref(false)
 const dashboardLoading = ref(false)
 
 function getFilterForTab(tab: TabKey): string | undefined {
-  if (tab === 'active') return 'Processed eq false'
-  if (tab === 'done') return 'Processed eq true'
-  return undefined
+  // 'all' returns undefined (no filter)
+  if (tab === 'all') return undefined
+
+  // Filter based on LastResult status field
+  return `LastResult eq '${tab}'`
 }
 
 async function loadRequests() {
@@ -135,6 +136,11 @@ function getCustomerName(r: any): string {
 }
 
 function getStatusName(r: any): string {
+  // Display LastResult field (status selected by user)
+  if (r.LastResult) {
+    return r.LastResult
+  }
+  // Fallback to R_Status_ID if LastResult is empty
   if (r.R_Status_ID && typeof r.R_Status_ID === 'object') {
     return r.R_Status_ID.identifier || r.R_Status_ID.Name || ''
   }
@@ -162,7 +168,26 @@ function goToNew() {
   router.push({ name: 'consultation-new' })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Load available statuses from SysConfig
+  const configValue = await getSysConfig('MobileSettingConfig')
+  if (configValue) {
+    try {
+      const statuses = JSON.parse(configValue)
+      // Add status tabs (keep 'all' as first tab)
+      tabs.value = [
+        { key: 'all', label: '全部' },
+        ...statuses.map((s: any) => ({
+          key: s.Name || s,
+          label: s.Name || s,
+        })),
+      ]
+      console.log('✅ Loaded status tabs from SysConfig:', tabs.value)
+    } catch (e) {
+      console.error('❌ Failed to parse SysConfig JSON:', e)
+    }
+  }
+
   loadRequests()
   loadAllRequests()  // Pre-load all requests for dashboard
 })

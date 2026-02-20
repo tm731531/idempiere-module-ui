@@ -76,11 +76,13 @@
           </p>
         </div>
 
-        <!-- Status management panel -->
+        <!-- Status management panel (custom section - no standard CRUD) -->
         <div v-if="selectedTable.customSection === 'request-status-management'" class="status-management-section">
           <StatusManagementPanel />
         </div>
 
+        <!-- Standard CRUD sections (only for tables without custom sections) -->
+        <template v-if="!selectedTable.customSection">
         <!-- Add form -->
         <div class="add-section">
           <div class="add-form">
@@ -147,6 +149,7 @@
             </button>
           </div>
         </div>
+        </template>
       </template>
     </template>
   </div>

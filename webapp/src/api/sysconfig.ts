@@ -38,20 +38,22 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
     const resp = await apiClient.get('/api/v1/models/AD_SysConfig', {
       params: {
         '$filter': `Name eq '${name}'`,
-        '$select': 'Name,Value,id',
+        '$select': 'AD_SysConfig_ID,Name,Value',
       },
     })
     const records = resp.data.records || []
-    
+
     if (records.length > 0) {
       // Update existing
-      const id = records[0].id
-      await apiClient.put(`/api/v1/models/AD_SysConfig/${id}`, { Value: value })
+      const configId = records[0].AD_SysConfig_ID
+      await apiClient.put(`/api/v1/models/AD_SysConfig/${configId}`, { Value: value })
       console.log('✅ Updated SysConfig:', name)
       return true
     } else {
-      // Create new
+      // Create new - requires AD_Org_ID, AD_Client_ID, Name, Value
       await apiClient.post('/api/v1/models/AD_SysConfig', {
+        AD_Org_ID: 0,
+        AD_Client_ID: 0,
         Name: name,
         Value: value,
         Description: 'Mobile consultation request statuses',

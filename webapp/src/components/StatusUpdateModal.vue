@@ -75,7 +75,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  'status-selected': [statusId: number]
+  'status-selected': [statusName: string]
   'close': []
 }>()
 

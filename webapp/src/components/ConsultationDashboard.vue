@@ -5,6 +5,7 @@ import { REQUEST_STATUS_IDS, isWaitingStatus, STATISTICS_CONFIG } from '@/config
 
 interface Props {
   requests: any[]
+  statuses?: string[] // 自定義狀態列表 (from SysConfig)
 }
 
 interface DrillDownState {
@@ -33,6 +34,19 @@ const statusItems = computed(() => {
     status,
     count,
   }))
+})
+
+// 計算自定義狀態的數量 (for metrics section)
+const customStatusMetrics = computed(() => {
+  if (!props.statuses || props.statuses.length === 0) return []
+
+  return props.statuses.map((statusName) => {
+    const count = props.requests.filter((r) => (r.LastResult || r.R_Status_ID?.id) === statusName).length
+    return {
+      statusName,
+      count,
+    }
+  })
 })
 
 const hasWarnings = computed(() => {
@@ -217,36 +231,36 @@ const formatDate = (dateStr: string) => {
           <div class="metric-unit">筆</div>
         </div>
 
-        <!-- 轉化率 -->
-        <div class="metric-card">
-          <div class="metric-label">轉化率</div>
-          <div class="metric-value">{{ stats.conversionRate }}</div>
-          <div class="metric-unit">已完成</div>
-        </div>
-
-        <!-- 平均回應時間 -->
-        <div class="metric-card">
-          <div class="metric-label">平均回應時間</div>
-          <div class="metric-value">{{ stats.avgResponseTime }}</div>
-          <div class="metric-unit">小時</div>
-        </div>
-
-        <!-- 未完成數 -->
-        <div class="metric-card">
-          <div class="metric-label">未完成數</div>
-          <div class="metric-value">{{ stats.pendingCount }}</div>
+        <!-- 自定義狀態卡片 -->
+        <div
+          v-for="item in customStatusMetrics"
+          :key="item.statusName"
+          class="metric-card"
+          :class="{ 'drill-active': drillDown.type === 'status' && drillDown.value === item.statusName }"
+          @click.stop="drillIntoStatus(item.statusName, item.count)"
+        >
+          <div class="metric-label">{{ item.statusName }}</div>
+          <div class="metric-value">{{ item.count }}</div>
           <div class="metric-unit">筆</div>
         </div>
 
         <!-- 沉默諮詢 -->
-        <div class="metric-card warning">
+        <div
+          class="metric-card warning"
+          :class="{ 'drill-active': drillDown.type === 'warning' && drillDown.value === 'silent' }"
+          @click.stop="drillIntoWarning('silent')"
+        >
           <div class="metric-label">沉默諮詢</div>
           <div class="metric-value">{{ stats.silentCount }}</div>
           <div class="metric-unit">筆</div>
         </div>
 
         <!-- 流失客戶 -->
-        <div class="metric-card warning">
+        <div
+          class="metric-card warning"
+          :class="{ 'drill-active': drillDown.type === 'warning' && drillDown.value === 'lost' }"
+          @click.stop="drillIntoWarning('lost')"
+        >
           <div class="metric-label">流失客戶</div>
           <div class="metric-value">{{ stats.lostCustomerCount }}</div>
           <div class="metric-unit">筆</div>

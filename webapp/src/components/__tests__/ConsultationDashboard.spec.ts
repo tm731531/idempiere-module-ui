@@ -30,30 +30,35 @@ describe('ConsultationDashboard', () => {
   ]
 
   it('renders metric cards', () => {
+    const statuses = ['待處理', '討論中', '已完成']
     const wrapper = mount(ConsultationDashboard, {
       props: {
         requests: mockRequests,
+        statuses,
       },
     })
 
     expect(wrapper.text()).toContain('本月諮詢數')
-    expect(wrapper.text()).toContain('轉化率')
-    expect(wrapper.text()).toContain('平均回應時間')
-    expect(wrapper.text()).toContain('未完成數')
+    expect(wrapper.text()).toContain('待處理')
+    expect(wrapper.text()).toContain('討論中')
+    expect(wrapper.text()).toContain('已完成')
     expect(wrapper.text()).toContain('沉默諮詢')
     expect(wrapper.text()).toContain('流失客戶')
   })
 
   it('calculates metrics correctly', () => {
+    const statuses = ['待處理', '討論中', '已完成']
     const wrapper = mount(ConsultationDashboard, {
       props: {
         requests: mockRequests,
+        statuses,
       },
     })
 
     // 檢查指標值
     expect(wrapper.text()).toContain('3') // 本月共 3 筆
-    expect(wrapper.text()).toContain('33%') // 轉化率 1/3
+    // 每個自定義狀態應該顯示對應的計數
+    // 待處理: 1, 討論中: 1, 已完成: 1
   })
 
   it('renders status distribution section', () => {

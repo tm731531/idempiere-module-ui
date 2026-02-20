@@ -59,7 +59,7 @@
     <!-- Dashboard View -->
     <div v-else class="dashboard-view">
       <div v-if="dashboardLoading" class="loading-state">載入儀表板中...</div>
-      <ConsultationDashboard v-else :requests="allRequests" />
+      <ConsultationDashboard v-else :requests="allRequests" :statuses="customStatuses" />
     </div>
   </div>
 </template>
@@ -84,6 +84,7 @@ const viewMode = ref<ViewMode>('list')
 const activeTab = ref<TabKey>('all')
 const requests = ref<any[]>([])
 const allRequests = ref<any[]>([])
+const customStatuses = ref<string[]>([]) // 自定義狀態列表
 const loading = ref(false)
 const dashboardLoading = ref(false)
 
@@ -174,6 +175,8 @@ onMounted(async () => {
   if (configValue) {
     try {
       const statuses = JSON.parse(configValue)
+      // Extract status names for dashboard
+      customStatuses.value = statuses.map((s: any) => s.Name || s)
       // Add status tabs (keep 'all' as first tab)
       tabs.value = [
         { key: 'all', label: '全部' },
@@ -183,6 +186,7 @@ onMounted(async () => {
         })),
       ]
       console.log('✅ Loaded status tabs from SysConfig:', tabs.value)
+      console.log('✅ Custom statuses for dashboard:', customStatuses.value)
     } catch (e) {
       console.error('❌ Failed to parse SysConfig JSON:', e)
     }

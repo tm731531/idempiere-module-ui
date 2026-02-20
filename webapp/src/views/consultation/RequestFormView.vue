@@ -290,7 +290,10 @@ function handleAddActivity(activity: Partial<Activity>) {
 }
 
 function handleUpdateStatus() {
+  console.log('🔘 handleUpdateStatus called')
+  console.log('   availableStatuses.value:', availableStatuses.value)
   showStatusModal.value = true
+  console.log('   showStatusModal.value:', showStatusModal.value)
 }
 
 function handleSetTracking() {

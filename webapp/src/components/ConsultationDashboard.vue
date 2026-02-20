@@ -320,12 +320,22 @@ const formatDate = (dateStr: string) => {
       <!-- Summary View (when collapsed) -->
       <div v-if="!isExpanded('customers')" class="summary-view">
         <div class="customer-summary">
-          <div v-if="stats.topCustomers[0]" class="summary-item">
+          <div
+            v-if="stats.topCustomers[0]"
+            class="summary-item"
+            :class="{ 'drill-active': drillDown.type === 'customer' && drillDown.value === stats.topCustomers[0]?.customerId }"
+            @click.stop="drillIntoCustomer(stats.topCustomers[0]?.customerId, stats.topCustomers[0]?.name, stats.topCustomers[0]?.count)"
+          >
             <span class="summary-label">Top 1</span>
             <span class="summary-value">{{ stats.topCustomers[0]?.name }}</span>
             <span class="summary-count">{{ stats.topCustomers[0]?.count }} 筆</span>
           </div>
-          <div v-if="stats.topCustomers[1]" class="summary-item">
+          <div
+            v-if="stats.topCustomers[1]"
+            class="summary-item"
+            :class="{ 'drill-active': drillDown.type === 'customer' && drillDown.value === stats.topCustomers[1]?.customerId }"
+            @click.stop="drillIntoCustomer(stats.topCustomers[1]?.customerId, stats.topCustomers[1]?.name, stats.topCustomers[1]?.count)"
+          >
             <span class="summary-label">Top 2</span>
             <span class="summary-value">{{ stats.topCustomers[1]?.name }}</span>
             <span class="summary-count">{{ stats.topCustomers[1]?.count }} 筆</span>

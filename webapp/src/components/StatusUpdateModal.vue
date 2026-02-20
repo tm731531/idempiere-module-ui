@@ -49,7 +49,7 @@
           type="button"
           class="btn btn-primary"
           :disabled="displayStatuses.length === 0 || selectedStatusId === null"
-          @click="handleConfirm"
+          @click="() => { console.log('🔘 Confirm button clicked'); handleConfirm() }"
         >
           確認
         </button>
@@ -116,6 +116,10 @@ watch(
   () => props.currentStatusId,
   () => {
     selectedStatusId.value = normalizedCurrentStatusId.value
+    console.log('📋 Modal initialized')
+    console.log('   displayStatuses:', props.statuses)
+    console.log('   selectedStatusId:', selectedStatusId.value)
+    console.log('   button disabled?:', props.statuses.length === 0 || selectedStatusId.value === null)
   },
   { immediate: true }
 )

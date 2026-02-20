@@ -569,6 +569,14 @@ const formatDate = (dateStr: string) => {
   margin-right: 12px;
 }
 
+.customer-summary .summary-item.drill-active {
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 0 -12px;
+  cursor: pointer;
+}
+
 /* Warning Summary */
 .warning-summary {
   display: flex;

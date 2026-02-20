@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { calculateStats } from '@/utils/dashboardStats'
 
 interface Props {
@@ -7,6 +7,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// 展開狀態
+const expandedSections = ref<Set<string>>(new Set([
+  'metrics',      // 預設展開關鍵指標
+  'status',       // 預設展開狀態分布
+]))
 
 const stats = computed(() => {
   return calculateStats(props.requests)
@@ -22,14 +28,30 @@ const statusItems = computed(() => {
 const hasWarnings = computed(() => {
   return stats.value.silentCount > 0 || stats.value.lostCustomerCount > 0
 })
+
+// 切換展開/折疊
+const toggleSection = (sectionId: string) => {
+  if (expandedSections.value.has(sectionId)) {
+    expandedSections.value.delete(sectionId)
+  } else {
+    expandedSections.value.add(sectionId)
+  }
+}
+
+const isExpanded = (sectionId: string) => {
+  return expandedSections.value.has(sectionId)
+}
 </script>
 
 <template>
   <div class="consultation-dashboard">
     <!-- Metrics Section -->
-    <section class="metrics-section">
-      <h2 class="section-title">關鍵指標</h2>
-      <div class="metrics-grid">
+    <section class="metrics-section collapsible" @click="toggleSection('metrics')">
+      <h2 class="section-title">
+        <span class="toggle-icon">{{ isExpanded('metrics') ? '▼' : '▶' }}</span>
+        關鍵指標
+      </h2>
+      <div v-if="isExpanded('metrics')" class="metrics-grid">
         <!-- 本月諮詢數 -->
         <div class="metric-card">
           <div class="metric-label">本月諮詢數</div>
@@ -75,43 +97,58 @@ const hasWarnings = computed(() => {
     </section>
 
     <!-- Status Distribution Section -->
-    <section class="status-section">
-      <h2 class="section-title">狀態分布</h2>
-      <div v-if="statusItems.length > 0" class="status-list">
-        <div v-for="item in statusItems" :key="item.status" class="status-item">
-          <span class="status-name">{{ item.status }}</span>
-          <span class="status-count">{{ item.count }}</span>
+    <section class="status-section collapsible" @click="toggleSection('status')">
+      <h2 class="section-title">
+        <span class="toggle-icon">{{ isExpanded('status') ? '▼' : '▶' }}</span>
+        狀態分布
+      </h2>
+      <div v-if="isExpanded('status')">
+        <div v-if="statusItems.length > 0" class="status-list">
+          <div v-for="item in statusItems" :key="item.status" class="status-item">
+            <span class="status-name">{{ item.status }}</span>
+            <span class="status-count">{{ item.count }}</span>
+          </div>
         </div>
+        <div v-else class="empty-state">暫無資料</div>
       </div>
-      <div v-else class="empty-state">暫無資料</div>
     </section>
 
     <!-- Top Customers Section -->
-    <section v-if="stats.topCustomers.length > 0" class="customers-section">
-      <h2 class="section-title">活躍客戶排行</h2>
-      <div class="customers-list">
-        <div v-for="(customer, index) in stats.topCustomers" :key="customer.customerId" class="customer-item">
-          <span class="customer-rank">{{ index + 1 }}</span>
-          <span class="customer-name">{{ customer.name }}</span>
-          <span class="customer-count">{{ customer.count }}</span>
+    <section v-if="stats.topCustomers.length > 0" class="customers-section collapsible" @click="toggleSection('customers')">
+      <h2 class="section-title">
+        <span class="toggle-icon">{{ isExpanded('customers') ? '▼' : '▶' }}</span>
+        活躍客戶排行
+      </h2>
+      <div v-if="isExpanded('customers')">
+        <div class="customers-list">
+          <div v-for="(customer, index) in stats.topCustomers" :key="customer.customerId" class="customer-item">
+            <span class="customer-rank">{{ index + 1 }}</span>
+            <span class="customer-name">{{ customer.name }}</span>
+            <span class="customer-count">{{ customer.count }}</span>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- Warning Section -->
-    <section class="warning-section">
-      <h2 class="section-title">預警清單</h2>
-      <div v-if="hasWarnings" class="warning-list">
-        <div v-if="stats.silentCount > 0" class="warning-item silent">
-          <span class="warning-icon">⏱️</span>
-          <span class="warning-text">有 {{ stats.silentCount }} 筆諮詢超過 7 天未回應</span>
+    <section class="warning-section collapsible" @click="toggleSection('warnings')">
+      <h2 class="section-title">
+        <span class="toggle-icon">{{ isExpanded('warnings') ? '▼' : '▶' }}</span>
+        預警清單
+      </h2>
+      <div v-if="isExpanded('warnings')">
+        <div v-if="hasWarnings" class="warning-list">
+          <div v-if="stats.silentCount > 0" class="warning-item silent">
+            <span class="warning-icon">⏱️</span>
+            <span class="warning-text">有 {{ stats.silentCount }} 筆諮詢超過 7 天未回應</span>
+          </div>
+          <div v-if="stats.lostCustomerCount > 0" class="warning-item lost">
+            <span class="warning-icon">📉</span>
+            <span class="warning-text">有 {{ stats.lostCustomerCount }} 個客戶 90 天無新諮詢</span>
+          </div>
         </div>
-        <div v-if="stats.lostCustomerCount > 0" class="warning-item lost">
-          <span class="warning-icon">📉</span>
-          <span class="warning-text">有 {{ stats.lostCustomerCount }} 個客戶 90 天無新諮詢</span>
-        </div>
+        <div v-else class="empty-state">暫無警告</div>
       </div>
-      <div v-else class="empty-state">暫無警告</div>
     </section>
   </div>
 </template>
@@ -130,6 +167,25 @@ const hasWarnings = computed(() => {
   margin: 0 0 16px 0;
   padding-bottom: 8px;
   border-bottom: 2px solid var(--color-primary, #3b82f6);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+/* 可折疊區塊 */
+.collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible:hover .section-title {
+  opacity: 0.8;
 }
 
 /* Metrics Section */

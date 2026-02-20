@@ -41,10 +41,11 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   // Filter requests from current month only
   const thisMonth = requests.filter((r) => new Date(r.Created).getTime() >= monthStart)
 
-  // 計算狀態分布
+  // 計算狀態分布（使用 LastResult 字段）
   const statusDist: Record<string, number> = {}
   filtered.forEach((r) => {
-    const status = r.R_Status_ID?.id || REQUEST_STATUS_IDS.PENDING
+    // 優先使用 LastResult（新的狀態字段），回退到 R_Status_ID
+    const status = r.LastResult || r.R_Status_ID?.id || REQUEST_STATUS_IDS.PENDING
     statusDist[status] = (statusDist[status] || 0) + 1
   })
 

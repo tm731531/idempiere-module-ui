@@ -10,14 +10,14 @@
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
 
     <form v-else @submit.prevent="handleSubmit">
-      <!-- Status Selector -->
+      <!-- Status Selector (dynamically loaded from SysConfig) -->
       <div class="form-group">
         <label>狀態</label>
         <select v-model="selectedStatus" class="status-select" @change="updateLastResultField">
           <option value="">-- 選擇狀態 --</option>
-          <option value="待處理">待處理</option>
-          <option value="處理中">處理中</option>
-          <option value="已完成">已完成</option>
+          <option v-for="status in statusOptions" :key="status" :value="status">
+            {{ status }}
+          </option>
         </select>
       </div>
 
@@ -183,6 +183,7 @@ const highlightColumns = ['C_BPartner_ID']
 const submitting = ref(false)
 const errorMsg = ref('')
 const selectedStatus = ref('')
+const statusOptions = ref<string[]>([])  // 動態加載的狀態選項
 
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
@@ -403,7 +404,10 @@ async function loadAvailableStatuses() {
       try {
         const statuses = JSON.parse(configValue)
         availableStatuses.value = statuses
+        // 提取 Name 字段用於下拉選單
+        statusOptions.value = statuses.map((s: any) => s.Name)
         console.log('✅ Loaded statuses from SysConfig:', statuses)
+        console.log('✅ Status options for dropdown:', statusOptions.value)
         return
       } catch (e) {
         console.error('❌ Failed to parse SysConfig JSON:', e)
@@ -418,15 +422,18 @@ async function loadAvailableStatuses() {
       { R_Status_ID: 2, Name: '已完成' },
     ]
     availableStatuses.value = defaultStatuses
+    statusOptions.value = defaultStatuses.map(s => s.Name)
     console.log('✅ Using default statuses:', defaultStatuses)
   } catch (e: any) {
     console.error('❌ Failed to load statuses:', e)
     // Final fallback
-    availableStatuses.value = [
+    const fallbackStatuses = [
       { R_Status_ID: 0, Name: '待處理' },
       { R_Status_ID: 1, Name: '處理中' },
       { R_Status_ID: 2, Name: '已完成' },
     ]
+    availableStatuses.value = fallbackStatuses
+    statusOptions.value = fallbackStatuses.map(s => s.Name)
   }
 }
 

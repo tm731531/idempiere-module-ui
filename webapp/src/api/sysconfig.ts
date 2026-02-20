@@ -75,8 +75,14 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
 
     if (records.length > 0) {
       // Update existing
-      const configId = records[0].AD_SysConfig_ID
-      console.log(`🔍 Updating SysConfig at org-level: configId=${configId}`)
+      console.log('📋 Full record:', JSON.stringify(records[0], null, 2))
+      console.log('📋 All keys:', Object.keys(records[0]))
+      const configId = records[0].AD_SysConfig_ID || records[0].id || records[0].adSysconfigId
+      console.log(`🔍 Found configId=${configId} (type: ${typeof configId})`)
+      if (!configId) {
+        console.error('❌ No ID field found. Available keys:', Object.keys(records[0]))
+        return false
+      }
       await apiClient.put(`/api/v1/models/AD_SysConfig/${configId}`, { Value: value })
       console.log('✅ Updated SysConfig at organization level:', name)
       return true

@@ -48,6 +48,13 @@
           </div>
           <div class="card-meta">
             <span class="card-status">{{ getStatusName(r) }}</span>
+            <span
+              v-if="isConverted(r)"
+              class="conversion-badge"
+              :title="`訂單: ${getOrderNo(r)}`"
+            >
+              ✓ 已轉化
+            </span>
             <span class="card-date">{{ formatDate(r.Created) }}</span>
           </div>
         </div>
@@ -155,6 +162,27 @@ function formatDate(dateStr: string): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+// 檢查咨詢是否已轉化
+function isConverted(r: any): boolean {
+  try {
+    const activities = JSON.parse(r.Description || '[]')
+    return Array.isArray(activities) && activities.some((a: any) => a.actionType === 'ConversionOrder')
+  } catch {
+    return false
+  }
+}
+
+// 取得關聯的訂單號
+function getOrderNo(r: any): string {
+  try {
+    const activities = JSON.parse(r.Description || '[]')
+    const conv = activities.find((a: any) => a.actionType === 'ConversionOrder')
+    return conv?.linkedOrderNo || ''
+  } catch {
+    return ''
+  }
 }
 
 function goToEdit(r: any) {
@@ -343,6 +371,17 @@ onMounted(async () => {
 .card-date {
   font-size: 0.8125rem;
   color: #94a3b8;
+}
+
+.conversion-badge {
+  display: inline-block;
+  background: #10b981;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
 }
 
 .fab {

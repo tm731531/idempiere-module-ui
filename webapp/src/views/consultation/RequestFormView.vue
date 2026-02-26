@@ -76,6 +76,15 @@
 
       <div class="form-actions">
         <button type="button" class="cancel-btn" @click="goBack">取消</button>
+        <button
+          v-if="isEdit && formData.C_BPartner_ID"
+          type="button"
+          class="create-order-btn"
+          @click="onCreateOrder"
+          :disabled="submitting"
+        >
+          ✏️ 建立訂單
+        </button>
         <button type="submit" :disabled="submitting">
           {{ submitting ? '儲存中...' : '儲存' }}
         </button>
@@ -470,6 +479,21 @@ onMounted(async () => {
     await loadAttachments(requestId.value)
   }
 })
+
+// 建立訂單功能
+function onCreateOrder() {
+  if (!formData.value.C_BPartner_ID) {
+    alert('請先選擇客戶')
+    return
+  }
+
+  // 跳轉到訂單建立頁，帶入客戶 ID 和相關諮詢 ID
+  router.push({
+    name: 'order-create',
+    params: { customerId: formData.value.C_BPartner_ID },
+    query: { relatedConsultationId: requestId.value },
+  })
+}
 </script>
 
 <style scoped>
@@ -698,6 +722,33 @@ onMounted(async () => {
 
 .back-btn:active {
   background: #f9fafb;
+}
+
+.create-order-btn {
+  background: #3b82f6;
+  color: white;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+
+.create-order-btn:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.create-order-btn:active:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.create-order-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .timeline-section {

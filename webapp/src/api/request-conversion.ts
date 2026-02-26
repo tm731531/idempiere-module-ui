@@ -250,7 +250,7 @@ export function calculateConversionStats(requests: any[]): {
   // 組合結果
   const rate = (converted.length / requests.length) * 100
   const avgDays = conversionTimes.length > 0
-    ? (conversionTimes.reduce((a, b) => a + b, 0) / conversionTimes.length).toFixed(1)
+    ? ((conversionTimes as number[]).reduce((a: number, b: number) => a + b, 0) / conversionTimes.length).toFixed(1)
     : '-'
 
   return {

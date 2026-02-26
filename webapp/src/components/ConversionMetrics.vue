@@ -133,35 +133,30 @@ function calculateConversionRate() {
 
 // 計算平均轉化時間
 function calculateAvgConversionTime() {
-  const convertedRequests = props.requests
-    .filter(req => {
-      try {
-        const activities = JSON.parse(req.Description || '[]')
-        return Array.isArray(activities) && activities.some(a => a.actionType === 'ConversionOrder')
-      } catch {
-        return false
-      }
-    })
-    .map(req => {
-      try {
-        const activities = JSON.parse(req.Description || '[]')
+  const times: number[] = []
+
+  props.requests.forEach(req => {
+    try {
+      const activities = JSON.parse(req.Description || '[]')
+      if (Array.isArray(activities)) {
         const conversionActivity = activities.find((a: any) => a.actionType === 'ConversionOrder')
-        if (!conversionActivity) return null
-
-        const timeToConversion = new Date(conversionActivity.timestamp).getTime() - new Date(req.Created).getTime()
-        return timeToConversion / (1000 * 60 * 60 * 24) // 轉換為天數
-      } catch {
-        return null
+        if (conversionActivity) {
+          const timeToConversion = new Date(conversionActivity.timestamp).getTime() - new Date(req.Created).getTime()
+          const days = timeToConversion / (1000 * 60 * 60 * 24)
+          times.push(days)
+        }
       }
-    })
-    .filter((t: any) => t !== null)
+    } catch {
+      // 忽略 JSON 解析錯誤
+    }
+  })
 
-  if (convertedRequests.length === 0) {
+  if (times.length === 0) {
     metrics.avgConversionTime = '-'
     return
   }
 
-  const avg = convertedRequests.reduce((a, b) => a + b, 0) / convertedRequests.length
+  const avg = times.reduce((a: number, b: number) => a + b, 0) / times.length
   metrics.avgConversionTime = `${avg.toFixed(1)} 天`
 }
 

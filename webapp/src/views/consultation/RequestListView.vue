@@ -18,6 +18,12 @@
 
     <!-- List View -->
     <div v-if="viewMode === 'list'" class="list-view">
+      <!-- Operator Filter Banner -->
+      <div v-if="filterOperatorId" class="operator-filter-banner">
+        <span>篩選: {{ filterOperatorName }}</span>
+        <button class="clear-filter-btn" @click="clearOperatorFilter">清除篩選</button>
+      </div>
+
       <div class="filter-tabs">
         <button
           v-for="tab in tabs"
@@ -72,8 +78,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { listRequests } from '@/api/request'
 import { getSysConfig } from '@/api/sysconfig'
 import ConversionMetrics from '@/components/ConversionMetrics.vue'
@@ -86,6 +92,7 @@ const tabs = ref<{ key: TabKey; label: string }[]>([
 ])
 
 const router = useRouter()
+const route = useRoute()
 
 const viewMode = ref<ViewMode>('list')
 const activeTab = ref<TabKey>('all')
@@ -96,11 +103,36 @@ const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
 
-function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
-  if (statusName === 'all') return allReqs
+// 從 query 參數獲取操作人過濾
+const filterOperatorId = computed(() => {
+  const id = route.query.filterOperatorId
+  return id ? Number(id) : null
+})
+const filterOperatorName = computed(() => route.query.filterOperatorName as string || null)
 
-  // Client-side filtering: filter by LastResult field
-  return allReqs.filter(r => r.LastResult === statusName)
+function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
+  let filtered = allReqs
+
+  // Filter by status
+  if (statusName !== 'all') {
+    filtered = filtered.filter(r => r.LastResult === statusName)
+  }
+
+  // Filter by operator (if specified)
+  if (filterOperatorId.value) {
+    filtered = filtered.filter(r => {
+      // Check if UpdatedBy matches the operator ID
+      let updatedById: number | null = null
+      if (r.UpdatedBy && typeof r.UpdatedBy === 'object') {
+        updatedById = r.UpdatedBy.id
+      } else if (typeof r.UpdatedBy === 'number') {
+        updatedById = r.UpdatedBy
+      }
+      return updatedById === filterOperatorId.value
+    })
+  }
+
+  return filtered
 }
 
 async function loadRequests() {
@@ -178,13 +210,11 @@ function goToEdit(r: any) {
 }
 
 function goToNew() {
-  console.log('🆕 goToNew clicked - navigating to consultation-new')
-  try {
-    router.push({ name: 'consultation-new' })
-    console.log('✅ Navigation initiated')
-  } catch (e) {
-    console.error('❌ Navigation error:', e)
-  }
+  router.push({ name: 'consultation-new' })
+}
+
+function clearOperatorFilter() {
+  router.push({ name: 'consultation-list' })
 }
 
 onMounted(async () => {
@@ -384,6 +414,34 @@ onMounted(async () => {
 }
 
 .fab:hover {
+  background: var(--color-primary-hover);
+}
+
+.operator-filter-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #e3f2fd;
+  border-left: 4px solid var(--color-primary);
+  border-radius: 4px;
+  font-size: 0.9375rem;
+  color: #1565c0;
+}
+
+.clear-filter-btn {
+  padding: 0.375rem 0.75rem;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-filter-btn:hover {
   background: var(--color-primary-hover);
 }
 </style>

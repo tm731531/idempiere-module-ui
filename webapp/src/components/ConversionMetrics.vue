@@ -45,7 +45,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(op, index) in sortedPerformance" :key="op.operatorId">
+          <tr
+            v-for="(op, index) in sortedPerformance"
+            :key="op.operatorId"
+            class="performance-row"
+            @click="viewOperatorDetails(op.operatorId)"
+          >
             <td class="rank">{{ index + 1 }}</td>
             <td class="name">{{ op.operatorName }}</td>
             <td class="count">{{ op.consultationsUpdated }}</td>
@@ -63,6 +68,9 @@
 
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 interface RequestActivity {
   timestamp: string
@@ -251,6 +259,17 @@ function getConversionRateClass(rate: string): string {
   return 'low'
 }
 
+// 點擊操作人績效，導航到列表頁面並過濾該操作人的諮詢
+function viewOperatorDetails(operatorId: number) {
+  router.push({
+    name: 'consultation-list',
+    query: {
+      filterOperatorId: operatorId,
+      filterOperatorName: props.operatorNames[operatorId] || `用戶 #${operatorId}`,
+    },
+  })
+}
+
 // 監聽 requests 變化，重新計算
 import { watch } from 'vue'
 watch(
@@ -358,8 +377,13 @@ watch(
   font-size: 14px;
 }
 
-.performance-table tbody tr:hover {
-  background: #f9f9f9;
+.performance-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.performance-row:hover {
+  background: #e3f2fd;
 }
 
 .rank {

@@ -177,35 +177,35 @@ function calculatePendingConversions() {
   metrics.pendingConversionCount = pending.length
 }
 
-// 計算諮詢師績效（基於 CreatedBy 欄位 - 誰建立了諮詢）
+// 計算諮詢師績效（基於 SalesRep_ID 欄位 - 負責人）
 function calculateOperatorPerformance() {
   const consultantMap = new Map<number, {
-    consultationsCreated: Set<number>
+    consultationsAssigned: Set<number>
     conversionsCreated: Set<number>
     responseTime: number[]
   }>()
 
   props.requests.forEach(req => {
-    // 獲取建立人（諮詢師）的 ID
+    // 獲取負責人（諮詢師）的 ID
     let consultantId: number | null = null
-    if (req.CreatedBy && typeof req.CreatedBy === 'object') {
-      consultantId = req.CreatedBy.id
-    } else if (typeof req.CreatedBy === 'number') {
-      consultantId = req.CreatedBy
+    if (req.SalesRep_ID && typeof req.SalesRep_ID === 'object') {
+      consultantId = req.SalesRep_ID.id
+    } else if (typeof req.SalesRep_ID === 'number') {
+      consultantId = req.SalesRep_ID
     }
 
     if (!consultantId) return
 
     if (!consultantMap.has(consultantId)) {
       consultantMap.set(consultantId, {
-        consultationsCreated: new Set(),
+        consultationsAssigned: new Set(),
         conversionsCreated: new Set(),
         responseTime: [],
       })
     }
 
     const consultant = consultantMap.get(consultantId)!
-    consultant.consultationsCreated.add(req.R_Request_ID)
+    consultant.consultationsAssigned.add(req.R_Request_ID)
 
     // 判斷是否已轉化（LastResult 為完成狀態）
     const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
@@ -223,10 +223,10 @@ function calculateOperatorPerformance() {
   metrics.operatorPerformance = Array.from(consultantMap.entries()).map(([consultantId, data]) => ({
     operatorId: consultantId,
     operatorName: props.operatorNames[consultantId] || `諮詢師 #${consultantId}`,
-    consultationsUpdated: data.consultationsCreated.size,
+    consultationsUpdated: data.consultationsAssigned.size,
     conversionsCreated: data.conversionsCreated.size,
-    conversionRate: data.consultationsCreated.size > 0
-      ? `${((data.conversionsCreated.size / data.consultationsCreated.size) * 100).toFixed(1)}%`
+    conversionRate: data.consultationsAssigned.size > 0
+      ? `${((data.conversionsCreated.size / data.consultationsAssigned.size) * 100).toFixed(1)}%`
       : '0%',
     avgResponseTime: data.responseTime.length > 0
       ? `${(data.responseTime.reduce((a, b) => a + b, 0) / data.responseTime.length).toFixed(1)}h`

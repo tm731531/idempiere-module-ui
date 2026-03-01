@@ -119,17 +119,17 @@ function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
     filtered = filtered.filter(r => r.LastResult === statusName)
   }
 
-  // Filter by consultant (if specified) - match by CreatedBy field
+  // Filter by consultant (if specified) - match by SalesRep_ID field
   if (filterOperatorId.value) {
     filtered = filtered.filter(r => {
-      // Check if CreatedBy matches the consultant ID
-      let createdById: number | null = null
-      if (r.CreatedBy && typeof r.CreatedBy === 'object') {
-        createdById = r.CreatedBy.id
-      } else if (typeof r.CreatedBy === 'number') {
-        createdById = r.CreatedBy
+      // Check if SalesRep_ID (assigned responsible person) matches the consultant ID
+      let salesRepId: number | null = null
+      if (r.SalesRep_ID && typeof r.SalesRep_ID === 'object') {
+        salesRepId = r.SalesRep_ID.id
+      } else if (typeof r.SalesRep_ID === 'number') {
+        salesRepId = r.SalesRep_ID
       }
-      return createdById === filterOperatorId.value
+      return salesRepId === filterOperatorId.value
     })
   }
 
@@ -182,16 +182,16 @@ function getStatusName(r: any): string {
 }
 
 function getOperatorName(r: any): string {
-  // Get consultant name from CreatedBy field (who created this consultation)
+  // Get consultant name from SalesRep_ID field (assigned responsible person)
   let consultantId: number | null = null
 
-  if (r.CreatedBy && typeof r.CreatedBy === 'object') {
-    consultantId = r.CreatedBy.id
-    // If CreatedBy has a display name, use it
-    if (r.CreatedBy.Name) return r.CreatedBy.Name
-    if (r.CreatedBy.identifier) return r.CreatedBy.identifier
-  } else if (typeof r.CreatedBy === 'number') {
-    consultantId = r.CreatedBy
+  if (r.SalesRep_ID && typeof r.SalesRep_ID === 'object') {
+    consultantId = r.SalesRep_ID.id
+    // If SalesRep_ID has a display name, use it
+    if (r.SalesRep_ID.Name) return r.SalesRep_ID.Name
+    if (r.SalesRep_ID.identifier) return r.SalesRep_ID.identifier
+  } else if (typeof r.SalesRep_ID === 'number') {
+    consultantId = r.SalesRep_ID
   }
 
   // Fallback to operator names map
@@ -201,7 +201,7 @@ function getOperatorName(r: any): string {
     return `諮詢師 #${consultantId}`
   }
 
-  return '未知'
+  return '未分配'
 }
 
 function formatDate(dateStr: string): string {

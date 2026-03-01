@@ -157,10 +157,10 @@ function formatDate(dateStr: string): string {
   return `${y}-${m}-${day}`
 }
 
-// 檢查咨詢是否已轉化
+// 檢查咨詢是否已轉化（基於 LastResult 欄位）
 function isConverted(r: any): boolean {
-  // TODO: Implement once we have proper activity storage
-  return false
+  const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
+  return r.LastResult && completedStatuses.includes(r.LastResult)
 }
 
 // 取得關聯的訂單號

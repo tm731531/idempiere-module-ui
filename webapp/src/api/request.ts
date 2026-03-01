@@ -11,8 +11,8 @@ export interface RequestData {
 
 export async function listRequests(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,LastResult',
-    '$expand': 'R_Status_ID,C_BPartner_ID',
+    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Updated,CreatedBy,UpdatedBy,LastResult',
+    '$expand': 'R_Status_ID,C_BPartner_ID,CreatedBy,UpdatedBy',
     '$orderby': 'Created desc',
     '$top': '100',
   }
@@ -24,8 +24,8 @@ export async function listRequests(filter?: string): Promise<any[]> {
 export async function getRequest(id: number): Promise<any> {
   const resp = await apiClient.get(`/api/v1/models/R_Request/${id}`, {
     params: {
-      '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,R_RequestType_ID,Created,Updated,LastResult',
-      '$expand': 'R_Status_ID,C_BPartner_ID,R_RequestType_ID',
+      '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,R_RequestType_ID,Created,Updated,CreatedBy,UpdatedBy,LastResult',
+      '$expand': 'R_Status_ID,C_BPartner_ID,R_RequestType_ID,CreatedBy,UpdatedBy',
     },
   })
   return resp.data

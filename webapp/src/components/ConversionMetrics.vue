@@ -112,18 +112,14 @@ const metrics = reactive<ConversionMetricsData>({
   operatorPerformance: [],
 })
 
-// 計算轉化率
+// 計算轉化率（基於 LastResult 欄位）
 function calculateConversionRate() {
   if (props.requests.length === 0) return
 
-  const converted = props.requests.filter(req => {
-    try {
-      const activities = JSON.parse(req.Description || '[]')
-      return Array.isArray(activities) && activities.some(a => a.actionType === 'ConversionOrder')
-    } catch {
-      return false
-    }
-  })
+  const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
+  const converted = props.requests.filter(req =>
+    req.LastResult && completedStatuses.includes(req.LastResult)
+  )
 
   metrics.convertedCount = converted.length
   metrics.totalCount = props.requests.length
@@ -131,23 +127,19 @@ function calculateConversionRate() {
   metrics.conversionRate = `${rate.toFixed(1)}%`
 }
 
-// 計算平均轉化時間
+// 計算平均轉化時間（基於 Created 和 Updated 欄位）
 function calculateAvgConversionTime() {
+  const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
   const times: number[] = []
 
   props.requests.forEach(req => {
-    try {
-      const activities = JSON.parse(req.Description || '[]')
-      if (Array.isArray(activities)) {
-        const conversionActivity = activities.find((a: any) => a.actionType === 'ConversionOrder')
-        if (conversionActivity) {
-          const timeToConversion = new Date(conversionActivity.timestamp).getTime() - new Date(req.Created).getTime()
-          const days = timeToConversion / (1000 * 60 * 60 * 24)
-          times.push(days)
-        }
+    // 只計算已轉化的諮詢
+    if (req.LastResult && completedStatuses.includes(req.LastResult)) {
+      if (req.Created && req.Updated) {
+        const timeToConversion = new Date(req.Updated).getTime() - new Date(req.Created).getTime()
+        const days = timeToConversion / (1000 * 60 * 60 * 24)
+        times.push(days)
       }
-    } catch {
-      // 忽略 JSON 解析錯誤
     }
   })
 
@@ -164,70 +156,79 @@ function calculateAvgConversionTime() {
 function calculatePendingConversions() {
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
 
   const pending = props.requests.filter(req => {
     const created = new Date(req.Created)
     if (created > sevenDaysAgo) return false // 少於 7 天的不算
 
-    try {
-      const activities = JSON.parse(req.Description || '[]')
-      return !activities.some((a: any) => a.actionType === 'ConversionOrder')
-    } catch {
-      return true
-    }
+    // 未轉化的記錄（LastResult 不是完成狀態）
+    return !req.LastResult || !completedStatuses.includes(req.LastResult)
   })
 
   metrics.pendingConversionCount = pending.length
 }
 
-// 計算操作人績效
+// 計算操作人績效（基於 UpdatedBy 欄位）
 function calculateOperatorPerformance() {
   const operatorMap = new Map<number, {
-    consultations: Set<number>
-    conversions: Set<number>
+    consultationsUpdated: Set<number>
+    conversionsCreated: Set<number>
     responseTime: number[]
   }>()
 
   props.requests.forEach(req => {
-    try {
-      const activities = JSON.parse(req.Description || '[]')
-      if (!Array.isArray(activities)) return
+    // 獲取最後修改人的 ID
+    let updatedById: number | null = null
+    if (req.UpdatedBy && typeof req.UpdatedBy === 'object') {
+      updatedById = req.UpdatedBy.id
+    } else if (typeof req.UpdatedBy === 'number') {
+      updatedById = req.UpdatedBy
+    }
 
-      activities.forEach((act: any) => {
-        const opId = act.createdBy
-        if (!operatorMap.has(opId)) {
-          operatorMap.set(opId, {
-            consultations: new Set(),
-            conversions: new Set(),
-            responseTime: [],
-          })
-        }
+    // 如果沒有 UpdatedBy，使用 CreatedBy
+    if (!updatedById) {
+      if (req.CreatedBy && typeof req.CreatedBy === 'object') {
+        updatedById = req.CreatedBy.id
+      } else if (typeof req.CreatedBy === 'number') {
+        updatedById = req.CreatedBy
+      }
+    }
 
-        const op = operatorMap.get(opId)!
-        op.consultations.add(req.R_Request_ID)
+    if (!updatedById) return
 
-        if (act.actionType === 'ConversionOrder') {
-          op.conversions.add(req.R_Request_ID)
-        }
-
-        // 計算響應時間（第一個活動到諮詢建立的時間）
-        if (activities.indexOf(act) === 0) {
-          const responseTime = new Date(act.timestamp).getTime() - new Date(req.Created).getTime()
-          op.responseTime.push(responseTime / (1000 * 60 * 60)) // 轉換為小時
-        }
+    if (!operatorMap.has(updatedById)) {
+      operatorMap.set(updatedById, {
+        consultationsUpdated: new Set(),
+        conversionsCreated: new Set(),
+        responseTime: [],
       })
-    } catch {
-      // 忽略 JSON 解析錯誤
+    }
+
+    const op = operatorMap.get(updatedById)!
+    op.consultationsUpdated.add(req.R_Request_ID)
+
+    // 判斷是否已轉化（LastResult 為完成狀態）
+    // 假設完成狀態包含：'已完成', 'Closed', '已轉化' 等
+    const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
+    if (req.LastResult && completedStatuses.includes(req.LastResult)) {
+      op.conversionsCreated.add(req.R_Request_ID)
+    }
+
+    // 計算響應時間（Updated - Created）
+    if (req.Created && req.Updated) {
+      const responseTime = new Date(req.Updated).getTime() - new Date(req.Created).getTime()
+      op.responseTime.push(responseTime / (1000 * 60 * 60)) // 轉換為小時
     }
   })
 
   metrics.operatorPerformance = Array.from(operatorMap.entries()).map(([opId, data]) => ({
     operatorId: opId,
     operatorName: props.operatorNames[opId] || `用戶 #${opId}`,
-    consultationsUpdated: data.consultations.size,
-    conversionsCreated: data.conversions.size,
-    conversionRate: data.consultations.size > 0
-      ? `${((data.conversions.size / data.consultations.size) * 100).toFixed(1)}%`
+    consultationsUpdated: data.consultationsUpdated.size,
+    conversionsCreated: data.conversionsCreated.size,
+    conversionRate: data.consultationsUpdated.size > 0
+      ? `${((data.conversionsCreated.size / data.consultationsUpdated.size) * 100).toFixed(1)}%`
       : '0%',
     avgResponseTime: data.responseTime.length > 0
       ? `${(data.responseTime.reduce((a, b) => a + b, 0) / data.responseTime.length).toFixed(1)}h`

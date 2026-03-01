@@ -13,7 +13,7 @@
       <!-- Status Selector (dynamically loaded from SysConfig) -->
       <div class="form-group">
         <label>狀態</label>
-        <select v-model="selectedStatus" class="status-select">
+        <select v-model="selectedStatus" @change="updateStatusField" class="status-select">
           <option value="">-- 選擇狀態 --</option>
           <option v-for="status in statusOptions" :key="status" :value="status">
             {{ status }}
@@ -251,6 +251,10 @@ async function handleSubmit() {
       delete updatePayload.Updated
       delete updatePayload.UpdatedBy
       delete updatePayload.Processed
+      // Ensure LastResult (status) is included if changed
+      if (selectedStatus.value) {
+        updatePayload.LastResult = selectedStatus.value
+      }
       await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
@@ -295,6 +299,13 @@ function handleUpdateStatus() {
 
 function handleSetTracking() {
   showTrackingModal.value = true
+}
+
+function updateStatusField() {
+  // When status dropdown changes, sync to formData.LastResult
+  if (formData.value) {
+    formData.value.LastResult = selectedStatus.value
+  }
 }
 
 function handleStatusSelected(statusName: string) {

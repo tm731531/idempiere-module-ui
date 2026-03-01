@@ -195,22 +195,23 @@ function getOperatorName(r: any): string {
   }
 
   // Fallback to operator names map
-  if (operatorId && operatorNames.value[operatorId]) {
-    return operatorNames.value[operatorId]
+  if (operatorId) {
+    const name = operatorNames.value[operatorId]
+    if (name) return name
+    return `用戶 #${operatorId}`
   }
-
-  // Default format
-  if (operatorId) return `用戶 #${operatorId}`
 
   // If no UpdatedBy, try CreatedBy
   if (r.CreatedBy && typeof r.CreatedBy === 'object') {
     if (r.CreatedBy.Name) return r.CreatedBy.Name
     if (r.CreatedBy.identifier) return r.CreatedBy.identifier
-  } else if (typeof r.CreatedBy === 'number') {
-    if (operatorNames.value[r.CreatedBy]) {
-      return operatorNames.value[r.CreatedBy]
+    if (typeof r.CreatedBy.id === 'number') {
+      const name = operatorNames.value[r.CreatedBy.id]
+      return name || `用戶 #${r.CreatedBy.id}`
     }
-    return `用戶 #${r.CreatedBy}`
+  } else if (typeof r.CreatedBy === 'number') {
+    const name = operatorNames.value[r.CreatedBy]
+    return name || `用戶 #${r.CreatedBy}`
   }
 
   return '未知'

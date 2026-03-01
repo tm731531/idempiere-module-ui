@@ -61,6 +61,7 @@
             >
               ✓ 已轉化
             </span>
+            <span class="card-operator">👤 {{ getOperatorName(r) }}</span>
             <span class="card-date">{{ formatDate(r.Created) }}</span>
           </div>
         </div>
@@ -139,12 +140,7 @@ async function loadRequests() {
   loading.value = true
   try {
     const allReqs = await listRequests()
-    console.log('📊 Loaded requests:', allReqs.length, 'Filter operator ID:', filterOperatorId.value)
-    if (allReqs.length > 0) {
-      console.log('📋 Sample request UpdatedBy:', allReqs[0].UpdatedBy)
-    }
     requests.value = filterRequestsByStatus(allReqs, activeTab.value)
-    console.log('✅ Filtered requests:', requests.value.length)
   } catch {
     requests.value = []
   } finally {
@@ -183,6 +179,41 @@ function getCustomerName(r: any): string {
 function getStatusName(r: any): string {
   // Display LastResult field (status name)
   return r.LastResult || ''
+}
+
+function getOperatorName(r: any): string {
+  // Get operator name from UpdatedBy field (who last modified this consultation)
+  let operatorId: number | null = null
+
+  if (r.UpdatedBy && typeof r.UpdatedBy === 'object') {
+    operatorId = r.UpdatedBy.id
+    // If UpdatedBy has a display name, use it
+    if (r.UpdatedBy.Name) return r.UpdatedBy.Name
+    if (r.UpdatedBy.identifier) return r.UpdatedBy.identifier
+  } else if (typeof r.UpdatedBy === 'number') {
+    operatorId = r.UpdatedBy
+  }
+
+  // Fallback to operator names map
+  if (operatorId && operatorNames.value[operatorId]) {
+    return operatorNames.value[operatorId]
+  }
+
+  // Default format
+  if (operatorId) return `用戶 #${operatorId}`
+
+  // If no UpdatedBy, try CreatedBy
+  if (r.CreatedBy && typeof r.CreatedBy === 'object') {
+    if (r.CreatedBy.Name) return r.CreatedBy.Name
+    if (r.CreatedBy.identifier) return r.CreatedBy.identifier
+  } else if (typeof r.CreatedBy === 'number') {
+    if (operatorNames.value[r.CreatedBy]) {
+      return operatorNames.value[r.CreatedBy]
+    }
+    return `用戶 #${r.CreatedBy}`
+  }
+
+  return '未知'
 }
 
 function formatDate(dateStr: string): string {
@@ -396,6 +427,16 @@ onMounted(async () => {
 .card-date {
   font-size: 0.8125rem;
   color: #94a3b8;
+}
+
+.card-operator {
+  font-size: 0.8125rem;
+  color: white;
+  background: #2196f3;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  display: inline-block;
 }
 
 .conversion-badge {

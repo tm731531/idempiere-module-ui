@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { listRequests } from '@/api/request'
 import { getSysConfig } from '@/api/sysconfig'
@@ -139,7 +139,12 @@ async function loadRequests() {
   loading.value = true
   try {
     const allReqs = await listRequests()
+    console.log('📊 Loaded requests:', allReqs.length, 'Filter operator ID:', filterOperatorId.value)
+    if (allReqs.length > 0) {
+      console.log('📋 Sample request UpdatedBy:', allReqs[0].UpdatedBy)
+    }
     requests.value = filterRequestsByStatus(allReqs, activeTab.value)
+    console.log('✅ Filtered requests:', requests.value.length)
   } catch {
     requests.value = []
   } finally {
@@ -217,6 +222,14 @@ function clearOperatorFilter() {
   router.push({ name: 'consultation-list' })
 }
 
+// 監聽操作人過濾變化，重新加載列表
+watch(
+  () => filterOperatorId.value,
+  () => {
+    loadRequests()
+  }
+)
+
 onMounted(async () => {
   // Load available statuses from SysConfig
   const configValue = await getSysConfig('MobileSettingConfig')
@@ -233,10 +246,8 @@ onMounted(async () => {
           label: s.Name || s,
         })),
       ]
-      console.log('✅ Loaded status tabs from SysConfig:', tabs.value)
-      console.log('✅ Custom statuses for dashboard:', customStatuses.value)
     } catch (e) {
-      console.error('❌ Failed to parse SysConfig JSON:', e)
+      // Ignore parse errors
     }
   }
 

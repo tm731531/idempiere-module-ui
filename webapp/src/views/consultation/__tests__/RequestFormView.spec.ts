@@ -94,7 +94,7 @@ describe('RequestFormView', () => {
     vi.clearAllMocks()
   })
 
-  it('renders RequestTimeline when editing', async () => {
+  it('RequestTimeline is not rendered (temporarily disabled)', async () => {
     const wrapper = mount(RequestFormView, {
       global: {
         stubs: {
@@ -109,7 +109,7 @@ describe('RequestFormView', () => {
     await wrapper.vm.$nextTick()
 
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })
-    expect(timeline.exists()).toBe(true)
+    expect(timeline.exists()).toBe(false)
   })
 
   it('renders QuickActionBar when editing', async () => {
@@ -177,12 +177,9 @@ describe('RequestFormView', () => {
       createdBy: 'Test User',
     })
 
-    // Verify formData.Description was updated
+    // Verify error message is shown (activity feature temporarily disabled)
     // @ts-ignore
-    const activities = JSON.parse(wrapper.vm.formData.Description || '[]')
-    expect(activities).toHaveLength(1)
-    expect(activities[0].actionType).toBe('打電話')
-    expect(activities[0].content).toBe('客戶已確認')
+    expect(wrapper.vm.errorMsg).toBe('活動功能暫時不可用')
   })
 
   it('passes correct props to QuickActionBar', async () => {
@@ -204,7 +201,7 @@ describe('RequestFormView', () => {
     expect(actionBar.props('disabled')).toBe(false)
   })
 
-  it('passes correct props to RequestTimeline', async () => {
+  it('RequestTimeline is temporarily disabled', async () => {
     const wrapper = mount(RequestFormView, {
       global: {
         stubs: {
@@ -218,8 +215,8 @@ describe('RequestFormView', () => {
     await flushPromises()
     await wrapper.vm.$nextTick()
 
+    // Activity Timeline is temporarily disabled until proper storage is found
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })
-    expect(timeline.exists()).toBe(true)
-    expect(timeline.props('activities')).toBe('[]')
+    expect(timeline.exists()).toBe(false)
   })
 })

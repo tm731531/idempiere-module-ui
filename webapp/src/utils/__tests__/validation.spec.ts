@@ -45,7 +45,8 @@ describe('Activity Content Validation', () => {
   })
 })
 
-describe('Tracking Date Validation', () => {
+// Feature temporarily disabled until proper storage is found
+describe.skip('Tracking Date Validation', () => {
   it('validates empty date', () => {
     const result = validateTrackingDate('')
     expect(result.isValid).toBe(false)
@@ -99,7 +100,8 @@ describe('Tracking Date Validation', () => {
   })
 })
 
-describe('Tracking Time Validation', () => {
+// Feature temporarily disabled until proper storage is found
+describe.skip('Tracking Time Validation', () => {
   it('validates empty time', () => {
     const result = validateTrackingTime('')
     expect(result.isValid).toBe(false)
@@ -144,7 +146,8 @@ describe('Tracking Time Validation', () => {
   })
 })
 
-describe('Tracking Description Validation', () => {
+// Feature temporarily disabled until proper storage is found
+describe.skip('Tracking Description Validation', () => {
   it('validates empty description', () => {
     const result = validateTrackingDescription('')
     expect(result.isValid).toBe(false)
@@ -176,7 +179,8 @@ describe('Tracking Description Validation', () => {
   })
 })
 
-describe('Tracking Form Validation', () => {
+// Feature temporarily disabled until proper storage is found
+describe.skip('Tracking Form Validation', () => {
   it('validates complete tracking form', () => {
     const today = new Date()
     const dateStr = today.toISOString().split('T')[0]!

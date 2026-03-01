@@ -66,7 +66,7 @@
     <!-- Dashboard View -->
     <div v-else class="dashboard-view">
       <div v-if="dashboardLoading" class="loading-state">載入儀表板中...</div>
-      <ConsultationDashboard v-else :requests="allRequests" :statuses="customStatuses" />
+      <ConversionMetrics v-else :requests="allRequests" :operatorNames="operatorNames" />
     </div>
   </div>
 </template>
@@ -76,7 +76,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
 import { getSysConfig } from '@/api/sysconfig'
-import ConsultationDashboard from '@/components/ConsultationDashboard.vue'
+import ConversionMetrics from '@/components/ConversionMetrics.vue'
 
 type TabKey = string // Now dynamic based on SysConfig
 type ViewMode = 'list' | 'dashboard'
@@ -92,22 +92,22 @@ const activeTab = ref<TabKey>('all')
 const requests = ref<any[]>([])
 const allRequests = ref<any[]>([])
 const customStatuses = ref<string[]>([]) // 自定義狀態列表
+const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
 
-function getFilterForTab(tab: TabKey): string | undefined {
-  // 'all' returns undefined (no filter)
-  if (tab === 'all') return undefined
+function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
+  if (statusName === 'all') return allReqs
 
-  // Filter based on LastResult status field
-  return `LastResult eq '${tab}'`
+  // Client-side filtering: filter by LastResult field
+  return allReqs.filter(r => r.LastResult === statusName)
 }
 
 async function loadRequests() {
   loading.value = true
   try {
-    const filter = getFilterForTab(activeTab.value)
-    requests.value = await listRequests(filter)
+    const allReqs = await listRequests()
+    requests.value = filterRequestsByStatus(allReqs, activeTab.value)
   } catch {
     requests.value = []
   } finally {
@@ -144,15 +144,8 @@ function getCustomerName(r: any): string {
 }
 
 function getStatusName(r: any): string {
-  // Display LastResult field (status selected by user)
-  if (r.LastResult) {
-    return r.LastResult
-  }
-  // Fallback to R_Status_ID if LastResult is empty
-  if (r.R_Status_ID && typeof r.R_Status_ID === 'object') {
-    return r.R_Status_ID.identifier || r.R_Status_ID.Name || ''
-  }
-  return ''
+  // Display LastResult field (status name)
+  return r.LastResult || ''
 }
 
 function formatDate(dateStr: string): string {
@@ -166,23 +159,14 @@ function formatDate(dateStr: string): string {
 
 // 檢查咨詢是否已轉化
 function isConverted(r: any): boolean {
-  try {
-    const activities = JSON.parse(r.Description || '[]')
-    return Array.isArray(activities) && activities.some((a: any) => a.actionType === 'ConversionOrder')
-  } catch {
-    return false
-  }
+  // TODO: Implement once we have proper activity storage
+  return false
 }
 
 // 取得關聯的訂單號
 function getOrderNo(r: any): string {
-  try {
-    const activities = JSON.parse(r.Description || '[]')
-    const conv = activities.find((a: any) => a.actionType === 'ConversionOrder')
-    return conv?.linkedOrderNo || ''
-  } catch {
-    return ''
-  }
+  // TODO: Implement once we have proper activity storage
+  return ''
 }
 
 function goToEdit(r: any) {

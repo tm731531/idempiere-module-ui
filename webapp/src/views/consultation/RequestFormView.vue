@@ -13,7 +13,7 @@
       <!-- Status Selector (dynamically loaded from SysConfig) -->
       <div class="form-group">
         <label>狀態</label>
-        <select v-model="selectedStatus" class="status-select" @change="updateLastResultField">
+        <select v-model="selectedStatus" class="status-select">
           <option value="">-- 選擇狀態 --</option>
           <option v-for="status in statusOptions" :key="status" :value="status">
             {{ status }}
@@ -31,11 +31,11 @@
         @update:modelValue="formData = $event"
       />
 
-      <!-- Activity Timeline Section -->
-      <div v-if="isEdit" class="timeline-section">
+      <!-- Activity Timeline Section - Temporarily Disabled -->
+      <!-- <div v-if="isEdit" class="timeline-section">
         <h3>活動記錄</h3>
         <RequestTimeline :activities="formData.Description || '[]'" />
-      </div>
+      </div> -->
 
       <!-- Attachment section (custom, not from metadata) -->
       <div v-if="isEdit" class="form-group attachment-section">
@@ -224,14 +224,10 @@ async function handleSubmit() {
     // If value is an object with 'id' property, extract the ID
     if (typeof value === 'object' && !Array.isArray(value) && 'id' in value) {
       cleanPayload[key] = value.id
-      console.log(`🔄 Converted ${key}: object → ${value.id}`)
     } else {
       cleanPayload[key] = value
     }
   }
-
-  console.log('📤 handleSubmit - cleanPayload:', cleanPayload)
-  console.log('📤 handleSubmit - R_Status_ID:', cleanPayload.R_Status_ID, 'type:', typeof cleanPayload.R_Status_ID)
 
   if (!cleanPayload.R_RequestType_ID) {
     errorMsg.value = '請選擇諮詢類型'
@@ -245,7 +241,6 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (isEdit.value && requestId.value) {
-      console.log('🔄 Updating request', requestId.value, 'with cleanPayload:', cleanPayload)
       // Create payload with only updateable fields
       const updatePayload = { ...cleanPayload }
       // Remove non-updateable system fields
@@ -256,26 +251,14 @@ async function handleSubmit() {
       delete updatePayload.Updated
       delete updatePayload.UpdatedBy
       delete updatePayload.Processed
-      // Explicitly include LastResult field for status
-      if (selectedStatus.value) {
-        updatePayload.LastResult = selectedStatus.value
-        console.log('📝 Added LastResult to payload:', updatePayload.LastResult)
-      }
-      console.log('🔄 Final updatePayload (system fields removed):', updatePayload)
       await updateRequest(requestId.value, updatePayload)
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
-      console.log('➕ Creating new request with cleanPayload:', cleanPayload)
       await createRequest(cleanPayload as RequestData)
       router.push({ name: 'consultation-list' })
     }
   } catch (e: any) {
-    console.error('❌ Submit error:', e)
-    console.error('❌ Error response:', e.response?.data)
-    console.error('❌ Error status:', e.response?.status)
-    console.error('❌ Error message:', e.message)
-
     // Try to extract API error message
     const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
     errorMsg.value = isEdit.value ? `更新諮詢失敗: ${apiError}` : `建立諮詢失敗: ${apiError}`
@@ -297,36 +280,13 @@ async function handleRemoveAttachment(fileName: string) {
   await remove(requestId.value, fileName)
 }
 
-function updateLastResultField() {
-  // When user selects a status, update the LastResult field
-  formData.value.LastResult = selectedStatus.value
-  console.log('📝 Status updated to:', selectedStatus.value)
-}
-
 function goBack() {
   router.push({ name: 'consultation-list' })
 }
 
 function handleAddActivity(activity: Partial<Activity>) {
-  try {
-    // Parse existing activities from JSON string in Description field
-    // Empty array if no activities yet
-    const activities = parseActivities(formData.value.Description || '[]')
-
-    // Add new activity with automatic timestamp and user ID
-    activities.push({
-      ...activity,
-      timestamp: activity.timestamp || new Date().toISOString(),
-      createdBy: activity.createdBy || auth.user?.name || 'Unknown',
-    })
-
-    // Re-serialize activities back to JSON string for storage
-    formData.value.Description = stringifyActivities(activities)
-    errorMsg.value = '' // Clear previous errors
-    // Note: QuickActionBar modal doesn't auto-close to allow multiple quick actions
-  } catch (e) {
-    errorMsg.value = '活動記錄新增失敗'
-  }
+  // TODO: Activity feature temporarily disabled until we find a proper field for storage
+  errorMsg.value = '活動功能暫時不可用'
 }
 
 function handleUpdateStatus() {
@@ -337,41 +297,18 @@ function handleSetTracking() {
   showTrackingModal.value = true
 }
 
-function handleStatusSelected(statusId: string) {
-  console.log('🔄 handleStatusSelected called with status name:', statusId)
-
+function handleStatusSelected(statusName: string) {
   if (formData.value) {
-    // Store status name in Result field (text field, not problematic R_Status_ID)
-    formData.value.Result = statusId
-    console.log('✅ Set Result to:', statusId)
-  } else {
-    console.error('❌ formData.value is undefined!')
+    formData.value.LastResult = statusName
+    selectedStatus.value = statusName
   }
-
   showStatusModal.value = false
 }
 
 function handleTrackingSet(data: { date: string; time: string; description: string }) {
-  try {
-    const activities = parseActivities(formData.value.Description || '[]')
-    // Convert date (YYYY-MM-DD) and time (HH:MM) to iDempiere datetime format
-    // Per iDempiere convention: Z suffix indicates local time (not UTC), stored as ISO string
-    const isoDateTime = `${data.date}T${data.time}:00Z`
-
-    activities.push({
-      type: '預約追蹤',
-      actionType: '設定追蹤',
-      content: data.description,
-      timestamp: isoDateTime,    // ISO datetime in local time with Z suffix
-      createdBy: auth.user?.name || 'Unknown',
-    })
-    formData.value.Description = stringifyActivities(activities)
-    errorMsg.value = '' // Clear any previous errors
-    showTrackingModal.value = false // Only closes on success
-  } catch (e) {
-    errorMsg.value = '追蹤預約設定失敗'
-    // Modal stays open so user can retry or cancel
-  }
+  // TODO: Tracking feature temporarily disabled until we find a proper field for storage
+  errorMsg.value = '追蹤預約功能暫時不可用'
+  showTrackingModal.value = false
 }
 
 function getStatusName(status: any): string {
@@ -413,18 +350,14 @@ async function loadAvailableStatuses() {
       try {
         const statuses = JSON.parse(configValue)
         availableStatuses.value = statuses
-        // 提取 Name 字段用於下拉選單
         statusOptions.value = statuses.map((s: any) => s.Name)
-        console.log('✅ Loaded statuses from SysConfig:', statuses)
-        console.log('✅ Status options for dropdown:', statusOptions.value)
         return
-      } catch (e) {
-        console.error('❌ Failed to parse SysConfig JSON:', e)
+      } catch {
+        // continue to fallback
       }
     }
 
     // Fallback: use hardcoded default statuses
-    console.warn('⚠️ No SysConfig found, using default statuses')
     const defaultStatuses = [
       { R_Status_ID: 0, Name: '待處理' },
       { R_Status_ID: 1, Name: '處理中' },
@@ -432,9 +365,7 @@ async function loadAvailableStatuses() {
     ]
     availableStatuses.value = defaultStatuses
     statusOptions.value = defaultStatuses.map(s => s.Name)
-    console.log('✅ Using default statuses:', defaultStatuses)
-  } catch (e: any) {
-    console.error('❌ Failed to load statuses:', e)
+  } catch {
     // Final fallback
     const fallbackStatuses = [
       { R_Status_ID: 0, Name: '待處理' },
@@ -473,7 +404,6 @@ onMounted(async () => {
 
   // Initialize status selector from LastResult field
   selectedStatus.value = formData.value.LastResult || ''
-  console.log('📝 Initialized status selector:', selectedStatus.value)
 
   if (isEdit.value && requestId.value) {
     await loadAttachments(requestId.value)

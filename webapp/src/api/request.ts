@@ -11,7 +11,7 @@ export interface RequestData {
 
 export async function listRequests(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Processed,LastResult,Description',
+    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,LastResult',
     '$expand': 'R_Status_ID,C_BPartner_ID',
     '$orderby': 'Created desc',
     '$top': '100',
@@ -24,7 +24,7 @@ export async function listRequests(filter?: string): Promise<any[]> {
 export async function getRequest(id: number): Promise<any> {
   const resp = await apiClient.get(`/api/v1/models/R_Request/${id}`, {
     params: {
-      '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,R_RequestType_ID,Created,Updated,Description',
+      '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,R_RequestType_ID,Created,Updated,LastResult',
       '$expand': 'R_Status_ID,C_BPartner_ID,R_RequestType_ID',
     },
   })
@@ -37,40 +37,13 @@ export async function createRequest(data: RequestData): Promise<any> {
 }
 
 export async function updateRequest(id: number, data: Record<string, any>): Promise<any> {
-  const url = `/api/v1/models/R_Request/${id}`
-  console.log(`📡 updateRequest - PUT ${url}`)
-  console.log(`📡 updateRequest - payload:`, JSON.stringify(data, null, 2))
-  try {
-    const resp = await apiClient.put(url, data)
-    console.log(`✅ updateRequest - success, response:`, resp.data)
-    return resp.data
-  } catch (error: any) {
-    console.error(`❌ updateRequest - error:`, error)
-    console.error(`❌ updateRequest - status:`, error.response?.status)
-    console.error(`❌ updateRequest - statusText:`, error.response?.statusText)
-    console.error(`❌ updateRequest - responseData:`, error.response?.data)
-    throw error
-  }
+  const resp = await apiClient.put(`/api/v1/models/R_Request/${id}`, data)
+  return resp.data
 }
 
 export async function updateRequestStatus(id: number, statusId: number): Promise<any> {
-  const url = `/api/v1/models/R_Request/${id}`
-  const payload = { R_Status_ID: statusId }
-  console.log(`📡 updateRequestStatus - PUT ${url}`)
-  console.log(`📡 updateRequestStatus - payload:`, JSON.stringify(payload))
-  try {
-    const resp = await apiClient.put(url, payload)
-    console.log(`✅ updateRequestStatus - success`)
-    console.log(`✅ updateRequestStatus - response:`, resp.data)
-    return resp.data
-  } catch (error: any) {
-    console.error(`❌ updateRequestStatus - error:`, error.message)
-    console.error(`❌ updateRequestStatus - status code:`, error.response?.status)
-    console.error(`❌ updateRequestStatus - status text:`, error.response?.statusText)
-    console.error(`❌ updateRequestStatus - error field:`, error.response?.data?.error)
-    console.error(`❌ updateRequestStatus - full response:`, JSON.stringify(error.response?.data, null, 2))
-    throw error
-  }
+  const resp = await apiClient.put(`/api/v1/models/R_Request/${id}`, { R_Status_ID: statusId })
+  return resp.data
 }
 
 export async function listRequestStatuses(requestTypeId?: number): Promise<any[]> {
@@ -83,9 +56,7 @@ export async function listRequestStatuses(requestTypeId?: number): Promise<any[]
     params['$filter'] = `R_RequestType_ID eq ${requestTypeId}`
   }
   const resp = await apiClient.get('/api/v1/models/R_Status', { params })
-  const statuses = resp.data.records || []
-  console.log('R_Status API response:', resp.data)
-  return statuses
+  return resp.data.records || []
 }
 
 export async function listRequestTypes(): Promise<any[]> {

@@ -177,66 +177,56 @@ function calculatePendingConversions() {
   metrics.pendingConversionCount = pending.length
 }
 
-// 計算操作人績效（基於 UpdatedBy 欄位）
+// 計算諮詢師績效（基於 CreatedBy 欄位 - 誰建立了諮詢）
 function calculateOperatorPerformance() {
-  const operatorMap = new Map<number, {
-    consultationsUpdated: Set<number>
+  const consultantMap = new Map<number, {
+    consultationsCreated: Set<number>
     conversionsCreated: Set<number>
     responseTime: number[]
   }>()
 
   props.requests.forEach(req => {
-    // 獲取最後修改人的 ID
-    let updatedById: number | null = null
-    if (req.UpdatedBy && typeof req.UpdatedBy === 'object') {
-      updatedById = req.UpdatedBy.id
-    } else if (typeof req.UpdatedBy === 'number') {
-      updatedById = req.UpdatedBy
+    // 獲取建立人（諮詢師）的 ID
+    let consultantId: number | null = null
+    if (req.CreatedBy && typeof req.CreatedBy === 'object') {
+      consultantId = req.CreatedBy.id
+    } else if (typeof req.CreatedBy === 'number') {
+      consultantId = req.CreatedBy
     }
 
-    // 如果沒有 UpdatedBy，使用 CreatedBy
-    if (!updatedById) {
-      if (req.CreatedBy && typeof req.CreatedBy === 'object') {
-        updatedById = req.CreatedBy.id
-      } else if (typeof req.CreatedBy === 'number') {
-        updatedById = req.CreatedBy
-      }
-    }
+    if (!consultantId) return
 
-    if (!updatedById) return
-
-    if (!operatorMap.has(updatedById)) {
-      operatorMap.set(updatedById, {
-        consultationsUpdated: new Set(),
+    if (!consultantMap.has(consultantId)) {
+      consultantMap.set(consultantId, {
+        consultationsCreated: new Set(),
         conversionsCreated: new Set(),
         responseTime: [],
       })
     }
 
-    const op = operatorMap.get(updatedById)!
-    op.consultationsUpdated.add(req.R_Request_ID)
+    const consultant = consultantMap.get(consultantId)!
+    consultant.consultationsCreated.add(req.R_Request_ID)
 
     // 判斷是否已轉化（LastResult 為完成狀態）
-    // 假設完成狀態包含：'已完成', 'Closed', '已轉化' 等
     const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
     if (req.LastResult && completedStatuses.includes(req.LastResult)) {
-      op.conversionsCreated.add(req.R_Request_ID)
+      consultant.conversionsCreated.add(req.R_Request_ID)
     }
 
     // 計算響應時間（Updated - Created）
     if (req.Created && req.Updated) {
       const responseTime = new Date(req.Updated).getTime() - new Date(req.Created).getTime()
-      op.responseTime.push(responseTime / (1000 * 60 * 60)) // 轉換為小時
+      consultant.responseTime.push(responseTime / (1000 * 60 * 60)) // 轉換為小時
     }
   })
 
-  metrics.operatorPerformance = Array.from(operatorMap.entries()).map(([opId, data]) => ({
-    operatorId: opId,
-    operatorName: props.operatorNames[opId] || `用戶 #${opId}`,
-    consultationsUpdated: data.consultationsUpdated.size,
+  metrics.operatorPerformance = Array.from(consultantMap.entries()).map(([consultantId, data]) => ({
+    operatorId: consultantId,
+    operatorName: props.operatorNames[consultantId] || `諮詢師 #${consultantId}`,
+    consultationsUpdated: data.consultationsCreated.size,
     conversionsCreated: data.conversionsCreated.size,
-    conversionRate: data.consultationsUpdated.size > 0
-      ? `${((data.conversionsCreated.size / data.consultationsUpdated.size) * 100).toFixed(1)}%`
+    conversionRate: data.consultationsCreated.size > 0
+      ? `${((data.conversionsCreated.size / data.consultationsCreated.size) * 100).toFixed(1)}%`
       : '0%',
     avgResponseTime: data.responseTime.length > 0
       ? `${(data.responseTime.reduce((a, b) => a + b, 0) / data.responseTime.length).toFixed(1)}h`

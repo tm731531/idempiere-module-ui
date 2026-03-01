@@ -119,17 +119,17 @@ function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
     filtered = filtered.filter(r => r.LastResult === statusName)
   }
 
-  // Filter by operator (if specified)
+  // Filter by consultant (if specified) - match by CreatedBy field
   if (filterOperatorId.value) {
     filtered = filtered.filter(r => {
-      // Check if UpdatedBy matches the operator ID
-      let updatedById: number | null = null
-      if (r.UpdatedBy && typeof r.UpdatedBy === 'object') {
-        updatedById = r.UpdatedBy.id
-      } else if (typeof r.UpdatedBy === 'number') {
-        updatedById = r.UpdatedBy
+      // Check if CreatedBy matches the consultant ID
+      let createdById: number | null = null
+      if (r.CreatedBy && typeof r.CreatedBy === 'object') {
+        createdById = r.CreatedBy.id
+      } else if (typeof r.CreatedBy === 'number') {
+        createdById = r.CreatedBy
       }
-      return updatedById === filterOperatorId.value
+      return createdById === filterOperatorId.value
     })
   }
 
@@ -182,36 +182,23 @@ function getStatusName(r: any): string {
 }
 
 function getOperatorName(r: any): string {
-  // Get operator name from UpdatedBy field (who last modified this consultation)
-  let operatorId: number | null = null
+  // Get consultant name from CreatedBy field (who created this consultation)
+  let consultantId: number | null = null
 
-  if (r.UpdatedBy && typeof r.UpdatedBy === 'object') {
-    operatorId = r.UpdatedBy.id
-    // If UpdatedBy has a display name, use it
-    if (r.UpdatedBy.Name) return r.UpdatedBy.Name
-    if (r.UpdatedBy.identifier) return r.UpdatedBy.identifier
-  } else if (typeof r.UpdatedBy === 'number') {
-    operatorId = r.UpdatedBy
+  if (r.CreatedBy && typeof r.CreatedBy === 'object') {
+    consultantId = r.CreatedBy.id
+    // If CreatedBy has a display name, use it
+    if (r.CreatedBy.Name) return r.CreatedBy.Name
+    if (r.CreatedBy.identifier) return r.CreatedBy.identifier
+  } else if (typeof r.CreatedBy === 'number') {
+    consultantId = r.CreatedBy
   }
 
   // Fallback to operator names map
-  if (operatorId) {
-    const name = operatorNames.value[operatorId]
+  if (consultantId) {
+    const name = operatorNames.value[consultantId]
     if (name) return name
-    return `用戶 #${operatorId}`
-  }
-
-  // If no UpdatedBy, try CreatedBy
-  if (r.CreatedBy && typeof r.CreatedBy === 'object') {
-    if (r.CreatedBy.Name) return r.CreatedBy.Name
-    if (r.CreatedBy.identifier) return r.CreatedBy.identifier
-    if (typeof r.CreatedBy.id === 'number') {
-      const name = operatorNames.value[r.CreatedBy.id]
-      return name || `用戶 #${r.CreatedBy.id}`
-    }
-  } else if (typeof r.CreatedBy === 'number') {
-    const name = operatorNames.value[r.CreatedBy]
-    return name || `用戶 #${r.CreatedBy}`
+    return `諮詢師 #${consultantId}`
   }
 
   return '未知'

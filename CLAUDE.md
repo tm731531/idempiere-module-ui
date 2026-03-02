@@ -276,24 +276,54 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
 ### Consultation (R_Request)
 
 - **Tab 344** (Request window)
-- **Consultant identification**: Uses `SalesRep_ID` field (負責人/Responsible Person), NOT CreatedBy or UpdatedBy
-- **Status field**: `LastResult` (NOT R_Status_ID) - stores status as string (e.g., '已完成', 'Closed')
-- **API $select**: Must include `SalesRep_ID, LastResult` explicitly in queries
-- **Status dropdown**: Dynamically loaded from `SysConfig.MobileSettingConfig` as JSON array
-- **Filtering**: Status filtering is **client-side** (filter by LastResult field) — server-side OData filtering on expanded fields is not supported
-- **Performance metrics**:
-  - Aggregated by `SalesRep_ID` (consultant's assigned consultations)
-  - Completion rate = consultations with `LastResult` in completed statuses / total assigned
-  - Completed statuses: `['已完成', 'Closed', '已轉化', 'Completed']`
-- **Dashboard features**:
-  - List view with status tabs + conversion badge
-  - Dashboard view with ConversionMetrics (conversion rate, average time, pending consultations)
-  - Clickable performance ranking rows filter list to show only that consultant's consultations
+- **Core field mappings**:
+  - `SalesRep_ID` → Consultant/Responsible Person (負責人) — identifies who handled the consultation
+  - `LastResult` → Status (狀態) — stores status as string, NOT R_Status_ID
+  - `C_BPartner_ID` → Customer (客戶)
+  - `Created` → Consultation date (諮詢日期)
+  - `Updated` → Last modification time (最後更新)
+  - ⚠️ `CreatedBy` & `UpdatedBy` are audit fields, NOT business responsibility fields
+
+- **API Query Pattern**:
+  ```typescript
+  // $select must explicitly include:
+  $select: ['ID', 'SalesRep_ID', 'LastResult', 'C_BPartner_ID', 'Created', 'Updated', ...]
+
+  // $expand must include related entities:
+  $expand: {
+    'SalesRep_ID': { $select: ['ID', 'Name'] },
+    'C_BPartner_ID': { $select: ['ID', 'Name'] }
+  }
+  ```
+
+- **Status handling**:
+  - **Dynamically loaded** from `SysConfig.MobileSettingConfig` as JSON array
+  - Filtering is **client-side** (filter by `LastResult` field) — OData server cannot filter on expanded text fields
+  - Completed statuses (for conversion rate): `['已完成', 'Closed', '已轉化', 'Completed']`
+
+- **Performance metrics** (aggregated by `SalesRep_ID`):
+  - **Conversion Rate** = count(LastResult ∈ completedStatuses) / count(all)
+  - **Average Response Time** = avg(Updated - Created) for completed consultations
+  - **Pending Conversions** = count(LastResult ∉ completedStatuses)
+
+- **Features**:
+  - List view with status tabs + conversion badge (green for completed)
+  - Dashboard view with ConversionMetrics component showing consultant rankings
+  - Clickable performance ranking rows → navigate to list with `?filterOperatorId=<SalesRep_ID>`
+  - Create Order button in edit mode (requires C_BPartner_ID)
+  - Consultant filter banner (blue) shows active `filterOperatorId` parameter
+
 - **Features disabled (temporary)**:
-  - Activity Timeline — no suitable storage field yet (previously tried Description)
-  - Tracking date recording — no suitable storage field yet
-- **Create Order**: Button available in edit mode (requires C_BPartner_ID set)
-- **Consultant filtering**: Query parameter `filterOperatorId` in URL filters list by SalesRep_ID; blue banner shows active filter
+  - ❌ Activity Timeline — no suitable storage field yet
+  - ❌ Tracking date recording — no suitable storage field yet
+
+- **Related files**:
+  - `api/request.ts` — listRequests, getRequest API functions
+  - `views/consultation/RequestListView.vue` — List with status filtering, operator display
+  - `views/consultation/RequestFormView.vue` — Form view with status dropdown, order creation
+  - `views/consultation/ConsultationDashboardView.vue` — Dashboard with ConversionMetrics
+  - `components/ConversionMetrics.vue` — Performance ranking and metrics display
+  - `i18n/fieldLabels.ts` — SalesRep_ID label mapping
 
 ## Testing
 

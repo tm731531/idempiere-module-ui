@@ -2,3 +2,4 @@ node_modules/
 osgi-bundle/web/
 *.tsBuildInfo
 *.jar
+.worktrees/

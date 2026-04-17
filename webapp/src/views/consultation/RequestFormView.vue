@@ -229,7 +229,7 @@ const {
     'ConfidentialType',    // 保密等級 — not relevant
     'ConfidentialTypeEntry', // 項目保密等級 — not relevant
     'IsEscalated',         // 已升級 — not relevant
-    'DateDueType',         // 到期類型 — not relevant
+    'DueType',             // 到期類型 — not relevant (column name is DueType, not DateDueType)
     'DateDue',             // 到期日期 — use DateNextAction instead
     'DateLastAction',      // system managed
     'M_InOut_ID',          // shipment link — not relevant
@@ -243,6 +243,8 @@ const {
     'StartDate',           // not relevant
     'CloseDate',           // not relevant
     'C_Order_ID',          // handled separately via "建立訂單" button
+    'Priority',            // 優先順序 — not relevant for clinic
+    'DateNextAction',      // 下次跟進日期 — managed separately via TrackingDateModal
   ],
 })
 
@@ -438,8 +440,7 @@ async function handleSubmit() {
       router.push({ name: 'consultation-list' })
     }
   } catch (e: any) {
-    // Try to extract API error message
-    const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
+    const apiError = e.response?.data?.detail || e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
     errorMsg.value = isEdit.value ? `更新諮詢失敗: ${apiError}` : `建立諮詢失敗: ${apiError}`
   } finally {
     submitting.value = false
@@ -648,7 +649,10 @@ onMounted(async () => {
   // Silently fetch the first R_RequestType so we can inject it into the create
   // payload. R_RequestType_ID is NOT NULL in iDempiere — without it the POST returns 500.
   listRequestTypes().then(types => {
-    if (types.length > 0) defaultRequestTypeId.value = types[0].R_RequestType_ID
+    if (types.length > 0) {
+      // API returns the PK as `id`, not `R_RequestType_ID`
+      defaultRequestTypeId.value = types[0].id ?? types[0].R_RequestType_ID ?? null
+    }
   }).catch(() => { /* non-critical */ })
 
   // Initialize status selector from R_Status_ID (expanded FK).

@@ -32,6 +32,8 @@ const router = createRouter({
         { path: 'kanban', name: 'consultation-kanban', component: () => import('@/views/consultation/KanbanBoardView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
         { path: 'pending', name: 'consultation-pending', component: () => import('@/views/consultation/PendingCustomersView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
         { path: 'today', name: 'consultation-today-todo', component: () => import('@/views/consultation/TodayTodoView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
+        { path: 'journey', name: 'consultation-journey', component: () => import('@/views/consultation/CustomerJourneyView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
+        { path: 'gantt', name: 'consultation-gantt', component: () => import('@/views/consultation/GanttChartView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
         { path: 'new', name: 'consultation-new', component: () => import('@/views/consultation/RequestFormView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
         { path: ':id', name: 'consultation-edit', component: () => import('@/views/consultation/RequestFormView.vue'), meta: { requiresAuth: true, pageKey: 'consultation' } },
       ],

@@ -33,6 +33,18 @@
       >
         今日待辦
       </button>
+      <button
+        class="view-tab"
+        @click="router.push({ name: 'consultation-gantt' })"
+      >
+        📅 甘特圖
+      </button>
+      <button
+        class="view-tab"
+        @click="router.push({ name: 'consultation-journey' })"
+      >
+        旅程漏斗
+      </button>
     </div>
 
     <!-- List View -->

@@ -220,9 +220,22 @@ function calculateOperatorPerformance() {
     }
   })
 
+  // Build a lookup from request objects for SalesRep_ID expanded name
+  const salesRepNames = new Map<number, string>()
+  props.requests.forEach(req => {
+    if (req.SalesRep_ID && typeof req.SalesRep_ID === 'object') {
+      const id = req.SalesRep_ID.id
+      if (id && !salesRepNames.has(id)) {
+        salesRepNames.set(id, req.SalesRep_ID.Name || req.SalesRep_ID.identifier || '')
+      }
+    }
+  })
+
   metrics.operatorPerformance = Array.from(consultantMap.entries()).map(([consultantId, data]) => ({
     operatorId: consultantId,
-    operatorName: props.operatorNames[consultantId] || `諮詢師 #${consultantId}`,
+    operatorName: salesRepNames.get(consultantId)
+      || (props.operatorNames && props.operatorNames[consultantId])
+      || `諮詢師 #${consultantId}`,
     consultationsUpdated: data.consultationsAssigned.size,
     conversionsCreated: data.conversionsCreated.size,
     conversionRate: data.consultationsAssigned.size > 0
@@ -251,11 +264,16 @@ function getConversionRateClass(rate: string): string {
 
 // 點擊操作人績效，導航到列表頁面並過濾該操作人的諮詢
 function viewOperatorDetails(operatorId: number) {
+  // Resolve name from the performance row (already computed) or fall back
+  const perf = metrics.operatorPerformance.find(p => p.operatorId === operatorId)
+  const displayName = perf?.operatorName
+    || (props.operatorNames && props.operatorNames[operatorId])
+    || `諮詢師 #${operatorId}`
   router.push({
     name: 'consultation-list',
     query: {
       filterOperatorId: operatorId,
-      filterOperatorName: props.operatorNames[operatorId] || `用戶 #${operatorId}`,
+      filterOperatorName: displayName,
     },
   })
 }

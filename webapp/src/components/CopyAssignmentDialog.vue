@@ -233,8 +233,8 @@ async function handleCopy() {
       } as any
 
       // Copy optional fields if they exist
-      if (props.sourceAppt.Comments) {
-        payload.Comments = props.sourceAppt.Comments
+      if (props.sourceAppt.Description) {
+        payload.Description = props.sourceAppt.Description
       }
 
       // API call

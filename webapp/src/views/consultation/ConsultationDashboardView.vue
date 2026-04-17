@@ -26,7 +26,7 @@
 
     <div v-if="loading" class="loading-state">載入中...</div>
     <div v-else-if="error" class="error-state">{{ error }}</div>
-    <ConversionMetrics v-else :requests="filteredRequests" :operatorNames="operatorNames" />
+    <ConversionMetrics v-else :requests="filteredRequests" />
   </div>
 </template>
 
@@ -38,7 +38,6 @@ import ConversionMetrics from '@/components/ConversionMetrics.vue'
 
 const router = useRouter()
 const requests = ref<any[]>([])
-const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const error = ref('')
 const dateRange = ref('30') // 預設 30 天
@@ -74,13 +73,8 @@ async function loadData() {
   loading.value = true
   error.value = ''
   try {
-    // 加載所有諮詢記錄
+    // 加載所有諮詢記錄（SalesRep_ID is $expand'd, names resolved in ConversionMetrics）
     requests.value = await listRequests()
-
-    // TODO: 加載 AD_User 名稱
-    // 預期格式: { 1000: "Jenny", 1001: "JERRY", ... }
-    // 暫時保留為空，前端會用 "用戶 #ID" 顯示
-    operatorNames.value = {}
   } catch (e) {
     error.value = '無法加載儀表板資料'
     console.error(e)

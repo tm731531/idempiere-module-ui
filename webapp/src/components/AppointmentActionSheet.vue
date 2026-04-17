@@ -15,9 +15,9 @@
           <span class="label">時間</span>
           <span class="value">{{ formatTime() }}</span>
         </div>
-        <div v-if="appt.Comments" class="summary-row">
+        <div v-if="appt.Description" class="summary-row">
           <span class="label">備註</span>
-          <span class="value">{{ appt.Comments }}</span>
+          <span class="value">{{ appt.Description }}</span>
         </div>
       </div>
     </div>

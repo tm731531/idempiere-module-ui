@@ -183,7 +183,7 @@ describe('TodayTodoView', () => {
     )
   })
 
-  it('shows empty state when no matching requests', async () => {
+  it('shows empty-bucket message after expanding an empty section', async () => {
     ;(listRequests as any).mockResolvedValue([])
 
     const wrapper = mount(TodayTodoView, {
@@ -192,12 +192,22 @@ describe('TodayTodoView', () => {
 
     await flushPromises()
 
-    expect(wrapper.find('.empty-state').exists()).toBe(true)
-    expect(wrapper.find('.empty-state').text()).toContain('今日沒有待辦事項')
+    // All 4 section headers are always present (sections are never removed from DOM)
+    expect(wrapper.find('.section-header--overdue').exists()).toBe(true)
+    expect(wrapper.find('.section-header--today').exists()).toBe(true)
+    expect(wrapper.find('.section-header--tomorrow').exists()).toBe(true)
+    expect(wrapper.find('.section-header--closed').exists()).toBe(true)
+
+    // Empty sections are auto-collapsed; click to expand one and verify empty-bucket message
+    await wrapper.find('.section-header--today').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.empty-bucket').exists()).toBe(true)
+    expect(wrapper.find('.empty-bucket').text()).toBe('無待辦項目')
   })
 
-  it('sections are collapsed when they have no items', async () => {
-    // Only one today item — other sections should be absent from DOM
+  it('sections are always present but show empty-bucket when they have no items', async () => {
+    // Only one today item — other sections should still be in the DOM with empty-bucket messages
     const mockData = [
       makeReq({ id: 1, DateNextAction: '2026-05-10T09:00:00', _completed: false }),
     ]
@@ -209,11 +219,9 @@ describe('TodayTodoView', () => {
 
     await flushPromises()
 
-    // Overdue section should not exist (0 items)
-    expect(wrapper.find('.section-header--overdue').exists()).toBe(false)
-    // Tomorrow section should not exist (0 items)
-    expect(wrapper.find('.section-header--tomorrow').exists()).toBe(false)
-    // Today section exists
+    // All section headers are always rendered
+    expect(wrapper.find('.section-header--overdue').exists()).toBe(true)
+    expect(wrapper.find('.section-header--tomorrow').exists()).toBe(true)
     expect(wrapper.find('.section-header--today').exists()).toBe(true)
   })
 

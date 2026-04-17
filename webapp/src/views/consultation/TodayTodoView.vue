@@ -39,7 +39,7 @@
       </div>
 
       <!-- Overdue section -->
-      <div v-if="overdue.length > 0" class="section">
+      <div class="section">
         <button class="section-header section-header--overdue" @click="collapsed.overdue = !collapsed.overdue">
           <span class="section-title">
             <span class="section-badge section-badge--overdue">逾期</span>
@@ -56,11 +56,12 @@
             :badge-text="getOverdueBadgeText(r)"
             @click="goToEdit(r)"
           />
+          <p v-if="overdue.length === 0" class="empty-bucket">無待辦項目</p>
         </div>
       </div>
 
       <!-- Today section -->
-      <div v-if="todayItems.length > 0" class="section">
+      <div class="section">
         <button class="section-header section-header--today" @click="collapsed.today = !collapsed.today">
           <span class="section-title">
             <span class="section-badge section-badge--today">今日跟進</span>
@@ -77,11 +78,12 @@
             badge-text="今日跟進"
             @click="goToEdit(r)"
           />
+          <p v-if="todayItems.length === 0" class="empty-bucket">無待辦項目</p>
         </div>
       </div>
 
       <!-- Tomorrow section -->
-      <div v-if="tomorrowItems.length > 0" class="section">
+      <div class="section">
         <button class="section-header section-header--tomorrow" @click="collapsed.tomorrow = !collapsed.tomorrow">
           <span class="section-title">
             <span class="section-badge section-badge--tomorrow">明日跟進</span>
@@ -98,11 +100,12 @@
             badge-text="明日跟進"
             @click="goToEdit(r)"
           />
+          <p v-if="tomorrowItems.length === 0" class="empty-bucket">無待辦項目</p>
         </div>
       </div>
 
       <!-- Closed today section -->
-      <div v-if="closedToday.length > 0" class="section">
+      <div class="section">
         <button class="section-header section-header--closed" @click="collapsed.closed = !collapsed.closed">
           <span class="section-title">
             <span class="section-badge section-badge--closed">今日完成</span>
@@ -119,12 +122,8 @@
             badge-text="今日完成"
             @click="goToEdit(r)"
           />
+          <p v-if="closedToday.length === 0" class="empty-bucket">無待辦項目</p>
         </div>
-      </div>
-
-      <!-- Empty state: show when all sections are empty -->
-      <div v-if="overdue.length === 0 && todayItems.length === 0 && tomorrowItems.length === 0 && closedToday.length === 0" class="empty-state">
-        <p>今日沒有待辦事項</p>
       </div>
     </template>
   </div>
@@ -634,5 +633,13 @@ onMounted(async () => {
   text-align: center;
   padding: 3rem 1rem;
   color: #94a3b8;
+}
+
+.empty-bucket {
+  text-align: center;
+  padding: 0.75rem 1rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin: 0;
 }
 </style>

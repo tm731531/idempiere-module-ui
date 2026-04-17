@@ -53,6 +53,7 @@ vi.mock('@/composables/useAssignmentColors', () => ({
     setAssignmentColorOverride: vi.fn(),
     assignmentColors: { value: {} },
   }),
+  flushPendingSave: vi.fn(),
 }))
 
 import {
@@ -235,23 +236,32 @@ describe('AppointmentForm — multi-resource mode', () => {
       return resourceId === 101
     })
 
-    const wrapper = mountForm()
-    await switchToMultiMode(wrapper)
+    // The watcher is debounced (300 ms) — use fake timers to advance past it
+    vi.useFakeTimers()
+    try {
+      const wrapper = mountForm()
+      await switchToMultiMode(wrapper)
 
-    // Select all resources to trigger conflict check
-    const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    for (const cb of checkboxes) {
-      await cb.setValue(true)
+      // Select all resources to trigger conflict check
+      const checkboxes = wrapper.findAll('input[type="checkbox"]')
+      for (const cb of checkboxes) {
+        await cb.setValue(true)
+      }
+
+      // Set valid time range so the watcher fires
+      const timeInputs = wrapper.findAll('input[type="datetime-local"]')
+      await timeInputs[0]!.setValue('2026-06-01T10:00')
+      await timeInputs[1]!.setValue('2026-06-01T11:00')
+
+      // Advance past the 300 ms debounce then flush async operations
+      await vi.advanceTimersByTimeAsync(300)
+      await flushPromises()
+
+      const conflictDots = wrapper.findAll('.conflict-dot')
+      expect(conflictDots).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
     }
-
-    // Set valid time range so the watcher fires
-    const timeInputs = wrapper.findAll('input[type="datetime-local"]')
-    await timeInputs[0]!.setValue('2026-06-01T10:00')
-    await timeInputs[1]!.setValue('2026-06-01T11:00')
-    await flushPromises()
-
-    const conflictDots = wrapper.findAll('.conflict-dot')
-    expect(conflictDots).toHaveLength(1)
   })
 
   it('disables save button when no resources are checked in multi-mode', async () => {
@@ -293,5 +303,70 @@ describe('AppointmentForm — createMultipleAssignments helper', () => {
 
     expect(createAssignment).toHaveBeenCalledTimes(1)
     expect(createMultipleAssignments).not.toHaveBeenCalled()
+  })
+})
+
+describe('AppointmentForm — query-param prefill', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    // Reset router to root so query params from previous tests don't bleed over
+    await mockRouter.push('/')
+  })
+
+  async function mountFormWithQuery(query: Record<string, string>) {
+    await mockRouter.push({ path: '/', query })
+    await flushPromises()
+    return mount(AppointmentForm, {
+      props: {
+        resources: mockResources,
+        existingAssignments: [],
+      },
+      global: {
+        plugins: [mockRouter],
+      },
+    })
+  }
+
+  it('pre-fills C_BPartner_ID when customerId query param is present', async () => {
+    const wrapper = await mountFormWithQuery({ customerId: '1234' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.form.bpartnerId).toBe(1234)
+  })
+
+  it('ignores invalid (non-numeric) customerId query param', async () => {
+    const wrapper = await mountFormWithQuery({ customerId: 'abc' })
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.form.bpartnerId).toBeNull()
+  })
+
+  it('shows consultation link banner when consultationId query param is present', async () => {
+    const wrapper = await mountFormWithQuery({ consultationId: '42' })
+    await flushPromises()
+
+    const banner = wrapper.find('.consultation-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('關聯諮詢 #42')
+  })
+
+  it('does NOT show consultation banner when no consultationId param', async () => {
+    const wrapper = await mountFormWithQuery({})
+    await flushPromises()
+
+    expect(wrapper.find('.consultation-banner').exists()).toBe(false)
+  })
+
+  it('shows clean create-mode form when no query params are present', async () => {
+    const wrapper = await mountFormWithQuery({})
+    await flushPromises()
+
+    const vm = wrapper.vm as any
+    expect(vm.form.bpartnerId).toBeNull()
+    expect(wrapper.find('.consultation-banner').exists()).toBe(false)
+    // Mode toggle is visible in create mode
+    expect(wrapper.find('.mode-toggle').exists()).toBe(true)
   })
 })

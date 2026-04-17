@@ -9,6 +9,10 @@
         </button>
       </div>
       <div v-if="resourcesLoading" class="selector-loading">載入中...</div>
+      <div v-else-if="resources.length === 0" class="empty-state">
+        <p>尚未設定任何資源</p>
+        <p>請至管理員設定新增資源</p>
+      </div>
       <div v-else class="resource-chips">
         <label
           v-for="res in resources"
@@ -243,7 +247,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { listResources } from '@/api/resource'
 import { listAssignments, updateAssignment } from '@/api/assignment'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
@@ -255,7 +259,7 @@ import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
 import { checkConflictLocal } from '@/lib/time-overlap'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
 import { useToast } from '@/composables/useToast'
-import { useAssignmentColors } from '@/composables/useAssignmentColors'
+import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
 
 // -----------------------------------------------------------------------------
 // Day label conventions
@@ -1117,6 +1121,8 @@ onMounted(async () => {
   }
   await loadAssignments()
 })
+
+onBeforeUnmount(() => flushPendingSave())
 </script>
 
 <style scoped>
@@ -1626,6 +1632,14 @@ onMounted(async () => {
 .month-name {
   font-size: 0.9375rem;
   font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  line-height: 1.6;
 }
 
 </style>

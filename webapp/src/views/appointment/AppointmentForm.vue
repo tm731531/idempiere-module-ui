@@ -195,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { createAssignment, createMultipleAssignments, updateAssignment, deleteAssignment, checkConflict } from '@/api/assignment'
@@ -204,7 +204,7 @@ import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import SearchSelector from '@/components/SearchSelector.vue'
 import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
-import { useAssignmentColors } from '@/composables/useAssignmentColors'
+import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
 
 const { setAssignmentColorOverride } = useAssignmentColors()
 
@@ -403,6 +403,8 @@ onMounted(() => {
     }
   }
 })
+
+onBeforeUnmount(() => flushPendingSave())
 
 // Cancel: emit to parent (modal mode) or navigate back (standalone mode)
 function handleCancel() {

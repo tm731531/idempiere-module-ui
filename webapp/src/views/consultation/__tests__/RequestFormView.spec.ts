@@ -68,6 +68,24 @@ vi.mock('@/api/request', () => ({
   ])),
 }))
 
+vi.mock('@/api/adNote', () => ({
+  listNotesForRecord: vi.fn(() => Promise.resolve([])),
+  createNote: vi.fn(() => Promise.resolve({
+    id: 1,
+    AD_Table_ID: 100,
+    Record_ID: 123,
+    Description: 'NOTE',
+    TextMsg: 'Test note',
+    Created: '2026-01-01T00:00:00Z',
+    CreatedBy: 1,
+  })),
+  getRRequestTableId: vi.fn(() => Promise.resolve(100)),
+}))
+
+vi.mock('@/api/sysconfig', () => ({
+  getSysConfig: vi.fn(() => Promise.resolve(null)),
+}))
+
 describe('RequestFormView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -94,7 +112,7 @@ describe('RequestFormView', () => {
     vi.clearAllMocks()
   })
 
-  it('RequestTimeline is not rendered (temporarily disabled)', async () => {
+  it('RequestTimeline renders in edit mode', async () => {
     const wrapper = mount(RequestFormView, {
       global: {
         stubs: {
@@ -109,7 +127,7 @@ describe('RequestFormView', () => {
     await wrapper.vm.$nextTick()
 
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })
-    expect(timeline.exists()).toBe(false)
+    expect(timeline.exists()).toBe(true)
   })
 
   it('renders QuickActionBar when editing', async () => {
@@ -155,31 +173,102 @@ describe('RequestFormView', () => {
     expect(actionBar.exists()).toBe(false)
   })
 
-  it('handles add-activity event from QuickActionBar', async () => {
+  it('handleAddActivity calls createNote API and refreshes timeline', async () => {
+    const { createNote, listNotesForRecord } = await import('@/api/adNote')
+
     const wrapper = mount(RequestFormView, {
       global: {
         stubs: {
           RequestTimeline: true,
           DynamicForm: true,
+          QuickActionBar: true,
         },
       },
     })
 
+    await flushPromises()
     await wrapper.vm.$nextTick()
 
-    // Directly call the handler method instead of triggering emit
+    // Directly call the handler method
     // @ts-ignore
-    wrapper.vm.handleAddActivity({
-      type: '前台行動',
-      actionType: '打電話',
+    await wrapper.vm.handleAddActivity({
+      type: 'NOTE',
+      actionType: 'NOTE',
       content: '客戶已確認',
-      timestamp: '2026-02-19T10:00:00Z',
-      createdBy: 'Test User',
     })
 
-    // Verify error message is shown (activity feature temporarily disabled)
+    await flushPromises()
+
+    // createNote should have been called with the activity data
+    expect(createNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Record_ID: 123,
+        Description: 'NOTE',
+        TextMsg: '客戶已確認',
+      })
+    )
+
+    // Timeline should refresh — listNotesForRecord called again after create
+    expect(listNotesForRecord).toHaveBeenCalledTimes(2) // once on mount, once after add
+  })
+
+  it('handleAddActivity stores call-type activity as JSON in TextMsg', async () => {
+    const { createNote } = await import('@/api/adNote')
+
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          DynamicForm: true,
+          QuickActionBar: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
     // @ts-ignore
-    expect(wrapper.vm.errorMsg).toBe('活動功能暫時不可用')
+    await wrapper.vm.handleAddActivity({
+      type: 'CALL',
+      actionType: '電話',
+      content: '客戶表示明天方便',
+    })
+
+    await flushPromises()
+
+    expect(createNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Description: 'CALL',
+        TextMsg: JSON.stringify({ summary: '客戶表示明天方便' }),
+      })
+    )
+  })
+
+  it('handleAddActivity does not set error message on success', async () => {
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          DynamicForm: true,
+          QuickActionBar: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // @ts-ignore
+    await wrapper.vm.handleAddActivity({
+      type: 'NOTE',
+      content: '測試備註',
+    })
+
+    await flushPromises()
+
+    // @ts-ignore
+    expect(wrapper.vm.errorMsg).toBe('')
   })
 
   it('passes correct props to QuickActionBar', async () => {
@@ -201,7 +290,20 @@ describe('RequestFormView', () => {
     expect(actionBar.props('disabled')).toBe(false)
   })
 
-  it('RequestTimeline is temporarily disabled', async () => {
+  it('passes activities JSON string to RequestTimeline', async () => {
+    const { listNotesForRecord } = await import('@/api/adNote')
+    vi.mocked(listNotesForRecord).mockResolvedValueOnce([
+      {
+        id: 1,
+        AD_Table_ID: 100,
+        Record_ID: 123,
+        Description: 'NOTE',
+        TextMsg: 'Test note content',
+        Created: '2026-01-15T10:00:00Z',
+        CreatedBy: { id: 1, identifier: 'Test User' },
+      },
+    ])
+
     const wrapper = mount(RequestFormView, {
       global: {
         stubs: {
@@ -215,8 +317,17 @@ describe('RequestFormView', () => {
     await flushPromises()
     await wrapper.vm.$nextTick()
 
-    // Activity Timeline is temporarily disabled until proper storage is found
     const timeline = wrapper.findComponent({ name: 'RequestTimeline' })
-    expect(timeline.exists()).toBe(false)
+    expect(timeline.exists()).toBe(true)
+    // The activities prop should be a JSON string
+    const activitiesProp = timeline.props('activities')
+    expect(typeof activitiesProp).toBe('string')
+    const parsed = JSON.parse(activitiesProp)
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed[0]).toMatchObject({
+      type: 'NOTE',
+      content: 'Test note content',
+      createdBy: 'Test User',
+    })
   })
 })

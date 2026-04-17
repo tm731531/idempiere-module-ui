@@ -31,11 +31,12 @@
         @update:modelValue="formData = $event"
       />
 
-      <!-- Activity Timeline Section - Temporarily Disabled -->
-      <!-- <div v-if="isEdit" class="timeline-section">
+      <!-- Activity Timeline Section -->
+      <div v-if="isEdit" class="timeline-section">
         <h3>活動記錄</h3>
-        <RequestTimeline :activities="formData.Description || '[]'" />
-      </div> -->
+        <div v-if="notesLoading" class="notes-loading">載入活動中...</div>
+        <RequestTimeline v-else :activities="notesAsJson" />
+      </div>
 
       <!-- Attachment section (custom, not from metadata) -->
       <div v-if="isEdit" class="form-group attachment-section">
@@ -134,7 +135,8 @@ import RequestTimeline from '@/components/RequestTimeline.vue'
 import QuickActionBar from '@/components/QuickActionBar.vue'
 import StatusUpdateModal from '@/components/StatusUpdateModal.vue'
 import TrackingDateModal from '@/components/TrackingDateModal.vue'
-import { parseActivities, stringifyActivities, type Activity } from '@/utils/requestActivity'
+import { type Activity } from '@/utils/requestActivity'
+import { listNotesForRecord, createNote, getRRequestTableId, type AdNote } from '@/api/adNote'
 import {
   getRequest,
   createRequest,
@@ -197,6 +199,62 @@ const statusOptions = ref<string[]>([])  // 動態加載的狀態選項
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
 const availableStatuses = ref<Array<{ R_Status_ID: number; Name: string }>>([])
+
+// Activity timeline backed by AD_Note
+const notes = ref<AdNote[]>([])
+const notesLoading = ref(false)
+
+/**
+ * Convert AD_Note records to the JSON string format that RequestTimeline expects.
+ * AD_Note.Description holds the activity type; TextMsg holds the content.
+ * For call logs the TextMsg may be a JSON string — we extract the summary if so.
+ */
+const notesAsJson = computed(() => {
+  const activities: Activity[] = notes.value.map((note) => {
+    let content = note.TextMsg || ''
+    let actionType = note.Description || 'NOTE'
+
+    // Attempt to parse call log JSON (e.g. { summary, duration, result })
+    try {
+      const parsed = JSON.parse(note.TextMsg)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        content = parsed.summary || parsed.result || note.TextMsg
+        if (parsed.duration) {
+          content = `${content} (${parsed.duration})`
+        }
+      }
+    } catch {
+      // TextMsg is plain text — use as-is
+    }
+
+    const createdBy =
+      typeof note.CreatedBy === 'object' && note.CreatedBy !== null
+        ? note.CreatedBy.identifier
+        : String(note.CreatedBy)
+
+    return {
+      timestamp: note.Created,
+      type: actionType,
+      actionType,
+      content,
+      createdBy,
+    }
+  })
+  return JSON.stringify(activities)
+})
+
+async function loadNotes(): Promise<void> {
+  if (!requestId.value) return
+  notesLoading.value = true
+  try {
+    notes.value = await listNotesForRecord('R_Request', requestId.value)
+  } catch (e) {
+    console.warn('Failed to load activity notes:', e)
+    notes.value = []
+  } finally {
+    notesLoading.value = false
+  }
+}
 
 const {
   attachments,
@@ -288,9 +346,40 @@ function goBack() {
   router.push({ name: 'consultation-list' })
 }
 
-function handleAddActivity(activity: Partial<Activity>) {
-  // TODO: Activity feature temporarily disabled until we find a proper field for storage
-  errorMsg.value = '活動功能暫時不可用'
+async function handleAddActivity(activity: Partial<Activity>) {
+  if (!requestId.value) {
+    errorMsg.value = '無法新增活動：諮詢 ID 不存在'
+    return
+  }
+
+  errorMsg.value = ''
+  try {
+    const tableId = await getRRequestTableId()
+    const activityType = activity.type || activity.actionType || 'NOTE'
+
+    // For call-type activities, store structured data as JSON in TextMsg
+    let textMsg: string
+    const isCallLike = activityType === 'CALL' || activity.actionType === '電話'
+    if (isCallLike && activity.content) {
+      textMsg = JSON.stringify({ summary: activity.content })
+    } else {
+      textMsg = activity.content || ''
+    }
+
+    await createNote({
+      AD_Table_ID: tableId,
+      Record_ID: requestId.value,
+      Description: activityType,
+      TextMsg: textMsg,
+      AD_Org_ID: auth.context?.organizationId ?? 0,
+    })
+
+    // Refresh timeline
+    await loadNotes()
+  } catch (e: any) {
+    const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
+    errorMsg.value = `新增活動失敗: ${apiError}`
+  }
 }
 
 function handleUpdateStatus() {
@@ -417,7 +506,10 @@ onMounted(async () => {
   selectedStatus.value = formData.value.LastResult || ''
 
   if (isEdit.value && requestId.value) {
-    await loadAttachments(requestId.value)
+    await Promise.all([
+      loadAttachments(requestId.value),
+      loadNotes(),
+    ])
   }
 })
 
@@ -707,6 +799,13 @@ function onCreateOrder() {
   letter-spacing: 0.05em;
   margin-bottom: 1rem;
   line-height: 1.4;
+}
+
+.notes-loading {
+  text-align: center;
+  padding: 1.5rem;
+  color: #94a3b8;
+  font-size: 0.9375rem;
 }
 
 /* Mobile-first responsive design */

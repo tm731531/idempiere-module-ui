@@ -281,7 +281,7 @@ const defaultRequestTypeId = ref<number | null>(null)
 const CLINIC_MANDATORY = ['C_BPartner_ID', 'SalesRep_ID']
 const adjustedFieldDefs = computed(() =>
   (visibleFieldDefs.value ?? []).map(f =>
-    CLINIC_MANDATORY.includes(f.columnName) ? { ...f, isMandatory: true } : f
+    CLINIC_MANDATORY.includes(f.column.columnName) ? { ...f, column: { ...f.column, isMandatory: true } } : f
   )
 )
 

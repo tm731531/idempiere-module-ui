@@ -284,6 +284,7 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
   - `R_Status_ID` → Status FK (狀態) — **source of truth** since 2026-04; points at `R_Status` table
   - `LastResult` → *legacy* free-text status; still queried for backwards compatibility but no longer drives conversion / filter logic
   - `C_BPartner_ID` → Customer (客戶)
+  - `DateNextAction` → 下次跟進日期 — standard iDempiere R_Request column; written by `TrackingDateModal` via `updateRequest`; displayed as a badge in the form view and as overdue/today/tomorrow/later badges in the list view
   - `Created` → Consultation date (諮詢日期)
   - `Updated` → Last modification time (最後更新)
   - ⚠️ `CreatedBy` & `UpdatedBy` are audit fields, NOT business responsibility fields
@@ -321,12 +322,11 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
 
 - **Features disabled (temporary)**:
   - ❌ Activity Timeline — no suitable storage field yet
-  - ❌ Tracking date recording — no suitable storage field yet
 
 - **Related files**:
   - `api/request.ts` — `listRequests`, `getRequest`, `listRequestStatuses` (returns `{R_Status_ID, Name, SeqNo, IsClosed}`), `updateRequestStatus`
   - `composables/useRequestStatuses.ts` — module-level cache + `loadRequestStatuses`, `findStatus`, `isCompletedStatus`, `isRequestCompleted`, `extractStatusId`, `extractStatusName`, `getStatusName`
-  - `views/consultation/RequestListView.vue` — Tabs generated from R_Status (ordered by SeqNo); filter by numeric `R_Status_ID`
+  - `views/consultation/RequestListView.vue` — Tabs generated from R_Status (ordered by SeqNo); filter by numeric `R_Status_ID`; `getTrackingBadge(dateStr)` returns `{ text, color }` or null for overdue/today/tomorrow/later; sort toggle (建立時間 / 下次跟進)
   - `views/consultation/RequestFormView.vue` — Status dropdown sourced from `R_Status`; submit uses `updateRequestStatus(id, R_Status_ID)`
   - `views/consultation/ConsultationDashboardView.vue` — Dashboard with ConversionMetrics
   - `components/ConversionMetrics.vue` — Performance ranking driven by `isRequestCompleted()` (IsClosed-backed)

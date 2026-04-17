@@ -35,6 +35,19 @@
         </button>
       </div>
 
+      <!-- Sort toggle -->
+      <div class="sort-bar">
+        <span class="sort-label">排序：</span>
+        <button
+          :class="['sort-btn', { active: sortMode === 'created' }]"
+          @click="sortMode = 'created'; loadRequests()"
+        >建立時間</button>
+        <button
+          :class="['sort-btn', { active: sortMode === 'next-action' }]"
+          @click="sortMode = 'next-action'; loadRequests()"
+        >下次跟進</button>
+      </div>
+
       <div v-if="loading" class="loading-state">載入中...</div>
 
       <div v-else-if="requests.length === 0" class="empty-state">
@@ -60,6 +73,12 @@
               :title="`訂單: ${getOrderNo(r)}`"
             >
               ✓ 已轉化
+            </span>
+            <span
+              v-if="getTrackingBadge(r.DateNextAction)"
+              :class="['tracking-badge', `tracking-badge--${getTrackingBadge(r.DateNextAction)!.color}`]"
+            >
+              {{ getTrackingBadge(r.DateNextAction)!.text }}
             </span>
             <span class="card-operator">👤 {{ getOperatorName(r) }}</span>
             <span class="card-date">{{ formatDate(r.Created) }}</span>
@@ -90,6 +109,7 @@ import {
   extractStatusName,
 } from '@/composables/useRequestStatuses'
 import ConversionMetrics from '@/components/ConversionMetrics.vue'
+import { getTrackingBadge } from '@/utils/trackingBadge'
 
 // Tab keys: 'all' | numeric R_Status_ID (stringified) | fallback status name
 type TabKey = string
@@ -102,8 +122,11 @@ const tabs = ref<{ key: TabKey; label: string }[]>([
 const router = useRouter()
 const route = useRoute()
 
+type SortMode = 'created' | 'next-action'
+
 const viewMode = ref<ViewMode>('list')
 const activeTab = ref<TabKey>('all')
+const sortMode = ref<SortMode>('created')
 const requests = ref<any[]>([])
 const allRequests = ref<any[]>([])
 const operatorNames = ref<Record<number, string>>({})
@@ -149,11 +172,27 @@ function filterRequestsByStatus(allReqs: any[], tabKey: string): any[] {
   return filtered
 }
 
+function sortRequests(reqs: any[]): any[] {
+  if (sortMode.value !== 'next-action') return reqs
+
+  // Sort by DateNextAction: overdue first, then soonest, then null/no-date last
+  return [...reqs].sort((a, b) => {
+    const da = a.DateNextAction ? new Date(String(a.DateNextAction).replace(/Z$/i, '')).getTime() : null
+    const db = b.DateNextAction ? new Date(String(b.DateNextAction).replace(/Z$/i, '')).getTime() : null
+
+    if (da === null && db === null) return 0
+    if (da === null) return 1   // no date goes to end
+    if (db === null) return -1  // no date goes to end
+    return da - db              // overdue (earlier) first
+  })
+}
+
 async function loadRequests() {
   loading.value = true
   try {
     const allReqs = await listRequests()
-    requests.value = filterRequestsByStatus(allReqs, activeTab.value)
+    const filtered = filterRequestsByStatus(allReqs, activeTab.value)
+    requests.value = sortRequests(filtered)
   } catch {
     requests.value = []
   } finally {
@@ -498,5 +537,73 @@ onMounted(async () => {
 
 .clear-filter-btn:hover {
   background: var(--color-primary-hover);
+}
+
+/* Tracking date badges */
+.tracking-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tracking-badge--red {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.tracking-badge--orange {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+.tracking-badge--yellow {
+  background: #fefce8;
+  color: #ca8a04;
+  border: 1px solid #fef08a;
+}
+
+.tracking-badge--gray {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+/* Sort bar */
+.sort-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sort-label {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.sort-btn {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: #64748b;
+  min-height: 28px;
+  transition: all 0.15s;
+}
+
+.sort-btn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.sort-btn:hover:not(.active) {
+  background: #f1f5f9;
 }
 </style>

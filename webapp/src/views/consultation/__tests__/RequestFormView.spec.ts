@@ -61,7 +61,7 @@ vi.mock('@/composables/useAttachment', () => ({
 vi.mock('@/api/request', () => ({
   getRequest: vi.fn(),
   createRequest: vi.fn(),
-  updateRequest: vi.fn(),
+  updateRequest: vi.fn(() => Promise.resolve({ id: 123 })),
   updateRequestStatus: vi.fn(() => Promise.resolve()),
   listRequestStatuses: vi.fn(() => Promise.resolve([
     { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
@@ -396,6 +396,76 @@ describe('RequestFormView', () => {
         consultationId: '123',
       }),
     }))
+  })
+
+  it('handleTrackingSet calls updateRequest with DateNextAction and updates dateNextAction ref', async () => {
+    const { updateRequest } = await import('@/api/request')
+
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          DynamicForm: true,
+          QuickActionBar: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // @ts-ignore
+    await wrapper.vm.handleTrackingSet({
+      date: '2026-05-10',
+      time: '14:30',
+      description: '下次電話跟進',
+    })
+
+    await flushPromises()
+
+    // Must call updateRequest with DateNextAction field
+    expect(updateRequest).toHaveBeenCalledWith(
+      123,
+      expect.objectContaining({ DateNextAction: expect.stringContaining('2026-05-10') })
+    )
+
+    // dateNextAction ref should be updated
+    // @ts-ignore
+    expect(wrapper.vm.dateNextAction).toBeTruthy()
+
+    // Must NOT set the old disabled error message
+    // @ts-ignore
+    expect(wrapper.vm.errorMsg).not.toContain('暫時不可用')
+  })
+
+  it('handleTrackingSet shows error when updateRequest fails', async () => {
+    const { updateRequest } = await import('@/api/request')
+    vi.mocked(updateRequest).mockRejectedValueOnce(new Error('Server error'))
+
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          DynamicForm: true,
+          QuickActionBar: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // @ts-ignore
+    await wrapper.vm.handleTrackingSet({
+      date: '2026-05-10',
+      time: '14:30',
+      description: '跟進',
+    })
+
+    await flushPromises()
+
+    // @ts-ignore
+    expect(wrapper.vm.errorMsg).toContain('設定追蹤日期失敗')
   })
 
   it('passes activities JSON string to RequestTimeline', async () => {

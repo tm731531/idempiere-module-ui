@@ -37,6 +37,45 @@ describe('assignment API', () => {
     expect(apiClient.post).toHaveBeenCalled()
   })
 
+  it('createAssignment includes C_BPartner_ID when provided', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 2 } })
+    const { createAssignment } = await import('@/api/assignment')
+    await createAssignment({
+      S_Resource_ID: 1,
+      AssignDateFrom: '2026-02-14T09:00:00',
+      AssignDateTo: '2026-02-14T10:00:00',
+      Name: 'Test with Customer',
+      AD_Org_ID: 11,
+      C_BPartner_ID: 100005,
+    })
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/v1/models/S_ResourceAssignment',
+      expect.objectContaining({ C_BPartner_ID: 100005 }),
+    )
+  })
+
+  it('updateAssignment includes C_BPartner_ID in payload', async () => {
+    vi.mocked(apiClient.put).mockResolvedValue({ data: { id: 1 } })
+    const { updateAssignment } = await import('@/api/assignment')
+    await updateAssignment(1, { Name: 'Updated', C_BPartner_ID: 100005 })
+    expect(apiClient.put).toHaveBeenCalledWith(
+      '/api/v1/models/S_ResourceAssignment/1',
+      expect.objectContaining({ C_BPartner_ID: 100005 }),
+    )
+  })
+
+  it('listAssignments expands C_BPartner_ID', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { records: [] } })
+    const { listAssignments } = await import('@/api/assignment')
+    await listAssignments(new Date('2026-02-14'), new Date('2026-02-14'))
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/api/v1/models/S_ResourceAssignment',
+      expect.objectContaining({
+        params: expect.objectContaining({ '$expand': expect.stringContaining('C_BPartner_ID') }),
+      }),
+    )
+  })
+
   it('updateAssignment strips IsConfirmed', async () => {
     vi.mocked(apiClient.put).mockResolvedValue({ data: { id: 1 } })
     const { updateAssignment } = await import('@/api/assignment')

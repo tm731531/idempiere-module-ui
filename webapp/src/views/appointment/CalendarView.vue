@@ -95,7 +95,12 @@
             @touchstart.passive="startDragAppt($event, layout.appt)"
             @contextmenu.prevent="onApptContextMenu($event, layout.appt)"
           >
-            {{ layout.appt.Name }}
+            <span class="appt-block-name">{{ layout.appt.Name }}</span>
+            <span
+              v-if="getCustomerName(layout.appt)"
+              class="appt-block-customer"
+              :title="getCustomerName(layout.appt)"
+            >{{ getCustomerName(layout.appt) }}</span>
           </div>
         </div>
       </div>
@@ -308,6 +313,14 @@ function getResourceName(appt: any): string {
   const resId = typeof appt.S_Resource_ID === 'object' ? appt.S_Resource_ID.id : appt.S_Resource_ID
   const res = resources.value.find(r => r.id === resId)
   return res?.Name || ''
+}
+
+function getCustomerName(appt: any): string {
+  if (!appt.C_BPartner_ID) return ''
+  if (typeof appt.C_BPartner_ID === 'object') {
+    return appt.C_BPartner_ID.identifier || appt.C_BPartner_ID.Name || ''
+  }
+  return ''
 }
 
 // ========== Date Helpers ==========
@@ -1370,6 +1383,24 @@ onMounted(async () => {
 .appt-time {
   font-size: 0.6875rem;
   opacity: 0.8;
+}
+
+.appt-block-name {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.appt-block-customer {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.6875rem;
+  opacity: 0.85;
+  margin-top: 1px;
 }
 
 /* Month grid */

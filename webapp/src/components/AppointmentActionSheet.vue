@@ -15,6 +15,10 @@
           <span class="label">時間</span>
           <span class="value">{{ formatTime() }}</span>
         </div>
+        <div v-if="getCustomerName()" class="summary-row">
+          <span class="label">客戶</span>
+          <span class="value">{{ getCustomerName() }}</span>
+        </div>
         <div v-if="appt.Description" class="summary-row">
           <span class="label">備註</span>
           <span class="value">{{ appt.Description }}</span>
@@ -62,6 +66,14 @@ function getResourceName(): string {
 
   const res = props.resources?.find((r: any) => r.id === resId)
   return res?.Name || `#${resId}`
+}
+
+function getCustomerName(): string {
+  if (!props.appt.C_BPartner_ID) return ''
+  if (typeof props.appt.C_BPartner_ID === 'object') {
+    return props.appt.C_BPartner_ID.identifier || props.appt.C_BPartner_ID.Name || ''
+  }
+  return ''
 }
 
 function formatTime(): string {

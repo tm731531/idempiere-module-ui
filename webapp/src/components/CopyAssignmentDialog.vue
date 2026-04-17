@@ -237,6 +237,14 @@ async function handleCopy() {
         payload.Description = props.sourceAppt.Description
       }
 
+      // Copy customer linkage from source appointment
+      if (props.sourceAppt.C_BPartner_ID) {
+        const bpId = typeof props.sourceAppt.C_BPartner_ID === 'object'
+          ? props.sourceAppt.C_BPartner_ID.id
+          : props.sourceAppt.C_BPartner_ID
+        if (bpId) payload.C_BPartner_ID = bpId
+      }
+
       // API call
       try {
         await createAssignment(payload)

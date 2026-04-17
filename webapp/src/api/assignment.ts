@@ -8,6 +8,7 @@ export interface AssignmentData {
   Name: string
   Description?: string
   AD_Org_ID: number
+  C_BPartner_ID?: number | null  // Customer (optional)
 }
 
 export async function listAssignments(
@@ -26,7 +27,7 @@ export async function listAssignments(
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
     params: {
       '$filter': filter,
-      '$expand': 'S_Resource_ID',
+      '$expand': 'S_Resource_ID,C_BPartner_ID',
       '$orderby': 'AssignDateFrom',
       '$top': '500',
     },

@@ -58,6 +58,18 @@
       </div>
 
       <div class="form-group">
+        <label class="form-label">客戶</label>
+        <SearchSelector
+          v-model="form.bpartnerId"
+          table-name="C_BPartner"
+          display-field="Name"
+          search-field="Name"
+          filter="IsCustomer eq true"
+          :initial-label="form.bpartnerLabel"
+        />
+      </div>
+
+      <div class="form-group">
         <label class="form-label">備註</label>
         <textarea
           v-model="form.description"
@@ -96,6 +108,7 @@ import { createAssignment, updateAssignment, deleteAssignment } from '@/api/assi
 import { createResource } from '@/api/resource'
 import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
+import SearchSelector from '@/components/SearchSelector.vue'
 
 const props = defineProps<{
   resources: any[]
@@ -120,6 +133,8 @@ const form = reactive({
   dateTo: '',
   name: '',
   description: '',
+  bpartnerId: null as number | null,
+  bpartnerLabel: '',
 })
 
 const saving = ref(false)
@@ -173,6 +188,15 @@ onMounted(() => {
     form.dateTo = toDatetimeLocal(parseIdempiereDateTime(a.AssignDateTo))
     form.name = a.Name || ''
     form.description = a.Description || ''
+    // Pre-fill customer if present
+    if (a.C_BPartner_ID) {
+      if (typeof a.C_BPartner_ID === 'object') {
+        form.bpartnerId = a.C_BPartner_ID.id ?? null
+        form.bpartnerLabel = a.C_BPartner_ID.identifier || a.C_BPartner_ID.Name || ''
+      } else {
+        form.bpartnerId = a.C_BPartner_ID
+      }
+    }
   } else {
     // Create mode
     if (props.initialResourceId !== undefined && props.initialResourceId !== 0) {
@@ -256,6 +280,7 @@ async function handleSave() {
         AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
+        C_BPartner_ID: form.bpartnerId ?? undefined,
       })
     } else {
       // Create new
@@ -266,6 +291,7 @@ async function handleSave() {
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
         AD_Org_ID: orgId,
+        C_BPartner_ID: form.bpartnerId ?? undefined,
       })
     }
 

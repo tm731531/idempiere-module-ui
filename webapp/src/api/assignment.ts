@@ -53,6 +53,25 @@ export async function deleteAssignment(id: number): Promise<void> {
   await apiClient.delete(`/api/v1/models/S_ResourceAssignment/${id}`)
 }
 
+/**
+ * List assignments for a specific customer (C_BPartner_ID), ordered by
+ * AssignDateFrom DESC. Used by CustomerHistorySidebar.
+ */
+export async function listAssignmentsByCustomer(
+  customerId: number,
+  top = 10,
+): Promise<any[]> {
+  const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
+    params: {
+      '$filter': `C_BPartner_ID eq ${customerId}`,
+      '$expand': 'S_Resource_ID,C_BPartner_ID',
+      '$orderby': 'AssignDateFrom desc',
+      '$top': String(top),
+    },
+  })
+  return resp.data.records || []
+}
+
 export async function checkConflict(
   resourceId: number,
   dateFrom: Date,

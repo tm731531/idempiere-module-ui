@@ -48,12 +48,12 @@ export interface OrderLineData {
   Description?: string
 }
 
-export async function listOrders(filter?: string): Promise<any[]> {
+export async function listOrders(filter?: string, top = 100): Promise<any[]> {
   const params: Record<string, string> = {
     '$select': 'C_Order_ID,DocumentNo,DocStatus,C_BPartner_ID,GrandTotal,DateOrdered,IsSOTrx',
     '$expand': 'C_BPartner_ID',
     '$orderby': 'DateOrdered desc',
-    '$top': '100',
+    '$top': String(top),
   }
   if (filter) params['$filter'] = filter
   const resp = await apiClient.get('/api/v1/models/C_Order', { params })

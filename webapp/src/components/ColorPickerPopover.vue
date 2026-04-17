@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, nextTick, watch } from 'vue'
 
 // ========== Clinic-friendly palette (10 colors) ==========
 const PALETTE = [
@@ -88,8 +88,6 @@ watch(() => props.visible, async (shown) => {
     left: `${Math.max(8, left)}px`,
   }
 })
-
-const computedStyle = computed(() => positionStyle.value)
 
 function select(hex: string) {
   emit('update:modelValue', hex)

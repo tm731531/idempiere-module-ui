@@ -108,6 +108,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { createAssignment, checkConflict } from '@/api/assignment'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 
+function toDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 interface Props {
   sourceAppt: any
   resources: any[]
@@ -140,13 +145,13 @@ const initializeDefaultTimes = () => {
       sourceFrom.getHours(), sourceFrom.getMinutes())
     const endDate = new Date(startDate.getTime() + (sourceTo.getTime() - sourceFrom.getTime()))
 
-    selectedStartTime.value = startDate.toISOString().slice(0, 16)
-    selectedEndTime.value = endDate.toISOString().slice(0, 16)
+    selectedStartTime.value = toDatetimeLocal(startDate)
+    selectedEndTime.value = toDatetimeLocal(endDate)
   } catch (e) {
     // Fallback to now if parsing fails
     const now = new Date()
-    selectedStartTime.value = now.toISOString().slice(0, 16)
-    selectedEndTime.value = new Date(now.getTime() + 3600000).toISOString().slice(0, 16)
+    selectedStartTime.value = toDatetimeLocal(now)
+    selectedEndTime.value = toDatetimeLocal(new Date(now.getTime() + 3600000))
   }
 }
 

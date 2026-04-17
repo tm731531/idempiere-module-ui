@@ -10,13 +10,17 @@
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
 
     <form v-else @submit.prevent="handleSubmit">
-      <!-- Status Selector (dynamically loaded from SysConfig) -->
+      <!-- Status Selector (loaded from R_Status table) -->
       <div class="form-group">
         <label>狀態</label>
-        <select v-model="selectedStatus" @change="updateStatusField" class="status-select">
-          <option value="">-- 選擇狀態 --</option>
-          <option v-for="status in statusOptions" :key="status" :value="status">
-            {{ status }}
+        <select v-model.number="selectedStatusId" @change="updateStatusField" class="status-select">
+          <option :value="0">-- 選擇狀態 --</option>
+          <option
+            v-for="status in availableStatuses"
+            :key="status.R_Status_ID"
+            :value="status.R_Status_ID"
+          >
+            {{ status.Name }}
           </option>
         </select>
       </div>
@@ -96,7 +100,7 @@
     <div v-if="isEdit && requestId" class="quick-actions-wrapper">
       <QuickActionBar
         :request-id="requestId!"
-        :current-status="getStatusName(formData.R_Status_ID)"
+        :current-status="currentStatusName"
         :disabled="submitting || !isEdit"
         @add-activity="handleAddActivity"
         @update-status="handleUpdateStatus"
@@ -144,16 +148,12 @@ import {
   updateRequestStatus,
   listRequestStatuses,
   type RequestData,
+  type RequestStatus,
 } from '@/api/request'
-import { getSysConfig } from '@/api/sysconfig'
-
-// Fallback statuses when API returns empty
-// These IDs must match actual R_Status records in the database
-const FALLBACK_STATUSES = [
-  { R_Status_ID: 100, Name: 'Open', SeqNo: 1 },
-  { R_Status_ID: 101, Name: 'Waiting on customer', SeqNo: 2 },
-  { R_Status_ID: 102, Name: 'Closed', SeqNo: 3 },
-]
+import {
+  loadRequestStatuses,
+  findStatus,
+} from '@/composables/useRequestStatuses'
 
 const router = useRouter()
 const route = useRoute()
@@ -193,12 +193,20 @@ const highlightColumns = ['C_BPartner_ID']
 
 const submitting = ref(false)
 const errorMsg = ref('')
-const selectedStatus = ref('')
-const statusOptions = ref<string[]>([])  // 動態加載的狀態選項
+// R_Status_ID of the currently-selected status. 0 = unselected.
+const selectedStatusId = ref<number>(0)
 
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
-const availableStatuses = ref<Array<{ R_Status_ID: number; Name: string }>>([])
+const availableStatuses = ref<RequestStatus[]>([])
+
+const currentStatusName = computed(() => {
+  if (selectedStatusId.value) {
+    const hit = findStatus(selectedStatusId.value)
+    if (hit) return hit.Name
+  }
+  return ''
+})
 
 // Activity timeline backed by AD_Note
 const notes = ref<AdNote[]>([])
@@ -309,14 +317,17 @@ async function handleSubmit() {
       delete updatePayload.Updated
       delete updatePayload.UpdatedBy
       delete updatePayload.Processed
-      // Ensure LastResult (status) is included if changed
-      if (selectedStatus.value) {
-        updatePayload.LastResult = selectedStatus.value
-      }
+      // Persist R_Status_ID separately via the dedicated endpoint when changed.
       await updateRequest(requestId.value, updatePayload)
+      if (selectedStatusId.value && selectedStatusId.value > 0) {
+        await updateRequestStatus(requestId.value, selectedStatusId.value)
+      }
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
+      if (selectedStatusId.value && selectedStatusId.value > 0) {
+        cleanPayload.R_Status_ID = selectedStatusId.value
+      }
       await createRequest(cleanPayload as RequestData)
       router.push({ name: 'consultation-list' })
     }
@@ -391,16 +402,33 @@ function handleSetTracking() {
 }
 
 function updateStatusField() {
-  // When status dropdown changes, sync to formData.LastResult
-  if (formData.value) {
-    formData.value.LastResult = selectedStatus.value
+  // When status dropdown changes, sync to formData.R_Status_ID (expanded object).
+  if (formData.value && selectedStatusId.value) {
+    const hit = findStatus(selectedStatusId.value)
+    formData.value.R_Status_ID = hit
+      ? { id: hit.R_Status_ID, identifier: hit.Name, Name: hit.Name }
+      : selectedStatusId.value
   }
 }
 
-function handleStatusSelected(statusName: string) {
-  if (formData.value) {
-    formData.value.LastResult = statusName
-    selectedStatus.value = statusName
+function handleStatusSelected(statusIdOrName: string | number) {
+  // StatusUpdateModal may emit either a status name (legacy) or the numeric id.
+  let nextId: number | null = null
+  if (typeof statusIdOrName === 'number') {
+    nextId = statusIdOrName
+  } else {
+    // Try numeric parse, then lookup by name
+    const asNum = Number(statusIdOrName)
+    if (!Number.isNaN(asNum) && /^\d+$/.test(statusIdOrName)) {
+      nextId = asNum
+    } else {
+      const hit = availableStatuses.value.find(s => s.Name === statusIdOrName)
+      if (hit) nextId = hit.R_Status_ID
+    }
+  }
+  if (nextId != null) {
+    selectedStatusId.value = nextId
+    updateStatusField()
   }
   showStatusModal.value = false
 }
@@ -411,69 +439,39 @@ function handleTrackingSet(data: { date: string; time: string; description: stri
   showTrackingModal.value = false
 }
 
-function getStatusName(status: any): string {
-  if (!status) return ''
-
-  // Status is now stored as a string name in Result field (e.g., "waiting", "open", "closed")
-  if (typeof status === 'string') {
-    return status
-  }
-
-  // Legacy support: if it's an object with Name
-  if (typeof status === 'object' && status.Name) {
-    return status.Name
-  }
-
-  return ''
-}
-
 function getCurrentStatusId(): number {
   const status = formData.value.R_Status_ID
-  if (status && typeof status === 'object' && status.id) {
-    return typeof status.id === 'number' ? status.id : Number(status.id)
-  }
-  if (typeof status === 'string') {
-    return Number(status)
+  if (status && typeof status === 'object' && status.id != null) {
+    const id = status.id
+    return typeof id === 'number' ? id : Number(id) || 0
   }
   if (typeof status === 'number') {
     return status
+  }
+  if (typeof status === 'string') {
+    const n = Number(status)
+    return Number.isNaN(n) ? 0 : n
   }
   return 0
 }
 
 async function loadAvailableStatuses() {
   try {
-    // Load statuses from SysConfig (MobileSettingConfig)
-    const configValue = await getSysConfig('MobileSettingConfig')
-
-    if (configValue) {
-      try {
-        const statuses = JSON.parse(configValue)
-        availableStatuses.value = statuses
-        statusOptions.value = statuses.map((s: any) => s.Name)
-        return
-      } catch {
-        // continue to fallback
-      }
-    }
-
-    // Fallback: use hardcoded default statuses
-    const defaultStatuses = [
-      { R_Status_ID: 0, Name: '待處理' },
-      { R_Status_ID: 1, Name: '處理中' },
-      { R_Status_ID: 2, Name: '已完成' },
-    ]
-    availableStatuses.value = defaultStatuses
-    statusOptions.value = defaultStatuses.map(s => s.Name)
+    const rows = await loadRequestStatuses()
+    availableStatuses.value = rows
   } catch {
-    // Final fallback
-    const fallbackStatuses = [
-      { R_Status_ID: 0, Name: '待處理' },
-      { R_Status_ID: 1, Name: '處理中' },
-      { R_Status_ID: 2, Name: '已完成' },
-    ]
-    availableStatuses.value = fallbackStatuses
-    statusOptions.value = fallbackStatuses.map(s => s.Name)
+    // Fall back to an empty list — UI will show only the placeholder option.
+    availableStatuses.value = []
+  }
+
+  // If the fetched list is empty, try a one-shot direct fetch to at least
+  // populate the dropdown even if caching failed (defensive).
+  if (availableStatuses.value.length === 0) {
+    try {
+      availableStatuses.value = await listRequestStatuses()
+    } catch {
+      availableStatuses.value = []
+    }
   }
 }
 
@@ -502,8 +500,17 @@ onMounted(async () => {
 
   await loadAvailableStatuses()
 
-  // Initialize status selector from LastResult field
-  selectedStatus.value = formData.value.LastResult || ''
+  // Initialize status selector from R_Status_ID (expanded FK).
+  // Fall back to matching LastResult against known status names for legacy rows.
+  const currentId = getCurrentStatusId()
+  if (currentId > 0 && availableStatuses.value.some(s => s.R_Status_ID === currentId)) {
+    selectedStatusId.value = currentId
+  } else if (typeof formData.value.LastResult === 'string' && formData.value.LastResult) {
+    const byName = availableStatuses.value.find(s => s.Name === formData.value.LastResult)
+    selectedStatusId.value = byName?.R_Status_ID ?? 0
+  } else {
+    selectedStatusId.value = 0
+  }
 
   if (isEdit.value && requestId.value) {
     await Promise.all([

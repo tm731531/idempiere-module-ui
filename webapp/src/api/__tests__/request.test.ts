@@ -18,9 +18,21 @@ describe('request API', () => {
     const { listRequests } = await import('@/api/request')
     const results = await listRequests()
     expect(results).toHaveLength(1)
-    expect(apiClient.get).toHaveBeenCalledWith('/api/v1/models/R_Request', expect.objectContaining({
-      params: expect.objectContaining({ '$expand': 'R_Status_ID,C_BPartner_ID' }),
-    }))
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/api/v1/models/R_Request',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          // R_Status_ID FK must be expanded so we can read R_Status.IsClosed
+          // / Name in the UI without a second round-trip.
+          '$expand': expect.stringContaining('R_Status_ID'),
+        }),
+      }),
+    )
+    const call = vi.mocked(apiClient.get).mock.calls[0]
+    const params = call?.[1]?.params as Record<string, string>
+    expect(params['$expand']).toContain('R_Status_ID')
+    expect(params['$expand']).toContain('C_BPartner_ID')
+    expect(params['$expand']).toContain('SalesRep_ID')
   })
 
   it('createRequest posts to R_Request', async () => {

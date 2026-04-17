@@ -281,7 +281,8 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
 - **Tab 344** (Request window)
 - **Core field mappings**:
   - `SalesRep_ID` → Consultant/Responsible Person (負責人) — identifies who handled the consultation
-  - `LastResult` → Status (狀態) — stores status as string, NOT R_Status_ID
+  - `R_Status_ID` → Status FK (狀態) — **source of truth** since 2026-04; points at `R_Status` table
+  - `LastResult` → *legacy* free-text status; still queried for backwards compatibility but no longer drives conversion / filter logic
   - `C_BPartner_ID` → Customer (客戶)
   - `Created` → Consultation date (諮詢日期)
   - `Updated` → Last modification time (最後更新)
@@ -290,24 +291,25 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
 - **API Query Pattern**:
   ```typescript
   // $select must explicitly include:
-  $select: ['ID', 'SalesRep_ID', 'LastResult', 'C_BPartner_ID', 'Created', 'Updated', ...]
+  $select: ['R_Request_ID', 'SalesRep_ID', 'R_Status_ID', 'LastResult', 'C_BPartner_ID', 'Created', 'Updated', ...]
 
   // $expand must include related entities:
-  $expand: {
-    'SalesRep_ID': { $select: ['ID', 'Name'] },
-    'C_BPartner_ID': { $select: ['ID', 'Name'] }
-  }
+  $expand: 'R_Status_ID,C_BPartner_ID,CreatedBy,UpdatedBy,SalesRep_ID'
   ```
 
-- **Status handling**:
-  - **Dynamically loaded** from `SysConfig.MobileSettingConfig` as JSON array
-  - Filtering is **client-side** (filter by `LastResult` field) — OData server cannot filter on expanded text fields
-  - Completed statuses (for conversion rate): `['已完成', 'Closed', '已轉化', 'Completed']`
+- **Status handling** (post-migration):
+  - **Source of truth**: `R_Status_ID` FK → `R_Status` table
+  - **Terminal detection**: `R_Status.IsClosed` (boolean). Replaces the previous hardcoded `['已完成', 'Closed', '已轉化', 'Completed']` list
+  - **Ordering**: `R_Status.SeqNo`
+  - **Loader**: `composables/useRequestStatuses.ts` (`loadRequestStatuses()`) caches rows module-level; `isCompletedStatus(id)` / `isRequestCompleted(req)` do the IsClosed check
+  - **Filtering** is still **client-side** (OData cannot filter on expanded text fields). List tabs key off `R_Status_ID` numbers (with `'all'` as the first tab)
+  - **Migration note**: legacy `LastResult` strings are still readable — `isRequestCompleted()` falls back to a completed-name list when `R_Status_ID` is missing on older records
+  - If the R_Status table is empty in the target iDempiere, the UI gracefully shows only the "全部" tab and an empty dropdown
 
-- **Performance metrics** (aggregated by `SalesRep_ID`):
-  - **Conversion Rate** = count(LastResult ∈ completedStatuses) / count(all)
-  - **Average Response Time** = avg(Updated - Created) for completed consultations
-  - **Pending Conversions** = count(LastResult ∉ completedStatuses)
+- **Performance metrics** (aggregated by `SalesRep_ID` → operator, with activity `createdBy` as fallback when SalesRep_ID is missing):
+  - **Conversion Rate** = count(isRequestCompleted) / count(all)
+  - **Average Response Time** = avg(Updated − Created) when completed; falls back to the last activity timestamp when Updated is missing
+  - **Pending Conversions** = count(created > 7 days ago AND !isRequestCompleted)
 
 - **Features**:
   - List view with status tabs + conversion badge (green for completed)
@@ -321,11 +323,13 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
   - ❌ Tracking date recording — no suitable storage field yet
 
 - **Related files**:
-  - `api/request.ts` — listRequests, getRequest API functions
-  - `views/consultation/RequestListView.vue` — List with status filtering, operator display
-  - `views/consultation/RequestFormView.vue` — Form view with status dropdown, order creation
+  - `api/request.ts` — `listRequests`, `getRequest`, `listRequestStatuses` (returns `{R_Status_ID, Name, SeqNo, IsClosed}`), `updateRequestStatus`
+  - `composables/useRequestStatuses.ts` — module-level cache + `loadRequestStatuses`, `findStatus`, `isCompletedStatus`, `isRequestCompleted`, `extractStatusId`, `extractStatusName`, `getStatusName`
+  - `views/consultation/RequestListView.vue` — Tabs generated from R_Status (ordered by SeqNo); filter by numeric `R_Status_ID`
+  - `views/consultation/RequestFormView.vue` — Status dropdown sourced from `R_Status`; submit uses `updateRequestStatus(id, R_Status_ID)`
   - `views/consultation/ConsultationDashboardView.vue` — Dashboard with ConversionMetrics
-  - `components/ConversionMetrics.vue` — Performance ranking and metrics display
+  - `components/ConversionMetrics.vue` — Performance ranking driven by `isRequestCompleted()` (IsClosed-backed)
+  - `utils/dashboardStats.ts` — Conversion rate / pending count now delegate to `isRequestCompleted`
   - `i18n/fieldLabels.ts` — SalesRep_ID label mapping
 
 ## Testing

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { apiClient } from '@/api/client'
 import { clearLookupCache } from '@/api/lookup'
+import { clearRequestStatusesCache } from '@/composables/useRequestStatuses'
 
 interface User {
   id: number
@@ -341,6 +342,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginError.value = ''
     loginLoading.value = true
     clearLookupCache()
+    clearRequestStatusesCache()
 
     try {
       // Re-POST with saved credentials to get fresh token + clients
@@ -409,6 +411,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_orgs')
     delete apiClient.defaults.headers.common['Authorization']
     clearLookupCache()
+    clearRequestStatusesCache()
   }
 
   // 初始化：如果有 token + context，還原登入狀態

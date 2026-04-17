@@ -82,10 +82,17 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { listRequests } from '@/api/request'
-import { getSysConfig } from '@/api/sysconfig'
+import {
+  loadRequestStatuses,
+  getStatusName as resolveStatusName,
+  isRequestCompleted,
+  extractStatusId,
+  extractStatusName,
+} from '@/composables/useRequestStatuses'
 import ConversionMetrics from '@/components/ConversionMetrics.vue'
 
-type TabKey = string // Now dynamic based on SysConfig
+// Tab keys: 'all' | numeric R_Status_ID (stringified) | fallback status name
+type TabKey = string
 type ViewMode = 'list' | 'dashboard'
 
 const tabs = ref<{ key: TabKey; label: string }[]>([
@@ -99,7 +106,6 @@ const viewMode = ref<ViewMode>('list')
 const activeTab = ref<TabKey>('all')
 const requests = ref<any[]>([])
 const allRequests = ref<any[]>([])
-const customStatuses = ref<string[]>([]) // 自定義狀態列表
 const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
@@ -111,12 +117,19 @@ const filterOperatorId = computed(() => {
 })
 const filterOperatorName = computed(() => route.query.filterOperatorName as string || null)
 
-function filterRequestsByStatus(allReqs: any[], statusName: string): any[] {
+function filterRequestsByStatus(allReqs: any[], tabKey: string): any[] {
   let filtered = allReqs
 
-  // Filter by status
-  if (statusName !== 'all') {
-    filtered = filtered.filter(r => r.LastResult === statusName)
+  // Filter by status (R_Status_ID-based). Tab key 'all' = no filter.
+  if (tabKey !== 'all') {
+    const asNumber = Number(tabKey)
+    if (!Number.isNaN(asNumber) && tabKey !== '' && /^\d+$/.test(tabKey)) {
+      // Numeric tab key → filter by R_Status_ID
+      filtered = filtered.filter(r => extractStatusId(r) === asNumber)
+    } else {
+      // Legacy / fallback: filter by status name
+      filtered = filtered.filter(r => extractStatusName(r) === tabKey)
+    }
   }
 
   // Filter by consultant (if specified) - match by SalesRep_ID field
@@ -177,7 +190,14 @@ function getCustomerName(r: any): string {
 }
 
 function getStatusName(r: any): string {
-  // Display LastResult field (status name)
+  // Prefer the expanded R_Status_ID FK; fall back to legacy LastResult.
+  const id = extractStatusId(r)
+  if (id != null) {
+    const name = resolveStatusName(id)
+    if (name) return name
+  }
+  const extracted = extractStatusName(r)
+  if (extracted) return extracted
   return r.LastResult || ''
 }
 
@@ -213,10 +233,9 @@ function formatDate(dateStr: string): string {
   return `${y}-${m}-${day}`
 }
 
-// 檢查咨詢是否已轉化（基於 LastResult 欄位）
+// 檢查咨詢是否已轉化（基於 R_Status.IsClosed，回退到舊的 LastResult）
 function isConverted(r: any): boolean {
-  const completedStatuses = ['已完成', 'Closed', '已轉化', 'Completed']
-  return r.LastResult && completedStatuses.includes(r.LastResult)
+  return isRequestCompleted(r)
 }
 
 // 取得關聯的訂單號
@@ -250,24 +269,20 @@ watch(
 )
 
 onMounted(async () => {
-  // Load available statuses from SysConfig
-  const configValue = await getSysConfig('MobileSettingConfig')
-  if (configValue) {
-    try {
-      const statuses = JSON.parse(configValue)
-      // Extract status names for dashboard
-      customStatuses.value = statuses.map((s: any) => s.Name || s)
-      // Add status tabs (keep 'all' as first tab)
-      tabs.value = [
-        { key: 'all', label: '全部' },
-        ...statuses.map((s: any) => ({
-          key: s.Name || s,
-          label: s.Name || s,
-        })),
-      ]
-    } catch (e) {
-      // Ignore parse errors
-    }
+  // Load R_Status rows from iDempiere (source of truth).
+  // If R_Status is empty (new install / no statuses configured), we gracefully
+  // degrade to a single "全部" tab — no fallback list is injected.
+  try {
+    const rows = await loadRequestStatuses()
+    tabs.value = [
+      { key: 'all', label: '全部' },
+      ...rows.map((s) => ({
+        key: String(s.R_Status_ID),
+        label: s.Name,
+      })),
+    ]
+  } catch {
+    // Keep default single "全部" tab on error
   }
 
   loadRequests()

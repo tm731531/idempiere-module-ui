@@ -5,10 +5,10 @@
 
 import {
   REQUEST_STATUS_IDS,
-  isCompletedStatus,
   isWaitingStatus,
   STATISTICS_CONFIG,
 } from '@/config/requestStatusConfig'
+import { isRequestCompleted, extractStatusName } from '@/composables/useRequestStatuses'
 
 export interface RequestStats {
   totalThisMonth: number
@@ -41,11 +41,12 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   // Filter requests from current month only
   const thisMonth = requests.filter((r) => new Date(r.Created).getTime() >= monthStart)
 
-  // 計算狀態分布（使用 LastResult 字段）
+  // 計算狀態分布
+  // 新的來源是 R_Status_ID (expanded) 的 Name/identifier。
+  // 若記錄為舊版 (只有 LastResult 文字)，則以 LastResult 當作顯示名稱。
   const statusDist: Record<string, number> = {}
   filtered.forEach((r) => {
-    // 優先使用 LastResult（新的狀態字段），回退到 R_Status_ID
-    const status = r.LastResult || r.R_Status_ID?.id || REQUEST_STATUS_IDS.PENDING
+    const status = extractStatusName(r) || REQUEST_STATUS_IDS.PENDING
     statusDist[status] = (statusDist[status] || 0) + 1
   })
 
@@ -100,9 +101,11 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
 
   return {
     totalThisMonth: thisMonth.length,
-    conversionRate: calculateConversionRate(thisMonth),
+    // Conversion rate uses the full look-back window (not just this month) to
+    // stay meaningful when consultations span multiple months.
+    conversionRate: calculateConversionRate(requests),
     avgResponseTime: calculateAvgResponseTime(filtered),
-    pendingCount: filtered.filter((r) => !isCompletedStatus(r.R_Status_ID?.id)).length,
+    pendingCount: filtered.filter((r) => !isRequestCompleted(r)).length,
     silentCount,
     lostCustomerCount: lostCount,
     statusDistribution: statusDist,
@@ -111,11 +114,13 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
 }
 
 /**
- * Calculate conversion rate (completed / total)
+ * Calculate conversion rate (completed / total).
+ * Completed is determined by R_Status_ID → R_Status.IsClosed when available,
+ * otherwise by legacy status-name match (e.g. '已完成').
  */
 function calculateConversionRate(requests: any[]): string {
   if (requests.length === 0) return '0%'
-  const completed = requests.filter((r) => isCompletedStatus(r.R_Status_ID?.id)).length
+  const completed = requests.filter((r) => isRequestCompleted(r)).length
   const rate = Math.round((completed / requests.length) * 100)
   return `${rate}%`
 }

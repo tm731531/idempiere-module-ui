@@ -9,6 +9,17 @@ export interface RequestData {
   [key: string]: any
 }
 
+/**
+ * R_Status row shape after migration. IsClosed determines terminal state.
+ */
+export interface RequestStatus {
+  R_Status_ID: number
+  Name: string
+  SeqNo?: number
+  IsClosed?: boolean
+  IsActive?: boolean
+}
+
 export async function listRequests(filter?: string): Promise<any[]> {
   const params: Record<string, string> = {
     '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Updated,CreatedBy,UpdatedBy,LastResult,SalesRep_ID',
@@ -46,9 +57,9 @@ export async function updateRequestStatus(id: number, statusId: number): Promise
   return resp.data
 }
 
-export async function listRequestStatuses(requestTypeId?: number): Promise<any[]> {
+export async function listRequestStatuses(requestTypeId?: number): Promise<RequestStatus[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Status_ID,Name,SeqNo,IsActive',
+    '$select': 'R_Status_ID,Name,SeqNo,IsActive,IsClosed',
     '$orderby': 'SeqNo',
     // Include all statuses, not just active ones (some may be inactive but still needed)
   }
@@ -56,7 +67,13 @@ export async function listRequestStatuses(requestTypeId?: number): Promise<any[]
     params['$filter'] = `R_RequestType_ID eq ${requestTypeId}`
   }
   const resp = await apiClient.get('/api/v1/models/R_Status', { params })
-  return resp.data.records || []
+  return (resp.data.records || []).map((r: any) => ({
+    R_Status_ID: r.id ?? r.R_Status_ID,
+    Name: r.Name,
+    SeqNo: r.SeqNo,
+    IsActive: r.IsActive === true || r.IsActive === 'Y',
+    IsClosed: r.IsClosed === true || r.IsClosed === 'Y',
+  }))
 }
 
 export async function listRequestTypes(): Promise<any[]> {

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { calculateStats } from '@/utils/dashboardStats'
 import { REQUEST_STATUS_IDS, isWaitingStatus, STATISTICS_CONFIG } from '@/config/requestStatusConfig'
+import { extractStatusName } from '@/composables/useRequestStatuses'
 
 interface Props {
   requests: any[]
@@ -41,7 +42,7 @@ const customStatusMetrics = computed(() => {
   if (!props.statuses || props.statuses.length === 0) return []
 
   return props.statuses.map((statusName) => {
-    const count = props.requests.filter((r) => (r.LastResult || r.R_Status_ID?.id) === statusName).length
+    const count = props.requests.filter((r) => extractStatusName(r) === statusName).length
     return {
       statusName,
       count,
@@ -115,7 +116,7 @@ const filteredRequests = computed(() => {
       return props.requests.filter((r) => new Date(r.Created).getTime() >= monthStart)
 
     case 'status':
-      return props.requests.filter((r) => (r.LastResult || r.R_Status_ID?.id) === drillDown.value.value)
+      return props.requests.filter((r) => extractStatusName(r) === drillDown.value.value)
 
     case 'customer':
       return props.requests.filter((r) => (r.C_BPartner_ID?.id ?? r.C_BPartner_ID) === drillDown.value.value)
@@ -442,7 +443,7 @@ const formatDate = (dateStr: string) => {
             <div class="col-id">{{ request.R_Request_ID }}</div>
             <div class="col-summary">{{ request.Summary || '(無標題)' }}</div>
             <div class="col-customer">{{ request.C_BPartner_ID?.Name || `#${request.C_BPartner_ID?.id}` || '-' }}</div>
-            <div class="col-status">{{ request.LastResult || request.R_Status_ID?.id || '-' }}</div>
+            <div class="col-status">{{ extractStatusName(request) || '-' }}</div>
             <div class="col-created">{{ formatDate(request.Created) }}</div>
           </div>
         </div>

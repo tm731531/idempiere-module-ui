@@ -35,8 +35,10 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
 import ConversionMetrics from '@/components/ConversionMetrics.vue'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const toast = useToast()
 const requests = ref<any[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -77,7 +79,12 @@ async function loadData() {
     requests.value = await listRequests()
   } catch (e) {
     error.value = '無法加載儀表板資料'
-    console.error(e)
+    toast.add({
+      severity: 'error',
+      summary: '載入失敗',
+      detail: '無法加載儀表板資料，請稍後重試',
+      life: 5000,
+    })
   } finally {
     loading.value = false
   }

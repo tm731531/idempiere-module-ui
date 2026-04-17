@@ -5,6 +5,7 @@
   </div>
   <AppHeader />
   <router-view />
+  <ToastContainer />
 </template>
 
 <script setup lang="ts">
@@ -12,6 +13,7 @@ import { sessionState, clearSessionExpired } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
 
 const auth = useAuthStore()
 const router = useRouter()

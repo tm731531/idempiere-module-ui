@@ -233,6 +233,9 @@ import AppointmentActionSheet from '@/components/AppointmentActionSheet.vue'
 import CopyAssignmentDialog from '@/components/CopyAssignmentDialog.vue'
 import { checkConflict, formatDuration, getMinutesDiff } from '@/lib/time-overlap'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
+import { useToast } from '@/composables/useToast'
+
+const toast = useToast()
 
 // ========== View Mode ==========
 type ViewMode = 'day' | 'week' | 'month' | 'year'
@@ -862,9 +865,12 @@ async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
 
   if (dragState.hasConflict) {
     // Conflict: show toast and revert
-    const msg = `與「${dragState.conflictingNames.join('」「')}」時間衝突，未儲存`
-    // TODO: Replace with your toast solution (e.g., useToast())
-    console.warn(msg)
+    toast.add({
+      severity: 'warn',
+      summary: '時段衝突',
+      detail: `與「${dragState.conflictingNames.join('」「')}」時間衝突，未儲存`,
+      life: 3000,
+    })
     dragState.hasConflict = false
     dragState.conflictingNames = []
     dragState.appointmentId = null
@@ -910,8 +916,12 @@ async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
     })
     await loadAssignments()
   } catch (error) {
-    console.error('Failed to update appointment:', error)
-    // TODO: Show error toast
+    toast.add({
+      severity: 'error',
+      summary: '儲存失敗',
+      detail: error instanceof Error ? error.message : '無法更新預約，請重試',
+      life: 5000,
+    })
   } finally {
     dragState.appointmentId = null
   }
@@ -943,8 +953,12 @@ async function handleDeleteAppt() {
     selectedAppt.value = null
     await loadAssignments()
   } catch (error) {
-    console.error('Failed to delete appointment:', error)
-    alert('刪除失敗，請重試')
+    toast.add({
+      severity: 'error',
+      summary: '刪除失敗',
+      detail: error instanceof Error ? error.message : '無法刪除預約，請重試',
+      life: 5000,
+    })
   }
 }
 

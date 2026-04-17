@@ -1,8 +1,17 @@
 <template>
-  <div class="dialog-overlay" @click.self="$emit('close')">
+  <div
+    ref="dialogRef"
+    class="dialog-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="status-modal-title"
+    tabindex="-1"
+    @click.self="$emit('close')"
+    @keydown.esc="$emit('close')"
+  >
     <div class="dialog-modal">
       <div class="dialog-header">
-        <h3 class="dialog-title">更新狀態</h3>
+        <h3 id="status-modal-title" class="dialog-title">更新狀態</h3>
         <button type="button" class="dialog-close" @click="$emit('close')">✕</button>
       </div>
 
@@ -59,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
 interface Status {
   R_Status_ID: number
@@ -79,8 +88,13 @@ const emit = defineEmits<{
   'close': []
 }>()
 
+const dialogRef = ref<HTMLElement | null>(null)
 const selectedStatusId = ref<number | null>(null)
 const showError = ref(false)
+
+onMounted(() => {
+  dialogRef.value?.focus()
+})
 
 // 直接使用父組件傳入的狀態，不假設任何硬編碼數據
 const displayStatuses = computed(() => {

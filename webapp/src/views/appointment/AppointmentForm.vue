@@ -1,7 +1,14 @@
 <template>
-  <div class="form-overlay" @click.self="handleCancel">
+  <div
+    class="form-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="appointment-form-title"
+    @click.self="handleCancel"
+    @keydown.esc="handleCancel"
+  >
     <div class="form-modal">
-      <h3 class="form-title">{{ editingAppt ? '編輯預約' : '新增預約' }}</h3>
+      <h3 id="appointment-form-title" class="form-title">{{ editingAppt ? '編輯預約' : '新增預約' }}</h3>
 
       <!-- Consultation link banner (shown when navigated from consultation edit page) -->
       <div v-if="linkedConsultationId" class="consultation-banner">
@@ -236,6 +243,10 @@ const saving = ref(false)
 const deleting = ref(false)
 const errorMsg = ref('')
 
+// Debounce + stale-response guard for conflict checks
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let fetchSeq = 0
+
 // Color picker
 const colorPickerVisible = ref(false)
 const colorAnchorEl = ref<HTMLElement | null>(null)
@@ -282,30 +293,53 @@ async function handleCreateResource() {
   }
 }
 
-// Recheck per-resource conflicts whenever selected resources or time window change
+// Recheck per-resource conflicts whenever selected resources or time window change.
+// Debounced (300 ms) to prevent parallel API calls when the user clicks multiple
+// resources rapidly. A sequence counter discards stale responses.
 watch(
   [selectedResourceIds, () => form.dateFrom, () => form.dateTo],
-  async ([resIds, from, to]) => {
-    if (!multiMode.value || !from || !to) return
-    const fromDate = new Date(from)
-    const toDate = new Date(to)
-    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || fromDate >= toDate) return
-
-    const entries = await Promise.all(
-      resIds.map(async (id) => {
-        try {
-          const hasConflict = await checkConflict(id, fromDate, toDate)
-          return [id, hasConflict] as [number, boolean]
-        } catch {
-          return [id, false] as [number, boolean]
-        }
-      }),
-    )
-    const conflicts: Record<number, boolean> = {}
-    for (const [id, has] of entries) {
-      conflicts[id] = has
+  ([resIds, from, to]) => {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer)
     }
-    resourceConflicts.value = conflicts
+    debounceTimer = setTimeout(async () => {
+      debounceTimer = null
+      if (!multiMode.value || !from || !to) return
+      const fromDate = new Date(from)
+      const toDate = new Date(to)
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || fromDate >= toDate) return
+
+      const seq = ++fetchSeq
+
+      const entries = await Promise.all(
+        resIds.map(async (id) => {
+          try {
+            const hasConflict = await checkConflict(id, fromDate, toDate)
+            return [id, hasConflict, null] as [number, boolean, null]
+          } catch {
+            return [id, false, id] as [number, boolean, number]
+          }
+        }),
+      )
+
+      // Discard stale response if a newer fetch was started
+      if (seq !== fetchSeq) return
+
+      const conflicts: Record<number, boolean> = {}
+      const failedIds: number[] = []
+      for (const [id, has, failId] of entries) {
+        conflicts[id] = has
+        if (failId !== null) failedIds.push(failId)
+      }
+      resourceConflicts.value = conflicts
+
+      if (failedIds.length > 0) {
+        const failedNames = failedIds
+          .map(id => props.resources.find(r => r.id === id)?.Name ?? `#${id}`)
+          .join('、')
+        errorMsg.value = `無法檢查衝突的服務人員：${failedNames}`
+      }
+    }, 300)
   },
   { deep: true },
 )

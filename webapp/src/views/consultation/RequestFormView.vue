@@ -460,26 +460,19 @@ function updateStatusField() {
   }
 }
 
-function handleStatusSelected(statusIdOrName: string | number) {
-  // StatusUpdateModal may emit either a status name (legacy) or the numeric id.
-  let nextId: number | null = null
-  if (typeof statusIdOrName === 'number') {
-    nextId = statusIdOrName
-  } else {
-    // Try numeric parse, then lookup by name
-    const asNum = Number(statusIdOrName)
-    if (!Number.isNaN(asNum) && /^\d+$/.test(statusIdOrName)) {
-      nextId = asNum
-    } else {
-      const hit = availableStatuses.value.find(s => s.Name === statusIdOrName)
-      if (hit) nextId = hit.R_Status_ID
+async function handleStatusSelected(statusId: number) {
+  // StatusUpdateModal emits the numeric R_Status_ID of the chosen status.
+  selectedStatusId.value = statusId
+  updateStatusField()
+  showStatusModal.value = false
+  if (requestId.value) {
+    try {
+      await updateRequestStatus(requestId.value, statusId)
+    } catch (e: any) {
+      const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
+      errorMsg.value = `更新狀態失敗: ${apiError}`
     }
   }
-  if (nextId != null) {
-    selectedStatusId.value = nextId
-    updateStatusField()
-  }
-  showStatusModal.value = false
 }
 
 async function handleTrackingSet(data: { date: string; time: string; description: string }) {
@@ -611,14 +604,14 @@ onMounted(async () => {
 
 // 建立訂單功能
 function onCreateOrder() {
-  if (!formData.value.C_BPartner_ID) {
+  if (formData.value.C_BPartner_ID == null) {
     alert('請先選擇客戶')
     return
   }
 
   // 跳轉到訂單建立頁，帶入客戶 ID 和相關諮詢 ID
   router.push({
-    name: 'order-create',
+    name: 'order-new',
     params: { customerId: formData.value.C_BPartner_ID },
     query: { relatedConsultationId: requestId.value },
   })
@@ -626,7 +619,7 @@ function onCreateOrder() {
 
 // 建立預約功能
 function onCreateAppointment() {
-  if (!formData.value.C_BPartner_ID) {
+  if (formData.value.C_BPartner_ID == null) {
     alert('請先選擇客戶')
     return
   }

@@ -36,6 +36,7 @@ import { useRouter } from 'vue-router'
 import { listRequests } from '@/api/request'
 import ConversionMetrics from '@/components/ConversionMetrics.vue'
 import { useToast } from '@/composables/useToast'
+import { parseIdempiereDateTime } from '@/api/utils'
 
 const router = useRouter()
 const toast = useToast()
@@ -66,7 +67,7 @@ const filteredRequests = computed(() => {
 
   const { from, to } = dateRangeParams.value
   return requests.value.filter(req => {
-    const created = new Date(req.Created)
+    const created = parseIdempiereDateTime(req.Created)
     return created >= new Date(from!) && created <= new Date(to!)
   })
 })
@@ -94,14 +95,33 @@ function goBack() {
   router.push('/')
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    // Resume auto-refresh when tab becomes visible
+    if (!interval) {
+      interval = setInterval(loadData, 5 * 60 * 1000)
+    }
+  } else {
+    // Pause auto-refresh when tab is hidden
+    if (interval) {
+      clearInterval(interval)
+      interval = null
+    }
+  }
+}
+
 onMounted(() => {
   loadData()
-  // 每 5 分鐘自動刷新一次
-  interval = setInterval(loadData, 5 * 60 * 1000)
+  // 每 5 分鐘自動刷新一次（僅在頁面可見時）
+  if (document.visibilityState === 'visible') {
+    interval = setInterval(loadData, 5 * 60 * 1000)
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   if (interval) clearInterval(interval)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 

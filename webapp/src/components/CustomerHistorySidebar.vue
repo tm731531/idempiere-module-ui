@@ -1,13 +1,19 @@
 <template>
   <div class="customer-history-sidebar" :class="{ collapsed: isCollapsed }">
     <!-- Toggle button -->
-    <button class="sidebar-toggle" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? '展開客戶歷史' : '收合客戶歷史'">
+    <button
+      class="sidebar-toggle"
+      :aria-expanded="!isCollapsed"
+      aria-controls="sidebar-content"
+      :title="isCollapsed ? '展開客戶歷史' : '收合客戶歷史'"
+      @click="isCollapsed = !isCollapsed"
+    >
       <span class="toggle-icon">{{ isCollapsed ? '◀' : '▶' }}</span>
       <span v-if="isCollapsed" class="toggle-label-vertical">客戶歷史</span>
     </button>
 
     <!-- Sidebar content -->
-    <div v-if="!isCollapsed" class="sidebar-content">
+    <div v-if="!isCollapsed" id="sidebar-content" class="sidebar-content">
       <div class="sidebar-header">
         <h3 class="sidebar-title">客戶歷史</h3>
         <span v-if="customerName" class="customer-name-badge">{{ customerName }}</span>
@@ -27,6 +33,10 @@
           </button>
           <div v-if="openSections.consultations" class="accordion-body">
             <div v-if="loadingStates.consultations" class="loading-row">載入中...</div>
+            <div v-else-if="errorStates.consultations" class="error-state">
+              載入失敗，請點擊重試
+              <button class="retry-btn" @click="loadSection('consultations')">重試</button>
+            </div>
             <div v-else-if="consultations.length === 0" class="empty-state">該客戶尚無諮詢記錄</div>
             <template v-else>
               <div
@@ -56,6 +66,10 @@
           </button>
           <div v-if="openSections.appointments" class="accordion-body">
             <div v-if="loadingStates.appointments" class="loading-row">載入中...</div>
+            <div v-else-if="errorStates.appointments" class="error-state">
+              載入失敗，請點擊重試
+              <button class="retry-btn" @click="loadSection('appointments')">重試</button>
+            </div>
             <div v-else-if="appointments.length === 0" class="empty-state">該客戶尚無預約記錄</div>
             <template v-else>
               <div
@@ -85,6 +99,10 @@
           </button>
           <div v-if="openSections.orders" class="accordion-body">
             <div v-if="loadingStates.orders" class="loading-row">載入中...</div>
+            <div v-else-if="errorStates.orders" class="error-state">
+              載入失敗，請點擊重試
+              <button class="retry-btn" @click="loadSection('orders')">重試</button>
+            </div>
             <div v-else-if="orders.length === 0" class="empty-state">該客戶尚無訂單記錄</div>
             <template v-else>
               <div
@@ -146,6 +164,12 @@ const loadingStates = reactive({
   orders: false,
 })
 
+const errorStates = reactive<{ consultations: string | null; appointments: string | null; orders: string | null }>({
+  consultations: null,
+  appointments: null,
+  orders: null,
+})
+
 // Track which sections have been loaded (lazy-load)
 const loadedSections = reactive({
   consultations: false,
@@ -168,6 +192,7 @@ function toggleSection(section: 'consultations' | 'appointments' | 'orders') {
 async function loadSection(section: 'consultations' | 'appointments' | 'orders') {
   if (!props.customerId) return
   loadingStates[section] = true
+  errorStates[section] = null
   try {
     if (section === 'consultations') {
       consultations.value = await listRequests(`C_BPartner_ID eq ${props.customerId}`, 10)
@@ -179,6 +204,7 @@ async function loadSection(section: 'consultations' | 'appointments' | 'orders')
     loadedSections[section] = true
   } catch (e) {
     console.warn(`Failed to load ${section} for customer ${props.customerId}:`, e)
+    errorStates[section] = '載入失敗'
   } finally {
     loadingStates[section] = false
   }
@@ -231,9 +257,20 @@ function navigateToConsultation(id: number | undefined) {
   router.push({ name: 'consultation-edit', params: { id } })
 }
 
-function navigateToAppointment(_id: number | undefined) {
-  // Appointments are managed via CalendarView (modal), so navigate to calendar
-  router.push({ name: 'appointment-calendar' })
+function navigateToAppointment(id: number | undefined) {
+  // Appointments are managed via CalendarView (modal), so navigate to calendar.
+  // Pass focusId and focusDate so CalendarView can (eventually) scroll to the appointment.
+  const appt = appointments.value.find(a => (a.id || a.S_ResourceAssignment_ID) === id)
+  const focusDate = appt?.AssignDateFrom
+    ? parseIdempiereDateTime(appt.AssignDateFrom).toISOString().substring(0, 10)
+    : undefined
+  router.push({
+    name: 'appointment-calendar',
+    query: {
+      ...(id != null ? { focusId: String(id) } : {}),
+      ...(focusDate ? { focusDate } : {}),
+    },
+  })
 }
 
 function navigateToOrder(id: number | undefined) {
@@ -400,6 +437,27 @@ function navigateToOrder(id: number | undefined) {
   text-align: center;
   color: #94a3b8;
   font-size: 0.8125rem;
+}
+
+.error-state {
+  padding: 0.75rem;
+  text-align: center;
+  color: #ef4444;
+  font-size: 0.8125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.retry-btn {
+  padding: 0.125rem 0.5rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 
 /* History rows */

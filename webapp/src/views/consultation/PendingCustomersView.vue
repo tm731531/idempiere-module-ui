@@ -93,6 +93,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listRequests, updateRequest } from '@/api/request'
 import { listProspects } from '@/api/bpartner'
 import { lookupCurrentUserId } from '@/api/lookup'
+import { parseIdempiereDateTime } from '@/api/utils'
 
 type TabKey = 'unassigned' | 'prospects'
 
@@ -173,7 +174,7 @@ async function onClaim(request: any) {
     const userName = authStore.user?.name || ''
     const userId = await lookupCurrentUserId(userName)
 
-    if (!userId) {
+    if (userId == null) {
       showToast('無法取得目前使用者 ID，請重新登入', 'error')
       return
     }
@@ -183,7 +184,8 @@ async function onClaim(request: any) {
     // Remove from local list immediately
     unassigned.value = unassigned.value.filter(r => r.id !== request.id)
   } catch (err) {
-    showToast(`認領失敗：${String(err)}`, 'error')
+    console.error('Claim request failed:', err)
+    showToast('認領失敗，請重試', 'error')
   } finally {
     claimingId.value = null
   }
@@ -209,7 +211,7 @@ function getCustomerName(r: any): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const d = parseIdempiereDateTime(dateStr)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')

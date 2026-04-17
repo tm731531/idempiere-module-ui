@@ -101,10 +101,10 @@
             <span
               v-if="isConverted(r)"
               class="conversion-badge"
-              :title="`訂單: ${getOrderNo(r)}`"
             >
               ✓ 已轉化
             </span>
+            <!-- TODO: memoize getTrackingBadge per card (currently called 3× per render) -->
             <span
               v-if="getTrackingBadge(r.DateNextAction)"
               :class="['tracking-badge', `tracking-badge--${getTrackingBadge(r.DateNextAction)!.color}`]"
@@ -132,6 +132,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { listRequests } from '@/api/request'
+import { parseIdempiereDateTime } from '@/api/utils'
 import {
   loadRequestStatuses,
   getStatusName as resolveStatusName,
@@ -180,7 +181,21 @@ const filterOperatorId = computed(() => {
   const id = route.query.filterOperatorId
   return id ? Number(id) : null
 })
-const filterOperatorName = computed(() => route.query.filterOperatorName as string || null)
+
+// Derive the operator display name from loaded requests (never trust URL query value directly)
+const filterOperatorName = computed(() => {
+  const targetId = filterOperatorId.value
+  if (targetId == null) return null
+  const match = allRequests.value.find(r => {
+    if (r.SalesRep_ID && typeof r.SalesRep_ID === 'object') {
+      return r.SalesRep_ID.id === targetId
+    }
+    return false
+  })
+  if (match?.SalesRep_ID?.Name) return match.SalesRep_ID.Name
+  if (match?.SalesRep_ID?.identifier) return match.SalesRep_ID.identifier
+  return `諮詢師 #${targetId}`
+})
 
 function filterRequestsByStatus(allReqs: any[], tabKey: string): any[] {
   let filtered = allReqs
@@ -207,7 +222,8 @@ function filterRequestsByStatus(allReqs: any[], tabKey: string): any[] {
       } else if (typeof r.SalesRep_ID === 'number') {
         salesRepId = r.SalesRep_ID
       }
-      return salesRepId === filterOperatorId.value
+      // Cast both sides to Number: query params arrive as strings, SalesRep_ID.id is a number
+      return Number(salesRepId) === Number(filterOperatorId.value)
     })
   }
 
@@ -307,7 +323,7 @@ function getOperatorName(r: any): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const d = parseIdempiereDateTime(dateStr)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -362,8 +378,13 @@ onMounted(async () => {
         label: s.Name,
       })),
     ]
+    // Validate persisted activeTab — fall back to 'all' if the tab no longer exists
+    if (!tabs.value.some(t => t.key === activeTab.value)) {
+      activeTab.value = 'all'
+    }
   } catch {
     // Keep default single "全部" tab on error
+    activeTab.value = 'all'
   }
 
   loadRequests()

@@ -25,6 +25,10 @@
             {{ status.Name }}
           </option>
         </select>
+        <!-- Warning when R_Status table has no rows (app-level defaults active) -->
+        <p v-if="!statusLoading && usingDefaultStatuses" class="status-setup-hint">
+          ⚠️ 尚未設定諮詢狀態（使用預設值）。請至 iDempiere 管理介面的 R_Status 表設定正式狀態。
+        </p>
         <!-- Next follow-up date badge -->
         <span v-if="dateNextAction" class="tracking-badge">
           📅 下次跟進：{{ formatTrackingDate(dateNextAction) }}
@@ -217,6 +221,28 @@ const {
   recordId: requestId,
   loadRecord: (id) => getRequest(id),
   columnFilters: { C_BPartner_ID: 'IsCustomer eq true' },
+  excludeColumns: [
+    // Irrelevant for clinic consultations
+    'R_RequestType_ID',    // 諮詢類型 — no types configured in this instance
+    'RequestAmt',          // 請求金額 — clinic doesn't track request amounts
+    'ConfidentialType',    // 保密等級 — not relevant
+    'ConfidentialTypeEntry', // 項目保密等級 — not relevant
+    'IsEscalated',         // 已升級 — not relevant
+    'DateDueType',         // 到期類型 — not relevant
+    'DateDue',             // 到期日期 — use DateNextAction instead
+    'DateLastAction',      // system managed
+    'M_InOut_ID',          // shipment link — not relevant
+    'M_RMA_ID',            // return merchandise — not relevant
+    'C_Invoice_ID',        // invoice link — not relevant
+    'A_Asset_ID',          // asset — not relevant
+    'C_Activity_ID',       // activity — not relevant
+    'C_Project_ID',        // project — not relevant
+    'TaskStatus',          // task management — not relevant
+    'TaskPercent',         // task management — not relevant
+    'StartDate',           // not relevant
+    'CloseDate',           // not relevant
+    'C_Order_ID',          // handled separately via "建立訂單" button
+  ],
 })
 
 const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
@@ -250,6 +276,20 @@ const dateNextAction = ref<string | null>(null)
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
 const availableStatuses = ref<RequestStatus[]>([])
+const statusLoading = ref(false)
+// True when availableStatuses was seeded from app-level defaults (R_Status table was empty)
+const usingDefaultStatuses = ref(false)
+
+/**
+ * App-level default statuses used when the R_Status table has no rows in
+ * the target iDempiere instance. Negative IDs distinguish them from real rows.
+ */
+const DEFAULT_STATUSES: RequestStatus[] = [
+  { R_Status_ID: -1, Name: '待處理', SeqNo: 10, IsActive: true, IsClosed: false },
+  { R_Status_ID: -2, Name: '處理中', SeqNo: 20, IsActive: true, IsClosed: false },
+  { R_Status_ID: -3, Name: '已完成', SeqNo: 30, IsActive: true, IsClosed: true },
+  { R_Status_ID: -4, Name: '已取消', SeqNo: 40, IsActive: true, IsClosed: true },
+]
 
 const currentStatusName = computed(() => {
   if (selectedStatusId.value) {
@@ -346,10 +386,6 @@ async function handleSubmit() {
     }
   }
 
-  if (!cleanPayload.R_RequestType_ID) {
-    errorMsg.value = '請選擇諮詢類型'
-    return
-  }
   if (!cleanPayload.Summary || !String(cleanPayload.Summary).trim()) {
     errorMsg.value = '請輸入摘要'
     return
@@ -376,6 +412,8 @@ async function handleSubmit() {
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
+      // Only set R_Status_ID for real iDempiere statuses (positive IDs).
+      // Negative IDs are app-level defaults active when R_Status table is empty.
       if (selectedStatusId.value && selectedStatusId.value > 0) {
         cleanPayload.R_Status_ID = selectedStatusId.value
       }
@@ -467,7 +505,8 @@ async function handleStatusSelected(statusId: number) {
   selectedStatusId.value = statusId
   updateStatusField()
   showStatusModal.value = false
-  if (requestId.value) {
+  // Skip API call for app-level default statuses (negative IDs)
+  if (requestId.value && statusId > 0) {
     try {
       await updateRequestStatus(requestId.value, statusId)
     } catch (e: any) {
@@ -534,6 +573,8 @@ function getCurrentStatusId(): number {
 }
 
 async function loadAvailableStatuses() {
+  statusLoading.value = true
+  usingDefaultStatuses.value = false
   try {
     const rows = await loadRequestStatuses()
     availableStatuses.value = rows
@@ -551,6 +592,15 @@ async function loadAvailableStatuses() {
       availableStatuses.value = []
     }
   }
+
+  // R_Status table has no rows in this iDempiere instance — seed app-level
+  // defaults so the form is usable even before an admin configures statuses.
+  if (availableStatuses.value.length === 0) {
+    availableStatuses.value = DEFAULT_STATUSES
+    usingDefaultStatuses.value = true
+  }
+
+  statusLoading.value = false
 }
 
 onMounted(async () => {
@@ -923,6 +973,17 @@ function onCreateAppointment() {
 .create-appointment-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.status-setup-hint {
+  margin-top: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #92400e;
+  line-height: 1.5;
 }
 
 .tracking-badge {

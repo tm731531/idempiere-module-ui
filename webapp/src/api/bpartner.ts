@@ -135,3 +135,64 @@ export async function updateCustomerContact(userId: number, data: { phone?: stri
   const resp = await apiClient.put(`/api/v1/models/AD_User/${userId}`, payload)
   return resp.data
 }
+
+export interface SalesRep {
+  id: number
+  Name: string
+}
+
+/** Cached SalesRep list (5 minute TTL) */
+let salesRepCache: SalesRep[] | null = null
+let salesRepCacheTime = 0
+const SALES_REP_CACHE_TTL = 5 * 60 * 1000  // 5 minutes
+
+/**
+ * List active AD_User records that are SalesReps.
+ * iDempiere's AD_User does not always have IsSalesRep column, so we query
+ * IsActive only and order by Name. Result is cached for 5 minutes.
+ */
+export async function listSalesReps(): Promise<SalesRep[]> {
+  const now = Date.now()
+  if (salesRepCache && now - salesRepCacheTime < SALES_REP_CACHE_TTL) {
+    return salesRepCache
+  }
+
+  const resp = await apiClient.get('/api/v1/models/AD_User', {
+    params: {
+      '$select': 'AD_User_ID,Name',
+      '$filter': 'IsActive eq true',
+      '$orderby': 'Name',
+      '$top': '200',
+    },
+  })
+  const records = resp.data.records || []
+  salesRepCache = records.map((r: any) => ({
+    id: r.id ?? r.AD_User_ID,
+    Name: r.Name,
+  }))
+  salesRepCacheTime = now
+  return salesRepCache!
+}
+
+/** Clear SalesRep cache (e.g. on logout) */
+export function clearSalesRepCache(): void {
+  salesRepCache = null
+  salesRepCacheTime = 0
+}
+
+/**
+ * List prospect C_BPartner records (potential customers not yet converted).
+ * iDempiere uses IsProspect=Y for prospects. Falls back to IsCustomer=false, IsActive=true
+ * if IsProspect column is unavailable.
+ */
+export async function listProspects(top = 200): Promise<any[]> {
+  const resp = await apiClient.get('/api/v1/models/C_BPartner', {
+    params: {
+      '$filter': 'IsProspect eq true and IsActive eq true',
+      '$select': 'C_BPartner_ID,Name,TaxID,Phone,EMail,IsProspect,IsCustomer',
+      '$orderby': 'Name',
+      '$top': String(top),
+    },
+  })
+  return resp.data.records || []
+}

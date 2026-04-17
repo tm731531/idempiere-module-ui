@@ -1,6 +1,6 @@
 <template>
   <div class="request-list-page">
-    <!-- View mode tabs: List vs Dashboard -->
+    <!-- View mode tabs: List / Dashboard / Kanban -->
     <div class="view-tabs">
       <button
         :class="['view-tab', { active: viewMode === 'list' }]"
@@ -13,6 +13,25 @@
         @click="viewMode = 'dashboard'"
       >
         📊 儀表板
+      </button>
+      <button
+        class="view-tab"
+        @click="router.push({ name: 'consultation-kanban' })"
+      >
+        🗂 看板
+      </button>
+      <button
+        class="view-tab pending-tab"
+        @click="router.push({ name: 'consultation-pending' })"
+      >
+        待分配
+        <span v-if="unassignedCount > 0" class="pending-count-badge">{{ unassignedCount }}</span>
+      </button>
+      <button
+        class="view-tab"
+        @click="router.push({ name: 'consultation-today-todo' })"
+      >
+        今日待辦
       </button>
     </div>
 
@@ -132,6 +151,17 @@ const allRequests = ref<any[]>([])
 const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
+
+// Count of unassigned requests — drives the badge on the "待分配" tab button
+const unassignedCount = computed(() =>
+  allRequests.value.filter(r => {
+    if (r.SalesRep_ID === null || r.SalesRep_ID === undefined) return true
+    if (typeof r.SalesRep_ID === 'object' && r.SalesRep_ID !== null) {
+      return !r.SalesRep_ID.id
+    }
+    return false
+  }).length
+)
 
 // 從 query 參數獲取操作人過濾
 const filterOperatorId = computed(() => {
@@ -366,6 +396,27 @@ onMounted(async () => {
 .view-tab.active {
   color: #3f3f46;
   border-bottom-color: #3f3f46;
+}
+
+.pending-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.pending-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
+  background: #ef4444;
+  color: white;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
 }
 
 .list-view,

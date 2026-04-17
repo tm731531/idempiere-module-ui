@@ -1,5 +1,8 @@
 # iDempiere Aesthetics UI (idempiere-module-ui)
 
+## Domain Brain: idempiere-rest-api, idempiere-po-model, design-principles
+## Domain Skill: idempiere-rest-resource, idempiere-mapped-model-factory-service
+
 ## Project Overview
 
 Vue 3 + TypeScript SPA for aesthetics clinic operations, deployed as an OSGi WAB bundle on iDempiere 12. All document forms are **metadata-driven** — field layouts come from iDempiere's Application Dictionary (AD_Field/AD_Column), not hardcoded HTML.

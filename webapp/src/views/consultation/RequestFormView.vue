@@ -37,7 +37,7 @@
 
       <!-- Dynamic form from AD metadata -->
       <DynamicForm
-        :fieldDefs="visibleFieldDefs"
+        :fieldDefs="adjustedFieldDefs"
         :modelValue="formData"
         :disabled="readOnly"
         :columnFilters="columnFilters"
@@ -179,6 +179,7 @@ import {
   updateRequest,
   updateRequestStatus,
   listRequestStatuses,
+  listRequestTypes,
   type RequestData,
   type RequestStatus,
 } from '@/api/request'
@@ -272,6 +273,17 @@ const successMsg = ref('')
 const selectedStatusId = ref<number>(0)
 // DateNextAction — follow-up date stored in R_Request
 const dateNextAction = ref<string | null>(null)
+
+// Auto-fetched on mount; injected into create payload to satisfy NOT NULL constraint.
+const defaultRequestTypeId = ref<number | null>(null)
+
+// Force C_BPartner_ID and SalesRep_ID into the mandatory section regardless of AD metadata.
+const CLINIC_MANDATORY = ['C_BPartner_ID', 'SalesRep_ID']
+const adjustedFieldDefs = computed(() =>
+  (visibleFieldDefs.value ?? []).map(f =>
+    CLINIC_MANDATORY.includes(f.columnName) ? { ...f, isMandatory: true } : f
+  )
+)
 
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
@@ -412,6 +424,11 @@ async function handleSubmit() {
       router.push({ name: 'consultation-list' })
     } else {
       cleanPayload.AD_Org_ID = auth.context?.organizationId ?? 0
+      // R_RequestType_ID is NOT NULL in iDempiere — inject the first available type
+      // if the user hasn't selected one (field is excluded from the visible form).
+      if (!cleanPayload.R_RequestType_ID && defaultRequestTypeId.value) {
+        cleanPayload.R_RequestType_ID = defaultRequestTypeId.value
+      }
       // Only set R_Status_ID for real iDempiere statuses (positive IDs).
       // Negative IDs are app-level defaults active when R_Status table is empty.
       if (selectedStatusId.value && selectedStatusId.value > 0) {
@@ -627,6 +644,12 @@ onMounted(async () => {
   }
 
   await loadAvailableStatuses()
+
+  // Silently fetch the first R_RequestType so we can inject it into the create
+  // payload. R_RequestType_ID is NOT NULL in iDempiere — without it the POST returns 500.
+  listRequestTypes().then(types => {
+    if (types.length > 0) defaultRequestTypeId.value = types[0].R_RequestType_ID
+  }).catch(() => { /* non-critical */ })
 
   // Initialize status selector from R_Status_ID (expanded FK).
   // Fall back to matching LastResult against known status names for legacy rows.

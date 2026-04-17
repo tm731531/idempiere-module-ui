@@ -67,6 +67,9 @@ vi.mock('@/api/request', () => ({
     { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
     { R_Status_ID: 2, Name: '已完成', SeqNo: 2 },
   ])),
+  listRequestTypes: vi.fn(() => Promise.resolve([
+    { R_RequestType_ID: 1, Name: '諮詢' },
+  ])),
 }))
 
 vi.mock('@/composables/useRequestStatuses', () => ({

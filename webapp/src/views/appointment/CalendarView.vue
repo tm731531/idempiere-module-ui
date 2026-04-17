@@ -78,6 +78,8 @@
           <div
             v-for="layout in dayApptLayout"
             :key="layout.appt.id"
+            class="appt-block"
+            :class="{ dragging: dragState.appointmentId === layout.appt.id, conflict: dragState.appointmentId === layout.appt.id && dragState.hasConflict }"
             :style="{
               ...getApptBlockStyle(layout),
               position: 'absolute',
@@ -89,6 +91,9 @@
               overflow: 'hidden'
             }"
             @click.stop="onApptClick(layout.appt)"
+            @mousedown.stop="startDragAppt($event, layout.appt)"
+            @touchstart.passive="startDragAppt($event, layout.appt)"
+            @contextmenu.prevent="onApptContextMenu($event, layout.appt)"
           >
             {{ layout.appt.Name }}
           </div>

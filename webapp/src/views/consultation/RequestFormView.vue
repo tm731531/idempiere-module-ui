@@ -1,5 +1,7 @@
 <template>
-  <div class="request-form-page">
+  <div class="request-form-layout">
+    <!-- Main form -->
+    <div class="request-form-page">
     <div class="form-header">
       <button class="back-btn" @click="goBack">返回</button>
       <h2>{{ isEdit ? '編輯諮詢' : '新增諮詢' }}</h2>
@@ -23,6 +25,10 @@
             {{ status.Name }}
           </option>
         </select>
+        <!-- Next follow-up date badge -->
+        <span v-if="dateNextAction" class="tracking-badge">
+          📅 下次跟進：{{ formatTrackingDate(dateNextAction) }}
+        </span>
       </div>
 
       <!-- Dynamic form from AD metadata -->
@@ -77,6 +83,7 @@
         <div v-if="attachError" class="field-error">{{ attachError }}</div>
       </div>
 
+      <div v-if="successMsg" class="form-success">{{ successMsg }}</div>
       <div v-if="errorMsg" class="form-error">{{ errorMsg }}</div>
 
       <div class="form-actions">
@@ -89,6 +96,15 @@
           :disabled="submitting"
         >
           ✏️ 建立訂單
+        </button>
+        <button
+          v-if="isEdit && formData.C_BPartner_ID"
+          type="button"
+          class="create-appointment-btn"
+          @click="onCreateAppointment"
+          :disabled="submitting"
+        >
+          📅 建立預約
         </button>
         <button type="submit" :disabled="submitting">
           {{ submitting ? '儲存中...' : '儲存' }}
@@ -125,11 +141,22 @@
       @tracking-set="handleTrackingSet"
       @close="showTrackingModal = false"
     />
+    </div><!-- end request-form-page -->
+
+    <!-- Customer history sidebar (desktop only, edit mode) -->
+    <CustomerHistorySidebar
+      v-if="isEdit"
+      class="form-sidebar"
+      :customer-id="sidebarCustomerId"
+      :customer-name="sidebarCustomerName"
+      :current-record-id="requestId ?? undefined"
+      current-record-type="consultation"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAttachment } from '@/composables/useAttachment'
@@ -137,6 +164,7 @@ import { useDocumentForm } from '@/composables/useDocumentForm'
 import DynamicForm from '@/components/DynamicForm.vue'
 import RequestTimeline from '@/components/RequestTimeline.vue'
 import QuickActionBar from '@/components/QuickActionBar.vue'
+import CustomerHistorySidebar from '@/components/CustomerHistorySidebar.vue'
 import StatusUpdateModal from '@/components/StatusUpdateModal.vue'
 import TrackingDateModal from '@/components/TrackingDateModal.vue'
 import { type Activity } from '@/utils/requestActivity'
@@ -150,6 +178,7 @@ import {
   type RequestData,
   type RequestStatus,
 } from '@/api/request'
+import { toIdempiereDateTime, parseIdempiereDateTime } from '@/api/utils'
 import {
   loadRequestStatuses,
   findStatus,
@@ -191,10 +220,30 @@ const {
 const columnFilters = { C_BPartner_ID: 'IsCustomer eq true' }
 const highlightColumns = ['C_BPartner_ID']
 
+// Sidebar customer binding
+const sidebarCustomerId = computed<number | null>(() => {
+  const bp = formData.value?.C_BPartner_ID
+  if (bp === null || bp === undefined) return null
+  if (typeof bp === 'object' && bp !== null && 'id' in bp) return bp.id as number
+  if (typeof bp === 'number') return bp
+  return null
+})
+
+const sidebarCustomerName = computed<string | undefined>(() => {
+  const bp = formData.value?.C_BPartner_ID
+  if (bp && typeof bp === 'object') {
+    return (bp as any).identifier || (bp as any).Name || undefined
+  }
+  return undefined
+})
+
 const submitting = ref(false)
 const errorMsg = ref('')
+const successMsg = ref('')
 // R_Status_ID of the currently-selected status. 0 = unselected.
 const selectedStatusId = ref<number>(0)
+// DateNextAction — follow-up date stored in R_Request
+const dateNextAction = ref<string | null>(null)
 
 const showStatusModal = ref(false)
 const showTrackingModal = ref(false)
@@ -433,10 +482,44 @@ function handleStatusSelected(statusIdOrName: string | number) {
   showStatusModal.value = false
 }
 
-function handleTrackingSet(data: { date: string; time: string; description: string }) {
-  // TODO: Tracking feature temporarily disabled until we find a proper field for storage
-  errorMsg.value = '追蹤預約功能暫時不可用'
-  showTrackingModal.value = false
+async function handleTrackingSet(data: { date: string; time: string; description: string }) {
+  if (!requestId.value) {
+    errorMsg.value = '無法設定追蹤：諮詢 ID 不存在'
+    showTrackingModal.value = false
+    return
+  }
+
+  const [year, month, day] = data.date.split('-').map(Number)
+  const [hour, minute] = data.time.split(':').map(Number)
+  const dt = new Date(year!, month! - 1, day!, hour ?? 0, minute ?? 0, 0)
+  const isoDate = toIdempiereDateTime(dt)
+
+  successMsg.value = ''
+  errorMsg.value = ''
+
+  try {
+    await updateRequest(requestId.value, { DateNextAction: isoDate })
+    dateNextAction.value = isoDate
+    showTrackingModal.value = false
+    successMsg.value = `下次跟進已設定：${data.date} ${data.time}`
+    // Auto-clear the success message after 4 seconds
+    setTimeout(() => { successMsg.value = '' }, 4000)
+  } catch (e: any) {
+    const apiError = e.response?.data?.error || e.response?.data?.message || e.message || '未知錯誤'
+    errorMsg.value = `設定追蹤日期失敗: ${apiError}`
+    showTrackingModal.value = false
+  }
+}
+
+function formatTrackingDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = parseIdempiereDateTime(dateStr)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day} ${h}:${mi}`
 }
 
 function getCurrentStatusId(): number {
@@ -512,6 +595,12 @@ onMounted(async () => {
     selectedStatusId.value = 0
   }
 
+  // Hydrate dateNextAction from loaded formData
+  const rawDate = formData.value?.DateNextAction
+  if (rawDate && typeof rawDate === 'string') {
+    dateNextAction.value = rawDate
+  }
+
   if (isEdit.value && requestId.value) {
     await Promise.all([
       loadAttachments(requestId.value),
@@ -532,6 +621,29 @@ function onCreateOrder() {
     name: 'order-create',
     params: { customerId: formData.value.C_BPartner_ID },
     query: { relatedConsultationId: requestId.value },
+  })
+}
+
+// 建立預約功能
+function onCreateAppointment() {
+  if (!formData.value.C_BPartner_ID) {
+    alert('請先選擇客戶')
+    return
+  }
+
+  // Extract numeric customer ID from FK object or raw number
+  const bpartner = formData.value.C_BPartner_ID
+  const customerId = typeof bpartner === 'object' && bpartner !== null
+    ? (bpartner as { id: number }).id
+    : bpartner
+
+  // Navigate to appointment creation with customer prefilled and consultation reference
+  router.push({
+    name: 'appointment-new',
+    query: {
+      customerId: String(customerId),
+      consultationId: String(requestId.value),
+    },
   })
 }
 </script>
@@ -791,6 +903,57 @@ function onCreateOrder() {
   cursor: not-allowed;
 }
 
+.create-appointment-btn {
+  background: #10b981;
+  color: white;
+  border: 1px solid #059669;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  min-height: 44px;
+  transition: all 0.2s;
+}
+
+.create-appointment-btn:hover:not(:disabled) {
+  background: #059669;
+  border-color: #047857;
+}
+
+.create-appointment-btn:active:not(:disabled) {
+  background: #047857;
+}
+
+.create-appointment-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tracking-badge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #1d4ed8;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.form-success {
+  background: #f0fdf4;
+  color: #166534;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  border: 1px solid #bbf7d0;
+}
+
 .timeline-section {
   margin-top: 2rem;
   margin-bottom: 8rem;
@@ -869,6 +1032,37 @@ function onCreateOrder() {
   .timeline-section {
     max-height: 400px;
     overflow-y: auto;
+  }
+}
+
+/* Layout: form + sidebar side-by-side */
+.request-form-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+.request-form-layout .request-form-page {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Sidebar: hidden on mobile, shown on desktop */
+.form-sidebar {
+  display: none;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+@media (min-width: 1024px) {
+  .request-form-layout .request-form-page {
+    max-width: none;
+  }
+
+  .form-sidebar {
+    display: flex;
   }
 }
 </style>

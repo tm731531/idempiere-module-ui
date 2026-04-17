@@ -62,10 +62,24 @@ vi.mock('@/api/request', () => ({
   getRequest: vi.fn(),
   createRequest: vi.fn(),
   updateRequest: vi.fn(),
+  updateRequestStatus: vi.fn(() => Promise.resolve()),
   listRequestStatuses: vi.fn(() => Promise.resolve([
     { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
     { R_Status_ID: 2, Name: '已完成', SeqNo: 2 },
   ])),
+}))
+
+vi.mock('@/composables/useRequestStatuses', () => ({
+  loadRequestStatuses: vi.fn(() => Promise.resolve([
+    { R_Status_ID: 1, Name: '待處理', SeqNo: 1 },
+    { R_Status_ID: 2, Name: '已完成', SeqNo: 2 },
+  ])),
+  findStatus: vi.fn(() => null),
+  isCompletedStatus: vi.fn(() => false),
+  isRequestCompleted: vi.fn(() => false),
+  extractStatusId: vi.fn(() => 0),
+  extractStatusName: vi.fn(() => ''),
+  getStatusName: vi.fn(() => ''),
 }))
 
 vi.mock('@/api/adNote', () => ({
@@ -288,6 +302,100 @@ describe('RequestFormView', () => {
     expect(actionBar.exists()).toBe(true)
     expect(actionBar.props('requestId')).toBe(123)
     expect(actionBar.props('disabled')).toBe(false)
+  })
+
+  it('renders 建立預約 button when editing with C_BPartner_ID', async () => {
+    const { useDocumentForm } = await import('@/composables/useDocumentForm')
+    vi.mocked(useDocumentForm).mockReturnValueOnce({
+      visibleFieldDefs: [],
+      formData: ref({
+        R_RequestType_ID: { id: 1, identifier: 'Type 1' },
+        Summary: 'Test summary',
+        Description: '[]',
+        R_Status_ID: { id: 1, identifier: 'New' },
+        C_BPartner_ID: { id: 1000, identifier: 'Test Customer' },
+      }),
+      pageLoading: ref(false),
+      pageError: ref(''),
+      docStatus: ref('DR'),
+      readOnly: false,
+      isCreate: false,
+      load: vi.fn(),
+      loadFields: vi.fn(),
+      initDefaults: vi.fn(),
+      getFormPayload: vi.fn(() => ({})),
+      getUpdatePayload: vi.fn(() => ({})),
+      populateFromRecord: vi.fn(),
+    } as any)
+
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          QuickActionBar: true,
+          DynamicForm: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    const btn = wrapper.find('.create-appointment-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.text()).toContain('建立預約')
+  })
+
+  it('onCreateAppointment navigates to appointment-new with query params', async () => {
+    const mockPush = vi.fn()
+    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as any)
+
+    const { useDocumentForm } = await import('@/composables/useDocumentForm')
+    vi.mocked(useDocumentForm).mockReturnValueOnce({
+      visibleFieldDefs: [],
+      formData: ref({
+        R_RequestType_ID: { id: 1, identifier: 'Type 1' },
+        Summary: 'Test summary',
+        Description: '[]',
+        R_Status_ID: { id: 1, identifier: 'New' },
+        C_BPartner_ID: { id: 1000, identifier: 'Test Customer' },
+      }),
+      pageLoading: ref(false),
+      pageError: ref(''),
+      docStatus: ref('DR'),
+      readOnly: false,
+      isCreate: false,
+      load: vi.fn(),
+      loadFields: vi.fn(),
+      initDefaults: vi.fn(),
+      getFormPayload: vi.fn(() => ({})),
+      getUpdatePayload: vi.fn(() => ({})),
+      populateFromRecord: vi.fn(),
+    } as any)
+
+    const wrapper = mount(RequestFormView, {
+      global: {
+        stubs: {
+          RequestTimeline: true,
+          QuickActionBar: true,
+          DynamicForm: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    const btn = wrapper.find('.create-appointment-btn')
+    await btn.trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'appointment-new',
+      query: expect.objectContaining({
+        customerId: '1000',
+        consultationId: '123',
+      }),
+    }))
   })
 
   it('passes activities JSON string to RequestTimeline', async () => {

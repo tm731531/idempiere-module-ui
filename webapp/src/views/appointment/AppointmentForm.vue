@@ -1,7 +1,12 @@
 <template>
-  <div class="form-overlay" @click.self="$emit('cancel')">
+  <div class="form-overlay" @click.self="handleCancel">
     <div class="form-modal">
       <h3 class="form-title">{{ editingAppt ? '編輯預約' : '新增預約' }}</h3>
+
+      <!-- Consultation link banner (shown when navigated from consultation edit page) -->
+      <div v-if="linkedConsultationId" class="consultation-banner">
+        關聯諮詢 #{{ linkedConsultationId }}
+      </div>
 
       <div class="form-group">
         <label class="form-label">服務人員</label>
@@ -91,7 +96,7 @@
           {{ deleting ? '刪除中...' : '刪除' }}
         </button>
         <div class="actions-right">
-          <button class="btn btn-secondary" @click="$emit('cancel')">取消</button>
+          <button class="btn btn-secondary" @click="handleCancel">取消</button>
           <button class="btn btn-primary" :disabled="saving" @click="handleSave">
             {{ saving ? '儲存中...' : '儲存' }}
           </button>
@@ -102,13 +107,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { createAssignment, updateAssignment, deleteAssignment } from '@/api/assignment'
 import { createResource } from '@/api/resource'
 import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import SearchSelector from '@/components/SearchSelector.vue'
+
+const router = useRouter()
+const route = useRoute()
 
 const props = defineProps<{
   resources: any[]
@@ -140,6 +149,12 @@ const form = reactive({
 const saving = ref(false)
 const deleting = ref(false)
 const errorMsg = ref('')
+
+// Query param: ID of the consultation this appointment is being created for (UX hint only)
+const linkedConsultationId = computed(() => {
+  const val = route?.query?.consultationId
+  return val ? String(val) : null
+})
 
 // Resource creation
 const showCreateResource = ref(false)
@@ -210,8 +225,28 @@ onMounted(() => {
       const toM = String(toDate.getMinutes()).padStart(2, '0')
       form.dateTo = `${props.initialDate}T${toH}:${toM}`
     }
+
+    // Pre-fill customer from query param (when navigated from consultation form)
+    const customerIdParam = route?.query?.customerId
+    if (customerIdParam && !form.bpartnerId) {
+      const parsed = Number(customerIdParam)
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        form.bpartnerId = parsed
+        // bpartnerLabel will be resolved by SearchSelector via initialLabel/resolveCurrentLabel
+      }
+    }
   }
 })
+
+// Cancel: emit to parent (modal mode) or navigate back (standalone mode)
+function handleCancel() {
+  if (linkedConsultationId.value) {
+    // Navigated from a consultation — go back to it
+    router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
+  } else {
+    emit('cancel')
+  }
+}
 
 function validate(): boolean {
   if (!form.resourceId) {
@@ -296,7 +331,12 @@ async function handleSave() {
     }
 
     saving.value = false
-    emit('saved')
+    if (linkedConsultationId.value) {
+      // Standalone mode: navigate back to the originating consultation
+      router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
+    } else {
+      emit('saved')
+    }
   } catch {
     errorMsg.value = '儲存失敗，請稍後再試'
     saving.value = false
@@ -343,6 +383,17 @@ async function handleDelete() {
   font-size: 1.125rem;
   font-weight: 600;
   margin-bottom: 1rem;
+}
+
+.consultation-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
 }
 
 .form-group {

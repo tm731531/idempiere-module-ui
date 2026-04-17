@@ -316,6 +316,7 @@ input[type="checkbox"]:disabled { opacity: 0.5; }
   - Dashboard view with ConversionMetrics component showing consultant rankings
   - Clickable performance ranking rows → navigate to list with `?filterOperatorId=<SalesRep_ID>`
   - Create Order button in edit mode (requires C_BPartner_ID)
+  - '建立預約' button in edit mode (requires C_BPartner_ID) — navigates to `appointment-new` with `customerId` and `consultationId` as query params; AppointmentForm pre-fills C_BPartner_ID and shows a "關聯諮詢 #ID" banner; on save/cancel navigates back to the consultation
   - Consultant filter banner (blue) shows active `filterOperatorId` parameter
 
 - **Features disabled (temporary)**:

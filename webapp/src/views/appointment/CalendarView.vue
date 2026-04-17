@@ -16,6 +16,9 @@
           class="resource-chip"
           :class="{ selected: selectedResourceIds.has(res.id) }"
           @click.prevent="toggleResource(res.id)"
+          @contextmenu.prevent="openChipColorPicker($event, res.id)"
+          @long-press.prevent="openChipColorPicker($event, res.id)"
+          :title="`${res.Name}（長按或右鍵可更改顏色）`"
         >
           <span class="chip-dot" :style="{ backgroundColor: getResourceColor(res.id) }"></span>
           <span class="chip-name">{{ res.Name }}</span>
@@ -224,6 +227,15 @@
       @cancel="showForm = false"
       @resources-changed="reloadResources"
     />
+
+    <!-- Resource chip color picker (right-click / long-press on chip) -->
+    <ColorPickerPopover
+      v-model:visible="chipColorPicker.visible"
+      :model-value="chipColorPicker.resourceId !== null ? (resourceColors[chipColorPicker.resourceId] ?? null) : null"
+      :anchor-el="chipColorPicker.anchorEl"
+      @change="onChipColorChange"
+      @update:visible="chipColorPicker.visible = $event"
+    />
   </div>
 </template>
 
@@ -236,11 +248,14 @@ import AppointmentForm from './AppointmentForm.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import AppointmentActionSheet from '@/components/AppointmentActionSheet.vue'
 import CopyAssignmentDialog from '@/components/CopyAssignmentDialog.vue'
+import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
 import { checkConflict, formatDuration, getMinutesDiff } from '@/lib/time-overlap'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
 import { useToast } from '@/composables/useToast'
+import { useAssignmentColors } from '@/composables/useAssignmentColors'
 
 const toast = useToast()
+const { load: loadColors, resolveAssignmentColor, setResourceColor, clearResourceColor, resourceColors } = useAssignmentColors()
 
 // ========== View Mode ==========
 type ViewMode = 'day' | 'week' | 'month' | 'year'
@@ -289,21 +304,47 @@ function toggleAll() {
 }
 
 function getResourceColor(resourceId: number): string {
-  // First try to find in resources list (for already-loaded resources)
+  // Check user-defined color from AD_SysConfig first
+  const userColor = resourceColors.value[resourceId]
+  if (userColor) return userColor
+
+  // Fallback: deterministic by index (original behaviour)
   const idx = resources.value.findIndex(r => r.id === resourceId)
   if (idx !== -1) {
     const colorIdx = idx % CALENDAR_CONFIG.COLORS.length
     return CALENDAR_CONFIG.COLORS[colorIdx]!
   }
-  // Fallback: use resource ID itself as stable hash for color assignment
-  // This ensures even newly-created resources get consistent colors
   const colorIdx = Math.abs(resourceId) % CALENDAR_CONFIG.COLORS.length
   return CALENDAR_CONFIG.COLORS[colorIdx]!
 }
 
 function getAppointmentColor(appt: any): string {
   const resId = typeof appt.S_Resource_ID === 'object' ? appt.S_Resource_ID.id : appt.S_Resource_ID
-  return getResourceColor(resId)
+  const assignId = appt.id ?? appt.S_ResourceAssignment_ID
+  return resolveAssignmentColor(assignId, resId)
+}
+
+// ========== Resource chip color picker ==========
+const chipColorPicker = reactive({
+  visible: false,
+  resourceId: null as number | null,
+  anchorEl: null as HTMLElement | null,
+})
+
+function openChipColorPicker(event: MouseEvent | TouchEvent, resourceId: number) {
+  event.preventDefault()
+  chipColorPicker.resourceId = resourceId
+  chipColorPicker.anchorEl = (event.currentTarget as HTMLElement) ?? null
+  chipColorPicker.visible = true
+}
+
+function onChipColorChange(hex: string | null) {
+  if (chipColorPicker.resourceId === null) return
+  if (hex === null) {
+    clearResourceColor(chipColorPicker.resourceId)
+  } else {
+    setResourceColor(chipColorPicker.resourceId, hex)
+  }
 }
 
 function getResourceName(appt: any): string {
@@ -991,6 +1032,8 @@ async function reloadResources() {
 // ========== Init ==========
 onMounted(async () => {
   resourcesLoading.value = true
+  // Load color maps in parallel with resources (non-blocking if it fails)
+  void loadColors()
   try {
     resources.value = await listResources()
     resources.value.forEach(r => selectedResourceIds.add(r.id))

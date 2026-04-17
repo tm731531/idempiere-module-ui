@@ -7,6 +7,59 @@ export interface SystemConfig {
   Description?: string
 }
 
+// ========== Color System Keys ==========
+const RESOURCE_COLORS_KEY = 'RESOURCE_COLORS'
+const ASSIGNMENT_COLORS_KEY = 'ASSIGNMENT_COLORS'
+
+/**
+ * Get per-resource colors from SysConfig.
+ * Returns a map of resourceId → hex color string.
+ */
+export async function getResourceColors(): Promise<Record<number, string>> {
+  const raw = await getSysConfig(RESOURCE_COLORS_KEY)
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw) as Record<number, string>
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Persist per-resource color map to SysConfig.
+ */
+export async function setResourceColors(colors: Record<number, string>): Promise<void> {
+  await updateSysConfig(RESOURCE_COLORS_KEY, JSON.stringify(colors))
+}
+
+/**
+ * Get per-assignment color overrides from SysConfig.
+ * Returns a map of assignmentId → hex color string.
+ */
+export async function getAssignmentColors(): Promise<Record<number, string>> {
+  const raw = await getSysConfig(ASSIGNMENT_COLORS_KEY)
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw) as Record<number, string>
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Set or clear a color override for a single assignment.
+ * Merges into the existing map. Pass null to remove the override.
+ */
+export async function setAssignmentColor(assignmentId: number, color: string | null): Promise<void> {
+  const existing = await getAssignmentColors()
+  if (color === null) {
+    delete existing[assignmentId]
+  } else {
+    existing[assignmentId] = color
+  }
+  await updateSysConfig(ASSIGNMENT_COLORS_KEY, JSON.stringify(existing))
+}
+
 /**
  * 讀取 SysConfig 設定 - 根據當前 tenant 取用
  * @param name SysConfig 的 Name (例如 "MobileSettingConfig")

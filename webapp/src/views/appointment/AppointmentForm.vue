@@ -8,7 +8,26 @@
         關聯諮詢 #{{ linkedConsultationId }}
       </div>
 
-      <div class="form-group">
+      <!-- Mode toggle (create mode only) -->
+      <div v-if="!editingAppt" class="form-group">
+        <div class="mode-toggle">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: !multiMode }"
+            @click="multiMode = false"
+          >單一資源</button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: multiMode }"
+            @click="multiMode = true"
+          >多資源同時</button>
+        </div>
+      </div>
+
+      <!-- Single resource selector -->
+      <div v-if="!multiMode" class="form-group">
         <label class="form-label">服務人員</label>
         <div class="selector-row">
           <select v-model="form.resourceId" class="form-input">
@@ -31,6 +50,32 @@
               {{ creatingResource ? '...' : '建立' }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Multi-resource checkbox list -->
+      <div v-if="multiMode" class="form-group">
+        <label class="form-label">選擇服務人員（可多選）</label>
+        <div class="resource-checklist">
+          <label
+            v-for="r in resources"
+            :key="r.id"
+            class="resource-check-row"
+          >
+            <input
+              type="checkbox"
+              :value="r.id"
+              v-model="selectedResourceIds"
+              class="resource-checkbox"
+            />
+            <span class="resource-name">{{ r.Name }}</span>
+            <span
+              v-if="resourceConflicts[r.id]"
+              class="conflict-dot"
+              title="此時段已有預約"
+            >●</span>
+          </label>
+          <div v-if="resources.length === 0" class="no-resources">尚無服務人員</div>
         </div>
       </div>
 
@@ -74,6 +119,37 @@
         />
       </div>
 
+      <!-- Color override (optional per-assignment color) -->
+      <div class="form-group">
+        <label class="form-label">顏色</label>
+        <div class="color-field">
+          <button
+            ref="colorAnchorEl"
+            type="button"
+            class="color-preview-btn"
+            :style="{ backgroundColor: form.colorOverride || '#94a3b8' }"
+            :title="form.colorOverride ? '點擊更改顏色' : '點擊設定顏色（可選）'"
+            @click="colorPickerVisible = true"
+          />
+          <span class="color-hint">
+            {{ form.colorOverride ? form.colorOverride : '使用資源預設顏色' }}
+          </span>
+          <button
+            v-if="form.colorOverride"
+            type="button"
+            class="btn-clear-color"
+            title="清除顏色覆蓋"
+            @click="form.colorOverride = null"
+          >✕</button>
+        </div>
+        <ColorPickerPopover
+          v-model:visible="colorPickerVisible"
+          :model-value="form.colorOverride"
+          :anchor-el="colorAnchorEl"
+          @change="(c: string | null) => { form.colorOverride = c }"
+        />
+      </div>
+
       <div class="form-group">
         <label class="form-label">備註</label>
         <textarea
@@ -86,6 +162,11 @@
 
       <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
 
+      <!-- Multi-submit result summary -->
+      <div v-if="multiResultSummary" class="multi-result-summary" :class="multiResultSummary.hasError ? 'summary-partial' : 'summary-ok'">
+        {{ multiResultSummary.text }}
+      </div>
+
       <div class="form-actions">
         <button
           v-if="editingAppt"
@@ -97,7 +178,7 @@
         </button>
         <div class="actions-right">
           <button class="btn btn-secondary" @click="handleCancel">取消</button>
-          <button class="btn btn-primary" :disabled="saving" @click="handleSave">
+          <button class="btn btn-primary" :disabled="saving || (multiMode && selectedResourceIds.length === 0)" @click="handleSave">
             {{ saving ? '儲存中...' : '儲存' }}
           </button>
         </div>
@@ -107,14 +188,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { createAssignment, updateAssignment, deleteAssignment } from '@/api/assignment'
+import { createAssignment, createMultipleAssignments, updateAssignment, deleteAssignment, checkConflict } from '@/api/assignment'
 import { createResource } from '@/api/resource'
 import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import SearchSelector from '@/components/SearchSelector.vue'
+import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
+import { useAssignmentColors } from '@/composables/useAssignmentColors'
+
+const { setAssignmentColorOverride } = useAssignmentColors()
 
 const router = useRouter()
 const route = useRoute()
@@ -144,11 +229,24 @@ const form = reactive({
   description: '',
   bpartnerId: null as number | null,
   bpartnerLabel: '',
+  colorOverride: null as string | null,
 })
 
 const saving = ref(false)
 const deleting = ref(false)
 const errorMsg = ref('')
+
+// Color picker
+const colorPickerVisible = ref(false)
+const colorAnchorEl = ref<HTMLElement | null>(null)
+
+// Multi-resource mode state
+const multiMode = ref(false)
+const selectedResourceIds = ref<number[]>([])
+// Per-resource conflict flags: resourceId → hasConflict
+const resourceConflicts = ref<Record<number, boolean>>({})
+// Summary shown after a multi-submit
+const multiResultSummary = ref<{ text: string; hasError: boolean } | null>(null)
 
 // Query param: ID of the consultation this appointment is being created for (UX hint only)
 const linkedConsultationId = computed(() => {
@@ -184,6 +282,34 @@ async function handleCreateResource() {
   }
 }
 
+// Recheck per-resource conflicts whenever selected resources or time window change
+watch(
+  [selectedResourceIds, () => form.dateFrom, () => form.dateTo],
+  async ([resIds, from, to]) => {
+    if (!multiMode.value || !from || !to) return
+    const fromDate = new Date(from)
+    const toDate = new Date(to)
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || fromDate >= toDate) return
+
+    const entries = await Promise.all(
+      resIds.map(async (id) => {
+        try {
+          const hasConflict = await checkConflict(id, fromDate, toDate)
+          return [id, hasConflict] as [number, boolean]
+        } catch {
+          return [id, false] as [number, boolean]
+        }
+      }),
+    )
+    const conflicts: Record<number, boolean> = {}
+    for (const [id, has] of entries) {
+      conflicts[id] = has
+    }
+    resourceConflicts.value = conflicts
+  },
+  { deep: true },
+)
+
 function toDatetimeLocal(d: Date): string {
   const y = d.getFullYear()
   const mo = String(d.getMonth() + 1).padStart(2, '0')
@@ -203,6 +329,12 @@ onMounted(() => {
     form.dateTo = toDatetimeLocal(parseIdempiereDateTime(a.AssignDateTo))
     form.name = a.Name || ''
     form.description = a.Description || ''
+    // Pre-fill color override from composable cache
+    const assignId = a.id ?? a.S_ResourceAssignment_ID
+    if (assignId) {
+      const { assignmentColors } = useAssignmentColors()
+      form.colorOverride = assignmentColors.value[assignId] ?? null
+    }
     // Pre-fill customer if present
     if (a.C_BPartner_ID) {
       if (typeof a.C_BPartner_ID === 'object') {
@@ -249,8 +381,12 @@ function handleCancel() {
 }
 
 function validate(): boolean {
-  if (!form.resourceId) {
+  if (!multiMode.value && !form.resourceId) {
     errorMsg.value = '請選擇服務人員'
+    return false
+  }
+  if (multiMode.value && selectedResourceIds.value.length === 0) {
+    errorMsg.value = '請至少選擇一位服務人員'
     return false
   }
   if (!form.dateFrom || !form.dateTo) {
@@ -292,23 +428,18 @@ async function handleSave() {
 
   saving.value = true
   errorMsg.value = ''
+  multiResultSummary.value = null
+
+  const orgId = authStore.context?.organizationId ?? 0
+  if (!orgId) {
+    errorMsg.value = '請先切換到具體組織（不可使用 * 組織）'
+    saving.value = false
+    return
+  }
 
   try {
-    if (checkConflictLocal()) {
-      errorMsg.value = '此服務人員在該時段已有預約，請選擇其他時段'
-      saving.value = false
-      return
-    }
-
-    const orgId = authStore.context?.organizationId ?? 0
-    if (!orgId) {
-      errorMsg.value = '請先切換到具體組織（不可使用 * 組織）'
-      saving.value = false
-      return
-    }
-
     if (props.editingAppt) {
-      // Update existing
+      // Edit mode: always single-resource
       await updateAssignment(props.editingAppt.id, {
         S_Resource_ID: form.resourceId,
         AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
@@ -317,9 +448,50 @@ async function handleSave() {
         Description: form.description.trim() || undefined,
         C_BPartner_ID: form.bpartnerId ?? undefined,
       })
+      // Persist color override (non-blocking — failure does not block save)
+      void setAssignmentColorOverride(props.editingAppt.id, form.colorOverride)
+    } else if (multiMode.value) {
+      // Multi-resource create: one POST per resource in parallel
+      const sharedPayload = {
+        AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
+        AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
+        Name: form.name.trim(),
+        Description: form.description.trim() || undefined,
+        AD_Org_ID: orgId,
+        C_BPartner_ID: form.bpartnerId ?? undefined,
+      }
+      const results = await createMultipleAssignments(sharedPayload, selectedResourceIds.value)
+      const successCount = results.filter((r) => r.result !== undefined).length
+      const failCount = results.filter((r) => r.error !== undefined).length
+
+      if (failCount === 0) {
+        multiResultSummary.value = { text: `${successCount} 筆預約已建立`, hasError: false }
+      } else {
+        multiResultSummary.value = {
+          text: `${successCount} 成功、${failCount} 失敗`,
+          hasError: true,
+        }
+      }
+
+      saving.value = false
+      if (failCount === 0) {
+        // All succeeded — close as normal
+        if (linkedConsultationId.value) {
+          router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
+        } else {
+          emit('saved')
+        }
+      }
+      // On partial failure: stay open so the user can see the summary
+      return
     } else {
-      // Create new
-      await createAssignment({
+      // Single-resource create
+      if (checkConflictLocal()) {
+        errorMsg.value = '此服務人員在該時段已有預約，請選擇其他時段'
+        saving.value = false
+        return
+      }
+      const newAssignment = await createAssignment({
         S_Resource_ID: form.resourceId,
         AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
         AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
@@ -328,6 +500,11 @@ async function handleSave() {
         AD_Org_ID: orgId,
         C_BPartner_ID: form.bpartnerId ?? undefined,
       })
+      // Persist color override for newly-created assignment (non-blocking)
+      const newId = newAssignment?.id ?? newAssignment?.S_ResourceAssignment_ID
+      if (newId && form.colorOverride) {
+        void setAssignmentColorOverride(newId, form.colorOverride)
+      }
     }
 
     saving.value = false
@@ -537,5 +714,143 @@ async function handleDelete() {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+/* Mode toggle */
+.mode-toggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: white;
+  color: var(--color-text);
+  border: none;
+}
+
+.mode-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* Multi-resource checklist */
+.resource-checklist {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.resource-check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.resource-check-row:last-child {
+  border-bottom: none;
+}
+
+.resource-check-row:hover {
+  background: #f8fafc;
+}
+
+.resource-checkbox {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.resource-name {
+  flex: 1;
+  font-size: 0.9375rem;
+}
+
+.conflict-dot {
+  color: var(--color-error, #ef4444);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  cursor: help;
+}
+
+.no-resources {
+  padding: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+/* Multi-submit result summary */
+.multi-result-summary {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.summary-ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.summary-partial {
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  color: #713f12;
+}
+
+/* Color field */
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-preview-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #e2e8f0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.color-preview-btn:hover {
+  border-color: #94a3b8;
+  transform: scale(1.1);
+}
+
+.color-hint {
+  font-size: 0.8125rem;
+  color: #64748b;
+  flex: 1;
+}
+
+.btn-clear-color {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.btn-clear-color:hover {
+  color: #ef4444;
+  background: #fee2e2;
 }
 </style>

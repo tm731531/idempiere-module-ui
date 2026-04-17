@@ -72,6 +72,36 @@ export async function listAssignmentsByCustomer(
   return resp.data.records || []
 }
 
+export interface MultiAssignmentResult {
+  resourceId: number
+  result?: any
+  error?: Error
+}
+
+/**
+ * Create one assignment per resource in parallel.
+ * Uses Promise.allSettled so partial failures do not abort the whole batch.
+ * Returns per-resource outcome (success or error).
+ */
+export async function createMultipleAssignments(
+  payload: Omit<AssignmentData, 'S_Resource_ID'>,
+  resourceIds: number[],
+): Promise<MultiAssignmentResult[]> {
+  const results = await Promise.allSettled(
+    resourceIds.map((resourceId) =>
+      createAssignment({ ...payload, S_Resource_ID: resourceId }),
+    ),
+  )
+  return results.map((r, i) => {
+    const resourceId = resourceIds[i]!
+    if (r.status === 'fulfilled') {
+      return { resourceId, result: r.value }
+    } else {
+      return { resourceId, error: r.reason as Error }
+    }
+  })
+}
+
 export async function checkConflict(
   resourceId: number,
   dateFrom: Date,

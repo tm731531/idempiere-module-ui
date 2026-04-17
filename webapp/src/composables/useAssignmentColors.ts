@@ -118,6 +118,37 @@ async function setAssignmentColorOverride(assignmentId: number, color: string | 
   }
 }
 
+// ========== Cache management ==========
+/**
+ * Clear all in-memory color state and cancel any pending debounced save.
+ * Call on logout / context switch to prevent cross-tenant color leaks.
+ */
+export function clearAssignmentColors(): void {
+  if (resourceSaveTimer !== null) {
+    clearTimeout(resourceSaveTimer)
+    resourceSaveTimer = null
+  }
+  resourceColors.value = {}
+  assignmentColors.value = {}
+  loaded.value = false
+}
+
+/**
+ * If a debounced resource-color save is pending, flush it immediately.
+ * Components should call this on `onBeforeUnmount` to avoid losing the last pick.
+ */
+export async function flushPendingSave(): Promise<void> {
+  if (resourceSaveTimer !== null) {
+    clearTimeout(resourceSaveTimer)
+    resourceSaveTimer = null
+    try {
+      await setResourceColors({ ...resourceColors.value })
+    } catch (e) {
+      console.error('[useAssignmentColors] Failed to flush pending resource color save:', e)
+    }
+  }
+}
+
 // ========== Exported composable ==========
 export function useAssignmentColors() {
   return {

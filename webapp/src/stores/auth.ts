@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { apiClient } from '@/api/client'
 import { clearLookupCache } from '@/api/lookup'
 import { clearRequestStatusesCache } from '@/composables/useRequestStatuses'
+import { clearAssignmentColors } from '@/composables/useAssignmentColors'
+import { clearAdNoteCache } from '@/api/adNote'
 
 interface User {
   id: number
@@ -343,6 +345,8 @@ export const useAuthStore = defineStore('auth', () => {
     loginLoading.value = true
     clearLookupCache()
     clearRequestStatusesCache()
+    clearAssignmentColors()
+    clearAdNoteCache()
 
     try {
       // Re-POST with saved credentials to get fresh token + clients
@@ -412,6 +416,8 @@ export const useAuthStore = defineStore('auth', () => {
     delete apiClient.defaults.headers.common['Authorization']
     clearLookupCache()
     clearRequestStatusesCache()
+    clearAssignmentColors()
+    clearAdNoteCache()
   }
 
   // 初始化：如果有 token + context，還原登入狀態

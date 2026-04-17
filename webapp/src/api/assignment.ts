@@ -112,7 +112,7 @@ export async function checkConflict(
   const fromStr = toIdempiereDateTime(dateFrom)
   const toStr = toIdempiereDateTime(dateTo)
   let filter = `S_Resource_ID eq ${resourceId} and AssignDateFrom lt '${toStr}' and AssignDateTo gt '${fromStr}'`
-  if (excludeId) filter += ` and S_ResourceAssignment_ID ne ${excludeId}`
+  if (excludeId) filter += ` and S_ResourceAssignment_ID neq ${excludeId}`
 
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
     params: { '$filter': filter, '$top': '1' },

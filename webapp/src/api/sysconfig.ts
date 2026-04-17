@@ -91,12 +91,10 @@ export async function getSysConfig(name: string): Promise<string | null> {
       })
       const records = resp.data.records || []
       if (records.length > 0) {
-        console.log(`✅ Found SysConfig '${name}' at client=${records[0].AD_Client_ID}, org=${records[0].AD_Org_ID}`)
         return records[0].Value
       }
     }
 
-    console.log(`⚠️ SysConfig '${name}' not found for any tenant level`)
     return null
   } catch (e) {
     console.error('❌ Failed to load SysConfig:', name, e)
@@ -124,24 +122,18 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
       },
     })
     const records = resp.data.records || []
-    console.log(`📡 getSysConfig response for org-level: ${records.length} records`)
 
     if (records.length > 0) {
       // Update existing
-      console.log('📋 Full record:', JSON.stringify(records[0], null, 2))
-      console.log('📋 All keys:', Object.keys(records[0]))
       const configId = records[0].AD_SysConfig_ID || records[0].id || records[0].adSysconfigId
-      console.log(`🔍 Found configId=${configId} (type: ${typeof configId})`)
       if (!configId) {
         console.error('❌ No ID field found. Available keys:', Object.keys(records[0]))
         return false
       }
       await apiClient.put(`/api/v1/models/AD_SysConfig/${configId}`, { Value: value })
-      console.log('✅ Updated SysConfig at organization level:', name)
       return true
     } else {
       // Create new org-specific record
-      console.log(`📝 Creating new SysConfig for org ${authStore.context.organizationId}`)
       try {
         await apiClient.post('/api/v1/models/AD_SysConfig', {
           AD_Client_ID: authStore.context.clientId,
@@ -150,7 +142,6 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
           Value: value,
           Description: 'Mobile consultation request statuses',
         })
-        console.log('✅ Created SysConfig at organization level:', name)
         return true
       } catch (createError: any) {
         if (createError.response?.status === 403) {

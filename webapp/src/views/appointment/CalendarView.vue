@@ -85,11 +85,14 @@
             :class="{ dragging: dragState.appointmentId === layout.appt.id, conflict: dragState.appointmentId === layout.appt.id && dragState.hasConflict }"
             :style="{
               ...getApptBlockStyle(layout),
+              transform: dragState.appointmentId === layout.appt.id
+                ? `translateY(${dragState.dragCurrentY - dragState.dragStartY}px)`
+                : undefined,
               position: 'absolute',
               color: 'white',
               padding: '5px',
               fontSize: '12px',
-              zIndex: '10',
+              zIndex: dragState.appointmentId === layout.appt.id ? '50' : '10',
               borderRadius: '4px',
               overflow: 'hidden'
             }"
@@ -240,19 +243,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { listResources } from '@/api/resource'
 import { listAssignments, updateAssignment } from '@/api/assignment'
-import { parseIdempiereDateTime } from '@/api/utils'
+import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import AppointmentForm from './AppointmentForm.vue'
 import BottomSheet from '@/components/BottomSheet.vue'
 import AppointmentActionSheet from '@/components/AppointmentActionSheet.vue'
 import CopyAssignmentDialog from '@/components/CopyAssignmentDialog.vue'
 import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
-import { checkConflict, formatDuration, getMinutesDiff } from '@/lib/time-overlap'
+import { checkConflictLocal } from '@/lib/time-overlap'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
 import { useToast } from '@/composables/useToast'
 import { useAssignmentColors } from '@/composables/useAssignmentColors'
+
+// -----------------------------------------------------------------------------
+// Day label conventions
+// -----------------------------------------------------------------------------
+// DAY_LABELS  = Monday-first: ['一','二','三','四','五','六','日']  (weekday grid, week tabs)
+// DAY_NAMES   = Sunday-first: ['日','一','二','三','四','五','六']  (indexed by Date.getDay())
+// Both conventions exist intentionally — DAY_LABELS is used when rendering a
+// Monday-first row of columns; DAY_NAMES is indexed with getDay() which is 0=Sun.
+// -----------------------------------------------------------------------------
 
 const toast = useToast()
 const { load: loadColors, resolveAssignmentColor, setResourceColor, clearResourceColor, resourceColors } = useAssignmentColors()
@@ -360,6 +372,11 @@ function getCustomerName(appt: any): string {
   if (!appt.C_BPartner_ID) return ''
   if (typeof appt.C_BPartner_ID === 'object') {
     return appt.C_BPartner_ID.identifier || appt.C_BPartner_ID.Name || ''
+  }
+  // Numeric FK (not expanded) — fall back to a placeholder so the user still
+  // sees *something* rather than a silently-empty customer slot.
+  if (typeof appt.C_BPartner_ID === 'number') {
+    return `#${appt.C_BPartner_ID}`
   }
   return ''
 }
@@ -645,7 +662,10 @@ const monthCells = computed(() => {
   const lastDay = new Date(year, month + 1, 0)
   const today = formatDateFull(new Date())
 
-  // Monday-based: getDay() 0=Sun→6, 1=Mon→0, ...
+  // Monday-first week: convert Date#getDay() (Sun=0..Sat=6) into the number
+  // of empty previous-month cells before the 1st of the month.
+  // Sun=0 → offset 6 (Sunday is column 7 in a Mon-first grid)
+  // Mon=1 → offset 0, Tue=2 → 1, ..., Sat=6 → 5
   let startOffset = firstDay.getDay() - 1
   if (startOffset < 0) startOffset = 6
 
@@ -772,6 +792,27 @@ const dragState = reactive({
   dragCurrentY: 0,
 })
 
+// Suppresses the click that fires immediately after a drag ends (browsers
+// emit `click` even after pointer drag). We also treat any pointer movement
+// > CLICK_DRAG_THRESHOLD_PX as "this was a drag, not a click".
+const CLICK_DRAG_THRESHOLD_PX = 3
+let suppressClick = false
+
+// Module-scoped cleanup ref so `onDragEnd` can always tear down listeners
+// in a `finally` block — previously the cleanup closure was attached to
+// the up-listener but never invoked, leaking listeners on every drag.
+let dragCleanup: (() => void) | null = null
+
+function getEventClientY(event: MouseEvent | TouchEvent): number {
+  if ('touches' in event && event.touches && event.touches.length > 0) {
+    return event.touches[0]!.clientY
+  }
+  if ('changedTouches' in event && event.changedTouches && event.changedTouches.length > 0) {
+    return event.changedTouches[0]!.clientY
+  }
+  return (event as MouseEvent).clientY
+}
+
 // ========== Context Menu (Right-click, Desktop) ==========
 const contextMenu = reactive({
   show: false,
@@ -789,6 +830,11 @@ function onSlotClick(slot: string) {
 }
 
 function onApptClick(appt: any) {
+  // Suppress the click that fires immediately after a drag
+  if (suppressClick) {
+    suppressClick = false
+    return
+  }
   // Mobile first: show action sheet instead of directly opening form
   selectedAppt.value = appt
   showActionSheet.value = true
@@ -801,6 +847,18 @@ function onApptContextMenu(event: MouseEvent, appt: any) {
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
   contextMenu.appt = appt
+
+  // After render, measure the menu and clamp to viewport so it doesn't spill
+  // off the right/bottom edge when clicked near the corners.
+  nextTick(() => {
+    const menuEl = document.querySelector<HTMLElement>('.context-menu')
+    if (!menuEl) return
+    const rect = menuEl.getBoundingClientRect()
+    const maxX = window.innerWidth - rect.width - 4
+    const maxY = window.innerHeight - rect.height - 4
+    if (contextMenu.x > maxX) contextMenu.x = Math.max(4, maxX)
+    if (contextMenu.y > maxY) contextMenu.y = Math.max(4, maxY)
+  })
 }
 
 function onContextMenuEdit() {
@@ -847,16 +905,18 @@ function startDragAppt(event: MouseEvent | TouchEvent, appt: any) {
   // Ignore if already dragging
   if (dragState.dragging) return
 
-  // Get the Y coordinate
-  const clientY = event instanceof TouchEvent
-    ? event.touches[0]?.clientY || 0
-    : event.clientY
+  // Use feature detection instead of `instanceof TouchEvent` — the global
+  // TouchEvent constructor is undefined on Firefox/Safari desktop and the
+  // old check threw a ReferenceError there.
+  const clientY = getEventClientY(event)
 
   dragState.dragging = true
   dragState.appointmentId = appt.id
   dragState.dragStartY = clientY
+  dragState.dragCurrentY = clientY
   dragState.hasConflict = false
   dragState.conflictingNames = []
+  suppressClick = false
 
   // Add global listeners for mousemove/touchmove and mouseup/touchend
   const moveListener = (e: MouseEvent | TouchEvent) => onDragMove(e, appt)
@@ -867,27 +927,30 @@ function startDragAppt(event: MouseEvent | TouchEvent, appt: any) {
   document.addEventListener('mouseup', upListener)
   document.addEventListener('touchend', upListener)
 
-  // Cleanup function
-  function cleanup() {
+  // Store cleanup in a module-scoped ref so `onDragEnd` can always invoke
+  // it (previously the cleanup closure was attached to the up-listener via
+  // `__cleanup` but never called, leaking listeners on every drag).
+  dragCleanup = () => {
     document.removeEventListener('mousemove', moveListener)
     document.removeEventListener('touchmove', moveListener)
     document.removeEventListener('mouseup', upListener)
     document.removeEventListener('touchend', upListener)
   }
-
-  // Store cleanup for later
-  ;(upListener as any).__cleanup = cleanup
 }
 
 function onDragMove(event: MouseEvent | TouchEvent, appt: any) {
-  const clientY = event instanceof TouchEvent
-    ? event.touches[0]?.clientY || 0
-    : event.clientY
-
+  const clientY = getEventClientY(event)
   dragState.dragCurrentY = clientY
 
   // Calculate time shift (1 slot = 30min = SLOT_HEIGHT px)
   const pixelDelta = clientY - dragState.dragStartY
+
+  // Any meaningful movement means the following click is really a "drag end",
+  // not a real tap — suppress the action-sheet popup that would otherwise fire.
+  if (Math.abs(pixelDelta) > CLICK_DRAG_THRESHOLD_PX) {
+    suppressClick = true
+  }
+
   const slotsDelta = Math.round(pixelDelta / SLOT_HEIGHT)
   const minutesDelta = slotsDelta * 30
 
@@ -903,8 +966,9 @@ function onDragMove(event: MouseEvent | TouchEvent, appt: any) {
     ? appt.S_Resource_ID.id
     : appt.S_Resource_ID
 
-  // Check for conflicts
-  const conflict = checkConflict(
+  // Check for conflicts (local, in-memory; not to be confused with the async
+  // `checkConflict` in `@/api/assignment`)
+  const conflict = checkConflictLocal(
     { start: newFrom, end: newTo, resourceId: resId },
     assignments.value,
     appt.id // exclude self
@@ -915,34 +979,48 @@ function onDragMove(event: MouseEvent | TouchEvent, appt: any) {
 }
 
 async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
+  // Always tear down listeners first so we never leak on early returns.
+  if (dragCleanup) {
+    dragCleanup()
+    dragCleanup = null
+  }
+
   dragState.dragging = false
 
-  if (dragState.hasConflict) {
-    // Conflict: show toast and revert
+  // Snapshot conflict state before we reset it — the translate-on-drag binding
+  // snaps the block back to its original position the moment we null
+  // `appointmentId` / zero `dragCurrentY - dragStartY`.
+  const hadConflict = dragState.hasConflict
+  const conflictNames = dragState.conflictingNames.slice()
+
+  if (hadConflict) {
+    // Conflict: show toast, snap back, abort
     toast.add({
       severity: 'warn',
       summary: '時段衝突',
-      detail: `與「${dragState.conflictingNames.join('」「')}」時間衝突，未儲存`,
+      detail: `與「${conflictNames.join('」「')}」時間衝突，未儲存`,
       life: 3000,
     })
     dragState.hasConflict = false
     dragState.conflictingNames = []
     dragState.appointmentId = null
+    dragState.dragCurrentY = dragState.dragStartY
+    // Let the synthetic post-drag click pass through this tick, then re-enable
+    setTimeout(() => { suppressClick = false }, 250)
     return
   }
 
-  // No conflict: save new time
-  const clientY = event instanceof TouchEvent
-    ? event.changedTouches[0]?.clientY || 0
-    : event.clientY
-
+  // No conflict: compute final delta and save
+  const clientY = getEventClientY(event)
   const pixelDelta = clientY - dragState.dragStartY
   const slotsDelta = Math.round(pixelDelta / SLOT_HEIGHT)
   const minutesDelta = slotsDelta * 30
 
   if (minutesDelta === 0) {
-    // No movement, just deselect
+    // No meaningful movement — snap back and release
     dragState.appointmentId = null
+    dragState.dragCurrentY = dragState.dragStartY
+    setTimeout(() => { suppressClick = false }, 250)
     return
   }
 
@@ -952,24 +1030,17 @@ async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
   const newFrom = new Date(from.getTime() + minutesDelta * 60000)
   const newTo = new Date(to.getTime() + minutesDelta * 60000)
 
-  // Format to iDempiere datetime
-  const toIdempiereDateTime = (d: Date): string => {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const h = String(d.getHours()).padStart(2, '0')
-    const min = String(d.getMinutes()).padStart(2, '0')
-    const s = String(d.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${day}T${h}:${min}:${s}Z`
-  }
-
   try {
+    // `toIdempiereDateTime` is imported from `@/api/utils` — the previous
+    // inline duplicate has been removed.
     await updateAssignment(appt.id, {
       AssignDateFrom: toIdempiereDateTime(newFrom),
       AssignDateTo: toIdempiereDateTime(newTo),
     })
     await loadAssignments()
   } catch (error) {
+    // Snap the block back to its original position on failure
+    dragState.dragCurrentY = dragState.dragStartY
     toast.add({
       severity: 'error',
       summary: '儲存失敗',
@@ -978,6 +1049,8 @@ async function onDragEnd(event: MouseEvent | TouchEvent, appt: any) {
     })
   } finally {
     dragState.appointmentId = null
+    dragState.dragCurrentY = dragState.dragStartY
+    setTimeout(() => { suppressClick = false }, 250)
   }
 }
 

@@ -96,6 +96,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { listRequests, updateRequest } from '@/api/request'
+import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
+import { isRequestCompleted, loadRequestStatuses } from '@/composables/useRequestStatuses'
 
 // ---------------------------------------------------------------------------
 // Constants & types
@@ -260,8 +262,9 @@ function pxDeltaToDays(deltaPx: number): number {
   return (deltaPx / colWidth.value) * colDays.value
 }
 
+// Wrapper so downstream code keeps working; delegates to the canonical parser.
 function stripFakeZ(dateStr: string): Date {
-  return new Date(String(dateStr).replace(/Z$/i, ''))
+  return parseIdempiereDateTime(String(dateStr))
 }
 
 // ---------------------------------------------------------------------------
@@ -294,8 +297,9 @@ const items = computed<GanttItem[]>(() => {
       endDate.setDate(endDate.getDate() + 7)
     }
 
-    // Determine color
-    const isClosed = isClosedRequest(r)
+    // Determine color — use the shared IsClosed-backed helper from
+    // useRequestStatuses so closed-state logic stays in a single place.
+    const isClosed = isRequestCompleted(r)
     let color: BarColor = 'green'
     if (isClosed) {
       color = 'gray'
@@ -345,16 +349,6 @@ const items = computed<GanttItem[]>(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isClosedRequest(r: any): boolean {
-  if (r.R_Status_ID && typeof r.R_Status_ID === 'object') {
-    if (r.R_Status_ID.IsClosed === true || r.R_Status_ID.IsClosed === 'Y') return true
-  }
-  // Legacy fallback
-  const CLOSED_NAMES = ['已完成', 'Closed', '已轉化', 'Completed']
-  const lastResult = r.LastResult || ''
-  return CLOSED_NAMES.includes(lastResult)
-}
-
 function formatDateShort(d: Date): string {
   const m = d.getMonth() + 1
   const day = d.getDate()
@@ -368,7 +362,14 @@ function formatDateShort(d: Date): string {
 async function loadData() {
   loading.value = true
   try {
-    rawRequests.value = await listRequests(undefined, 200)
+    // Load R_Status cache in parallel so `isRequestCompleted()` has data
+    // when we compute bar colours. Errors are swallowed — the helper falls
+    // back to a legacy name list if the cache is empty.
+    const [requests] = await Promise.all([
+      listRequests(undefined, 200),
+      loadRequestStatuses().catch(() => []),
+    ])
+    rawRequests.value = requests
   } catch {
     rawRequests.value = []
   } finally {
@@ -425,12 +426,11 @@ function onBarDragEnd(event: DragEvent) {
 async function persistDateNextAction(id: number, newDate: Date) {
   saveError.value = null
   try {
-    // iDempiere DateTime format: yyyy-MM-dd'T'HH:mm:ssZ (no ms)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const y = newDate.getFullYear()
-    const mo = pad(newDate.getMonth() + 1)
-    const d = pad(newDate.getDate())
-    const isoStr = `${y}-${mo}-${d}T00:00:00Z`
+    // iDempiere writes DateNextAction at local midnight with the fake-Z
+    // suffix — use the canonical `toIdempiereDateTime` from @/api/utils.
+    const midnight = new Date(newDate)
+    midnight.setHours(0, 0, 0, 0)
+    const isoStr = toIdempiereDateTime(midnight)
 
     await updateRequest(id, { DateNextAction: isoStr })
 

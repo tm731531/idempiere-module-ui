@@ -67,6 +67,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getSysConfig, updateSysConfig } from '@/api/sysconfig'
+import { useToast } from '@/composables/useToast'
 
 interface Status {
   R_Status_ID?: number
@@ -76,6 +77,7 @@ interface Status {
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
+const toast = useToast()
 
 const statuses = ref<Status[]>([])
 const originalStatuses = ref<Status[]>([])
@@ -96,7 +98,6 @@ async function loadStatuses() {
     if (configValue) {
       statuses.value = JSON.parse(configValue)
       originalStatuses.value = JSON.parse(JSON.stringify(statuses.value))
-      console.log('✅ Loaded statuses:', statuses.value)
     } else {
       statuses.value = [
         { R_Status_ID: 0, Name: '待處理' },
@@ -156,8 +157,7 @@ async function handleSaveAll() {
     const success = await updateSysConfig('MobileSettingConfig', json)
     if (success) {
       originalStatuses.value = JSON.parse(JSON.stringify(statuses.value))
-      console.log('✅ Saved statuses to SysConfig')
-      alert('狀態設定已儲存！重新整理頁面會看到新狀態。')
+      toast.add({ severity: 'success', summary: '狀態設定已儲存', detail: '重新整理頁面會看到新狀態。', life: 4000 })
     } else {
       error.value = '儲存失敗，請重試'
     }

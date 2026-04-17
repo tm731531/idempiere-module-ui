@@ -3,83 +3,35 @@ import { mount, flushPromises } from '@vue/test-utils'
 import ConversionMetrics from '../ConversionMetrics.vue'
 
 describe('ConversionMetrics', () => {
-  // 測試數據
+  // Fixtures use R_Status_ID (with IsClosed) for conversion detection and
+  // SalesRep_ID for operator identification — matching the post-migration component.
+  const STATUS_CONVERTED = { id: 1, IsClosed: true, Name: '已轉化' }
+  const STATUS_PENDING = { id: 2, IsClosed: false, Name: '待處理' }
+
   const mockRequests = [
     {
       R_Request_ID: 5000,
-      C_BPartner_ID: 1000,
+      C_BPartner_ID: { id: 1000, Name: '客戶A' },
+      SalesRep_ID: { id: 1001, Name: 'Jenny' },
       Created: '2026-02-20T09:00:00Z',
-      Summary: '諮詢隆鼻療程',
-      Description: JSON.stringify([
-        {
-          timestamp: '2026-02-20T09:30:00Z',
-          type: 'Activity',
-          actionType: 'PhoneCall',
-          content: '首次通話，介紹療程',
-          createdBy: 1001,
-          id: 'act-001',
-        },
-        {
-          timestamp: '2026-02-24T16:30:00Z',
-          type: 'StatusChange',
-          actionType: 'ConversionOrder',
-          content: '轉化為訂單 #ORD-2026-0001',
-          createdBy: 1001,
-          linkedOrderId: 1000001,
-          linkedOrderNo: 'ORD-2026-0001',
-          id: 'act-002',
-        },
-      ]),
+      Updated: '2026-02-24T16:30:00Z',
+      R_Status_ID: { ...STATUS_CONVERTED },
     },
     {
       R_Request_ID: 5001,
-      C_BPartner_ID: 1001,
+      C_BPartner_ID: { id: 1001, Name: '客戶B' },
+      SalesRep_ID: { id: 1002, Name: 'JERRY' },
       Created: '2026-02-21T10:00:00Z',
-      Summary: '諮詢除皺療程',
-      Description: JSON.stringify([
-        {
-          timestamp: '2026-02-21T10:30:00Z',
-          type: 'Activity',
-          actionType: 'PhoneCall',
-          content: '客戶詢問價格',
-          createdBy: 1002,
-          id: 'act-003',
-        },
-      ]),
+      Updated: '2026-02-21T10:30:00Z',
+      R_Status_ID: { ...STATUS_PENDING },
     },
     {
       R_Request_ID: 5002,
-      C_BPartner_ID: 1002,
+      C_BPartner_ID: { id: 1002, Name: '客戶C' },
+      SalesRep_ID: { id: 1001, Name: 'Jenny' },
       Created: '2026-02-18T08:00:00Z',
-      Summary: '諮詢脂肪填充',
-      Description: JSON.stringify([
-        {
-          timestamp: '2026-02-18T14:00:00Z',
-          type: 'Activity',
-          actionType: 'PhoneCall',
-          content: '初步諮詢',
-          createdBy: 1002,
-          id: 'act-004',
-        },
-        {
-          timestamp: '2026-02-20T15:00:00Z',
-          type: 'Activity',
-          actionType: 'Message',
-          content: '客戶發訊息確認',
-          createdBy: 1001,
-          id: 'act-005',
-        },
-        {
-          timestamp: '2026-02-22T16:00:00Z',
-          type: 'StatusChange',
-          actionType: 'ConversionOrder',
-          content: '轉化為訂單 #ORD-2026-0002',
-          createdBy: 1001,
-          linkedOrderId: 1000002,
-          linkedOrderNo: 'ORD-2026-0002',
-          id: 'act-006',
-        },
-      ]),
+      Updated: '2026-02-22T16:00:00Z',
+      R_Status_ID: { ...STATUS_CONVERTED },
     },
   ]
 
@@ -226,9 +178,10 @@ describe('ConversionMetrics', () => {
       })
       await flushPromises()
 
-      // 5000: 2026-02-20 09:00 → 2026-02-24 16:30 = 4.3125 天
-      // 5002: 2026-02-18 08:00 → 2026-02-22 16:00 = 4.333 天
-      // 平均 ≈ 4.3 天
+      // Converted requests use Updated - Created:
+      // 5000: 2026-02-20T09:00 → 2026-02-24T16:30 = 4.3125 天
+      // 5002: 2026-02-18T08:00 → 2026-02-22T16:00 = 4.333 天
+      // Average ≈ 4.3 天
       const timeText = getAvgConversionTimeText(wrapper)
       expect(timeText).toContain('4.')
     })
@@ -325,20 +278,18 @@ describe('ConversionMetrics', () => {
 
       const performance = getPerformanceData(wrapper)
 
-      // Jenny (1001): 操作 2 個諮詢（5000, 5002），轉化 2 個
+      // Jenny (1001): SalesRep on 5000 + 5002, both converted
       const jenny = performance.find((op: any) => op.name === 'Jenny')
       expect(jenny).toBeDefined()
       expect(jenny.consultationsUpdated).toBe(2)
       expect(jenny.conversionsCreated).toBe(2)
       expect(jenny.conversionRate).toBe('100.0%')
 
-      // JERRY (1002): 操作 2 個諮詢（5001, 5002），轉化 0 個
-      // 注意: 5001 只有第一個活動是 JERRY 操作，但沒有轉化
-      // 5002 的第一個活動是 JERRY，但轉化是 Jenny 操作的
+      // JERRY (1002): SalesRep on 5001 only (not converted)
       const jerry = performance.find((op: any) => op.name === 'JERRY')
       expect(jerry).toBeDefined()
-      expect(jerry.consultationsUpdated).toBe(2)
-      expect(jerry.conversionsCreated).toBe(0) // 修正：JERRY 沒有轉化任何訂單
+      expect(jerry.consultationsUpdated).toBe(1)
+      expect(jerry.conversionsCreated).toBe(0)
       expect(jerry.conversionRate).toBe('0.0%')
     })
 
@@ -358,16 +309,26 @@ describe('ConversionMetrics', () => {
     })
 
     it('應使用預設名稱當無提供操作人名稱', async () => {
+      // Requests with no SalesRep_ID.Name and no operatorNames entry fall back to '用戶 #ID'
+      const noNameRequests = [
+        {
+          R_Request_ID: 5090,
+          C_BPartner_ID: { id: 1090, Name: '客戶X' },
+          SalesRep_ID: { id: 9999 }, // no Name field
+          Created: '2026-02-20T09:00:00Z',
+          Updated: '2026-02-20T09:00:00Z',
+          R_Status_ID: { id: 2, IsClosed: false },
+        },
+      ]
       const wrapper = mount(ConversionMetrics, {
         props: {
-          requests: mockRequests,
+          requests: noNameRequests,
           operatorNames: {}, // 空物件
         },
       })
       await flushPromises()
 
       const performance = getPerformanceData(wrapper)
-      // 應該顯示 "用戶 #1001" 之類的
       expect(performance.length).toBeGreaterThan(0)
       expect(performance[0].name).toContain('用戶')
     })

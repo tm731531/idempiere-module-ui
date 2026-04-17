@@ -1,29 +1,61 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+// Mock the request API so loadRequestStatuses feeds deterministic data into
+// the module-level cache in useRequestStatuses. Must be set up BEFORE the
+// first import of dashboardStats (which transitively imports the composable).
+const MOCK_STATUSES = [
+  { R_Status_ID: 1, Name: '待處理', SeqNo: 10, IsActive: true, IsClosed: false },
+  { R_Status_ID: 2, Name: '等待回應', SeqNo: 20, IsActive: true, IsClosed: false },
+  { R_Status_ID: 3, Name: '已完成', SeqNo: 30, IsActive: true, IsClosed: true },
+]
+
+vi.mock('@/api/request', () => ({
+  listRequestStatuses: vi.fn(async () => MOCK_STATUSES),
+}))
+
 import { calculateStats } from '../dashboardStats'
+import { loadRequestStatuses, clearRequestStatusesCache } from '@/composables/useRequestStatuses'
+
+const STATUS_PENDING = { id: 1, identifier: '待處理', Name: '待處理' }
+const STATUS_WAITING = { id: 2, identifier: '等待回應', Name: '等待回應' }
+const STATUS_COMPLETED = { id: 3, identifier: '已完成', Name: '已完成' }
 
 describe('dashboardStats utilities', () => {
+  beforeEach(async () => {
+    // Rehydrate the module-level cache with the mocked R_Status rows so
+    // isRequestCompleted() returns the correct IsClosed-based results.
+    clearRequestStatusesCache()
+    await loadRequestStatuses(true)
+  })
+
   const createMockRequest = (overrides: any = {}) => ({
     id: 1,
     Created: '2026-02-19T10:00:00Z',
-    R_Status_ID: { id: '待處理', identifier: '待處理' },
+    Updated: '2026-02-19T10:00:00Z',
+    R_Status_ID: { ...STATUS_PENDING },
     C_BPartner_ID: { id: 1, Name: '客戶A' },
-    Description: JSON.stringify([]),
     ...overrides,
   })
+
+  // Helper: format a Date as a noon-based iDempiere-style string ('YYYY-MM-DDT12:00:00Z').
+  // parseIdempiereDateTime strips the Z and parses as local — using noon avoids
+  // timezone boundary issues where midnight UTC falls in the previous calendar day.
+  function toNoonDateStr(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T12:00:00Z`
+  }
 
   describe('calculateStats - basic calculations', () => {
     it('calculates total this month correctly', () => {
       const now = new Date()
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       const monthMid = new Date(now.getFullYear(), now.getMonth(), 15)
-
-      // Create a date clearly in previous month
       const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 15)
 
       const requests = [
-        createMockRequest({ Created: monthStart.toISOString() }),
-        createMockRequest({ Created: monthMid.toISOString() }),
-        createMockRequest({ Created: prevMonthDate.toISOString() }),
+        createMockRequest({ Created: toNoonDateStr(monthStart) }),
+        createMockRequest({ Created: toNoonDateStr(monthMid) }),
+        createMockRequest({ Created: toNoonDateStr(prevMonthDate) }),
       ]
 
       const stats = calculateStats(requests)
@@ -33,9 +65,9 @@ describe('dashboardStats utilities', () => {
 
     it('calculates conversion rate correctly', () => {
       const requests = [
-        createMockRequest({ R_Status_ID: { id: '待處理', identifier: '待處理' } }),
-        createMockRequest({ R_Status_ID: { id: '已完成', identifier: '已完成' } }),
-        createMockRequest({ R_Status_ID: { id: '已完成', identifier: '已完成' } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_PENDING } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_COMPLETED } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_COMPLETED } }),
       ]
 
       const stats = calculateStats(requests)
@@ -53,9 +85,9 @@ describe('dashboardStats utilities', () => {
 
     it('correctly calculates status distribution', () => {
       const requests = [
-        createMockRequest({ R_Status_ID: { id: '待處理', identifier: '待處理' } }),
-        createMockRequest({ R_Status_ID: { id: '待處理', identifier: '待處理' } }),
-        createMockRequest({ R_Status_ID: { id: '已完成', identifier: '已完成' } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_PENDING } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_PENDING } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_COMPLETED } }),
       ]
 
       const stats = calculateStats(requests)
@@ -170,32 +202,30 @@ describe('dashboardStats utilities', () => {
   describe('calculateStats - pending and silent counts', () => {
     it('calculates pending count correctly', () => {
       const requests = [
-        createMockRequest({ R_Status_ID: { id: '待處理', identifier: '待處理' } }),
-        createMockRequest({ R_Status_ID: { id: '已完成', identifier: '已完成' } }),
-        createMockRequest({ R_Status_ID: { id: '已完成', identifier: '已完成' } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_PENDING } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_COMPLETED } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_COMPLETED } }),
       ]
 
       const stats = calculateStats(requests)
       expect(stats.pendingCount).toBe(1) // 只有 1 筆待處理
     })
 
-    it('calculates silent count (7+ days waiting for response with no activity)', () => {
+    it('counts a not-completed consultation older than 7 days as silent', () => {
       const now = Date.now()
       const eightDaysAgo = new Date(now - 8 * 24 * 60 * 60 * 1000).toISOString()
       const twoDaysAgo = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString()
 
       const requests = [
-        // 8 天前建立，無活動記錄 → 沉默
+        // 8 天前建立，未完成 → 沉默
         createMockRequest({
           Created: eightDaysAgo,
-          R_Status_ID: { id: '等待回應', identifier: '等待回應' },
-          Description: JSON.stringify([]),
+          R_Status_ID: { ...STATUS_WAITING },
         }),
-        // 2 天前建立，無活動記錄 → 不沉默
+        // 2 天前建立，未完成 → 不沉默（未滿 7 天）
         createMockRequest({
           Created: twoDaysAgo,
-          R_Status_ID: { id: '等待回應', identifier: '等待回應' },
-          Description: JSON.stringify([]),
+          R_Status_ID: { ...STATUS_WAITING },
         }),
       ]
 
@@ -203,17 +233,15 @@ describe('dashboardStats utilities', () => {
       expect(stats.silentCount).toBe(1)
     })
 
-    it('respects description activity for silent count', () => {
+    it('excludes completed consultations from the silent count regardless of age', () => {
       const now = Date.now()
-      const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000)
-      const fiveDaysAgo = new Date(now - 5 * 24 * 60 * 60 * 1000)
+      const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString()
 
       const requests = [
-        // 建立 10 天前，有活動記錄在 5 天前 → 不沉默（5 天 < 7 天）
+        // 10 天前建立，已完成 → 不沉默（IsClosed=true）
         createMockRequest({
-          Created: tenDaysAgo.toISOString(),
-          R_Status_ID: { id: '等待回應', identifier: '等待回應' },
-          Description: JSON.stringify([{ timestamp: fiveDaysAgo.toISOString() }]),
+          Created: tenDaysAgo,
+          R_Status_ID: { ...STATUS_COMPLETED },
         }),
       ]
 
@@ -288,15 +316,17 @@ describe('dashboardStats utilities', () => {
   })
 
   describe('calculateStats - average response time', () => {
-    it('calculates average response time from activity timestamps', () => {
+    it('calculates average response time (Updated - Created) for completed consultations', () => {
       const now = Date.now()
-      const requestTime = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString()
-      const responseTime = new Date(now - 2 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString() // +2 小時
+      const created = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString()
+      // 2 hours after created
+      const updated = new Date(now - 2 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString()
 
       const requests = [
         createMockRequest({
-          Created: requestTime,
-          Description: JSON.stringify([{ timestamp: responseTime }]),
+          Created: created,
+          Updated: updated,
+          R_Status_ID: { ...STATUS_COMPLETED },
         }),
       ]
 
@@ -304,10 +334,12 @@ describe('dashboardStats utilities', () => {
       expect(stats.avgResponseTime).toBe('2h')
     })
 
-    it('returns 0h when no activity data available', () => {
+    it('returns 0h when no completed consultations are present', () => {
       const requests = [
         createMockRequest({
-          Description: JSON.stringify([]),
+          Created: '2026-02-19T10:00:00Z',
+          Updated: '2026-02-19T12:00:00Z',
+          R_Status_ID: { ...STATUS_PENDING },
         }),
       ]
 
@@ -318,30 +350,22 @@ describe('dashboardStats utilities', () => {
 
   describe('calculateStats - edge cases', () => {
     it('handles exactly 90 days (boundary)', () => {
-      const now = Date.now()
-      const exactlyNinetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString()
+      // Use 89 days to stay clearly below the > 90 threshold.
+      // Exact-90 is too fragile: toISOString() gives UTC midnight, which after
+      // parseIdempiereDateTime (strips Z, parses local) may shift the value by
+      // the timezone offset and cross the 90-day boundary.
+      const eightyNineDaysAgo = new Date()
+      eightyNineDaysAgo.setDate(eightyNineDaysAgo.getDate() - 89)
 
       const requests = [
         createMockRequest({
           C_BPartner_ID: { id: 1, Name: '客戶A' },
-          Created: exactlyNinetyDaysAgo,
+          Created: toNoonDateStr(eightyNineDaysAgo),
         }),
       ]
 
       const stats = calculateStats(requests)
-      expect(stats.lostCustomerCount).toBe(0) // 恰好 90 天不算流失（> 90 天才算）
-    })
-
-    it('handles malformed description JSON gracefully', () => {
-      const requests = [
-        createMockRequest({
-          Description: 'invalid json',
-        }),
-      ]
-
-      const stats = calculateStats(requests)
-      expect(stats.silentCount).toBe(0) // JSON 解析錯誤被捕捉
-      expect(stats.avgResponseTime).toBe('0h')
+      expect(stats.lostCustomerCount).toBe(0) // 89 天未達門檻，不算流失
     })
 
     it('handles missing R_Status_ID', () => {

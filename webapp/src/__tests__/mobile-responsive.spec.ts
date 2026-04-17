@@ -315,7 +315,8 @@ describe('Mobile Responsive Design - User Interactions', () => {
     await confirmBtn.trigger('click')
 
     expect(wrapper.emitted('status-selected')).toBeTruthy()
-    expect(wrapper.emitted('status-selected')?.[0]).toEqual(['已完成'])
+    // Component emits the numeric R_Status_ID, not the status name string
+    expect(wrapper.emitted('status-selected')?.[0]).toEqual([2])
   })
 
   it('QuickActionBar emits events on button clicks', async () => {

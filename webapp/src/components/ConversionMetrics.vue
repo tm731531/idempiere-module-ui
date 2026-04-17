@@ -67,21 +67,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { isRequestCompleted } from '@/composables/useRequestStatuses'
+import { parseIdempiereDateTime } from '@/api/utils'
 
 const router = useRouter()
-
-interface RequestActivity {
-  timestamp: string
-  type: string
-  actionType: string
-  content: string
-  createdBy: number
-  linkedOrderId?: number
-  linkedOrderNo?: string
-}
 
 interface OperatorPerformance {
   operatorId: number
@@ -112,122 +103,20 @@ const props = withDefaults(defineProps<Props>(), {
   operatorNames: () => ({}),
 })
 
-const metrics = reactive<ConversionMetricsData>({
-  conversionRate: '0%',
-  convertedCount: 0,
-  totalCount: 0,
-  avgConversionTime: '-',
-  pendingConversionCount: 0,
-  operatorPerformance: [],
-})
-
-// Detect conversion via Description JSON activities OR via completed status.
-// Description may contain an activity with actionType === 'ConversionOrder'
-// (test fixtures use this). Falls back to R_Status.IsClosed / legacy LastResult.
-function isConvertedRequest(req: any): boolean {
-  if (isRequestCompleted(req)) return true
-  // Parse Description JSON activities looking for a conversion marker
-  if (typeof req?.Description === 'string' && req.Description) {
-    try {
-      const acts = JSON.parse(req.Description)
-      if (Array.isArray(acts)) {
-        return acts.some((a: any) => a?.actionType === 'ConversionOrder' || a?.type === 'ConversionOrder')
-      }
-    } catch {
-      // ignore malformed JSON
-    }
-  }
-  return false
-}
-
-// 計算轉化率（基於 R_Status.IsClosed / 活動記錄）
-function calculateConversionRate() {
-  metrics.totalCount = props.requests.length
-  if (props.requests.length === 0) {
-    metrics.convertedCount = 0
-    metrics.conversionRate = '0%'
-    return
-  }
-
-  const converted = props.requests.filter(isConvertedRequest)
-
-  metrics.convertedCount = converted.length
-  const rate = (converted.length / props.requests.length) * 100
-  metrics.conversionRate = `${rate.toFixed(1)}%`
-}
-
-// 計算平均轉化時間（基於 Created 和 Updated 欄位）
-function calculateAvgConversionTime() {
-  const times: number[] = []
-
-  props.requests.forEach(req => {
-    // 只計算已轉化的諮詢
-    if (!isConvertedRequest(req)) return
-
-    // Prefer the ConversionOrder activity timestamp when available
-    let conversionTs: string | null = null
-    if (typeof req.Description === 'string' && req.Description) {
-      try {
-        const acts = JSON.parse(req.Description)
-        if (Array.isArray(acts)) {
-          const marker = acts.find((a: any) => a?.actionType === 'ConversionOrder' || a?.type === 'ConversionOrder')
-          if (marker?.timestamp) conversionTs = marker.timestamp
-        }
-      } catch { /* ignore */ }
-    }
-    if (!conversionTs) conversionTs = req.Updated || null
-
-    if (req.Created && conversionTs) {
-      const delta = new Date(conversionTs).getTime() - new Date(req.Created).getTime()
-      if (delta > 0) {
-        const days = delta / (1000 * 60 * 60 * 24)
-        times.push(days)
-      }
-    }
-  })
-
-  if (times.length === 0) {
-    metrics.avgConversionTime = '-'
-    return
-  }
-
-  const avg = times.reduce((a: number, b: number) => a + b, 0) / times.length
-  metrics.avgConversionTime = `${avg.toFixed(1)} 天`
-}
-
-// 計算待轉化諮詢（超過 7 天未轉化）
-function calculatePendingConversions() {
-  const now = new Date()
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-  const pending = props.requests.filter(req => {
-    const created = new Date(req.Created)
-    if (created > sevenDaysAgo) return false // 少於 7 天的不算
-    return !isConvertedRequest(req)
-  })
-
-  metrics.pendingConversionCount = pending.length
-}
-
 /**
- * Extract the list of activity entries from a request's Description field.
- * Returns empty array if Description is missing or malformed.
+ * Parse a date value that may be an iDempiere datetime string. Falls back to
+ * the native Date parser for non-iDempiere-shaped inputs.
  */
-function parseActivities(req: any): any[] {
-  if (typeof req?.Description !== 'string' || !req.Description) return []
-  try {
-    const parsed = JSON.parse(req.Description)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+function parseMaybeDate(value: unknown): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' && value) return parseIdempiereDateTime(value)
+  return new Date(NaN)
 }
 
 /**
- * Resolve the primary operator (consultant) id for a request.
- * Priority:
- *   1. SalesRep_ID (expanded object or bare number) — the assigned consultant
- *   2. First activity's createdBy — for legacy records without a SalesRep_ID
+ * Resolve the primary operator (consultant) id for a request from SalesRep_ID.
+ * Returns null when no consultant is assigned — we no longer fall back to
+ * activity JSON (Description is not fetched and was always empty in practice).
  */
 function getPrimaryOperatorId(req: any): number | null {
   if (req?.SalesRep_ID && typeof req.SalesRep_ID === 'object') {
@@ -236,95 +125,92 @@ function getPrimaryOperatorId(req: any): number | null {
   } else if (typeof req?.SalesRep_ID === 'number') {
     return req.SalesRep_ID
   }
-  const acts = parseActivities(req)
-  if (acts.length > 0) {
-    const createdBy = acts[0]?.createdBy
-    if (typeof createdBy === 'number') return createdBy
-  }
   return null
 }
 
 /**
- * Return the set of operator ids who participated in a request (SalesRep_ID
- * if present, plus every distinct createdBy on activities).
+ * Compute the complete metrics object in a single pass over props.requests.
  */
-function getAllOperatorIds(req: any): number[] {
-  const ids = new Set<number>()
-  const primary = getPrimaryOperatorId(req)
-  if (primary != null) ids.add(primary)
-  for (const a of parseActivities(req)) {
-    if (typeof a?.createdBy === 'number') ids.add(a.createdBy)
-  }
-  return Array.from(ids)
-}
+const metrics = computed<ConversionMetricsData>(() => {
+  const reqs = props.requests
+  const totalCount = reqs.length
 
-/**
- * Return the operator id who performed the CONVERSION action for a request.
- * Looks for an activity with actionType/type === 'ConversionOrder'. If none,
- * falls back to the primary operator when R_Status indicates completion.
- */
-function getConvertingOperatorId(req: any): number | null {
-  for (const a of parseActivities(req)) {
-    if (a?.actionType === 'ConversionOrder' || a?.type === 'ConversionOrder') {
-      if (typeof a.createdBy === 'number') return a.createdBy
+  if (totalCount === 0) {
+    return {
+      conversionRate: '0%',
+      convertedCount: 0,
+      totalCount: 0,
+      avgConversionTime: '-',
+      pendingConversionCount: 0,
+      operatorPerformance: [],
     }
   }
-  // Fall back to primary when R_Status marks it as completed
-  if (isRequestCompleted(req)) return getPrimaryOperatorId(req)
-  return null
-}
 
-// 計算諮詢師績效
-// 優先使用 SalesRep_ID（負責人），若無則用活動記錄的 createdBy。
-// 轉化歸屬於執行 ConversionOrder 活動的操作人；若無活動則以 R_Status 為準。
-function calculateOperatorPerformance() {
-  const operatorMap = new Map<number, {
+  // --- Conversion rate & average conversion time ---
+  const converted = reqs.filter(isRequestCompleted)
+  const convertedCount = converted.length
+  const conversionRate = `${((convertedCount / totalCount) * 100).toFixed(1)}%`
+
+  const conversionDays: number[] = []
+  converted.forEach((req) => {
+    const createdMs = parseMaybeDate(req.Created).getTime()
+    const updatedMs = parseMaybeDate(req.Updated).getTime()
+    if (Number.isNaN(createdMs) || Number.isNaN(updatedMs)) return
+    const delta = updatedMs - createdMs
+    if (delta > 0) conversionDays.push(delta / (1000 * 60 * 60 * 24))
+  })
+  const avgConversionTime = conversionDays.length > 0
+    ? `${(conversionDays.reduce((a, b) => a + b, 0) / conversionDays.length).toFixed(1)} 天`
+    : '-'
+
+  // --- Pending conversions: older than 7 days AND not completed ---
+  const now = Date.now()
+  const sevenDaysAgoMs = now - 7 * 24 * 60 * 60 * 1000
+  const pendingConversionCount = reqs.filter((req) => {
+    const createdMs = parseMaybeDate(req.Created).getTime()
+    if (Number.isNaN(createdMs) || createdMs > sevenDaysAgoMs) return false
+    return !isRequestCompleted(req)
+  }).length
+
+  // --- Operator performance (aggregated by SalesRep_ID) ---
+  interface OperatorAgg {
     consultationsAssigned: Set<number>
     conversionsCreated: Set<number>
     responseTime: number[]
-  }>()
-
-  const ensure = (id: number) => {
-    if (!operatorMap.has(id)) {
-      operatorMap.set(id, {
+  }
+  const operatorMap = new Map<number, OperatorAgg>()
+  const ensure = (id: number): OperatorAgg => {
+    let hit = operatorMap.get(id)
+    if (!hit) {
+      hit = {
         consultationsAssigned: new Set(),
         conversionsCreated: new Set(),
         responseTime: [],
-      })
+      }
+      operatorMap.set(id, hit)
     }
-    return operatorMap.get(id)!
+    return hit
   }
 
-  props.requests.forEach(req => {
-    const involvedIds = getAllOperatorIds(req)
-    involvedIds.forEach(opId => ensure(opId).consultationsAssigned.add(req.R_Request_ID))
-
-    const converter = getConvertingOperatorId(req)
-    if (converter != null) {
-      ensure(converter).conversionsCreated.add(req.R_Request_ID)
+  reqs.forEach((req) => {
+    const opId = getPrimaryOperatorId(req)
+    if (opId == null) return
+    const agg = ensure(opId)
+    agg.consultationsAssigned.add(req.R_Request_ID)
+    if (isRequestCompleted(req)) {
+      agg.conversionsCreated.add(req.R_Request_ID)
     }
-
-    // Response time: prefer Updated; fall back to the latest activity timestamp.
-    let endTs: string | null = req.Updated || null
-    if (!endTs) {
-      const acts = parseActivities(req)
-      if (acts.length > 0) {
-        const last = acts[acts.length - 1]
-        if (last?.timestamp) endTs = last.timestamp
-      }
-    }
-    if (req.Created && endTs && involvedIds.length > 0) {
-      const ms = new Date(endTs).getTime() - new Date(req.Created).getTime()
-      if (ms > 0) {
-        const hours = ms / (1000 * 60 * 60)
-        involvedIds.forEach(opId => ensure(opId).responseTime.push(hours))
-      }
+    const createdMs = parseMaybeDate(req.Created).getTime()
+    const updatedMs = parseMaybeDate(req.Updated).getTime()
+    if (!Number.isNaN(createdMs) && !Number.isNaN(updatedMs)) {
+      const ms = updatedMs - createdMs
+      if (ms > 0) agg.responseTime.push(ms / (1000 * 60 * 60))
     }
   })
 
-  // Build a lookup from request objects for SalesRep_ID expanded name
+  // Build a lookup of SalesRep_ID → display name from expanded FK objects.
   const salesRepNames = new Map<number, string>()
-  props.requests.forEach(req => {
+  reqs.forEach((req) => {
     if (req.SalesRep_ID && typeof req.SalesRep_ID === 'object') {
       const id = req.SalesRep_ID.id
       if (typeof id === 'number' && !salesRepNames.has(id)) {
@@ -333,26 +219,40 @@ function calculateOperatorPerformance() {
     }
   })
 
-  metrics.operatorPerformance = Array.from(operatorMap.entries()).map(([operatorId, data]) => ({
-    operatorId,
-    operatorName: salesRepNames.get(operatorId)
-      || (props.operatorNames && props.operatorNames[operatorId])
-      || `用戶 #${operatorId}`,
-    consultationsUpdated: data.consultationsAssigned.size,
-    conversionsCreated: data.conversionsCreated.size,
-    conversionRate: data.consultationsAssigned.size > 0
-      ? `${((data.conversionsCreated.size / data.consultationsAssigned.size) * 100).toFixed(1)}%`
-      : '0%',
-    avgResponseTime: data.responseTime.length > 0
-      ? `${(data.responseTime.reduce((a, b) => a + b, 0) / data.responseTime.length).toFixed(1)}h`
-      : '-',
-  }))
-}
+  const operatorPerformance: OperatorPerformance[] = Array.from(operatorMap.entries()).map(
+    ([operatorId, data]) => ({
+      operatorId,
+      operatorName:
+        salesRepNames.get(operatorId) ||
+        (props.operatorNames && props.operatorNames[operatorId]) ||
+        `用戶 #${operatorId}`,
+      consultationsUpdated: data.consultationsAssigned.size,
+      conversionsCreated: data.conversionsCreated.size,
+      conversionRate:
+        data.consultationsAssigned.size > 0
+          ? `${((data.conversionsCreated.size / data.consultationsAssigned.size) * 100).toFixed(1)}%`
+          : '0%',
+      avgResponseTime:
+        data.responseTime.length > 0
+          ? `${(data.responseTime.reduce((a, b) => a + b, 0) / data.responseTime.length).toFixed(1)}h`
+          : '-',
+    }),
+  )
+
+  return {
+    conversionRate,
+    convertedCount,
+    totalCount,
+    avgConversionTime,
+    pendingConversionCount,
+    operatorPerformance,
+  }
+})
 
 // 排序績效表（按轉化訂單數降序）
 const sortedPerformance = computed(() => {
-  return [...metrics.operatorPerformance].sort(
-    (a, b) => b.conversionsCreated - a.conversionsCreated
+  return [...metrics.value.operatorPerformance].sort(
+    (a, b) => b.conversionsCreated - a.conversionsCreated,
   )
 })
 
@@ -366,11 +266,11 @@ function getConversionRateClass(rate: string): string {
 
 // 點擊操作人績效，導航到列表頁面並過濾該操作人的諮詢
 function viewOperatorDetails(operatorId: number) {
-  // Resolve name from the performance row (already computed) or fall back
-  const perf = metrics.operatorPerformance.find(p => p.operatorId === operatorId)
-  const displayName = perf?.operatorName
-    || (props.operatorNames && props.operatorNames[operatorId])
-    || `用戶 #${operatorId}`
+  const perf = metrics.value.operatorPerformance.find((p) => p.operatorId === operatorId)
+  const displayName =
+    perf?.operatorName ||
+    (props.operatorNames && props.operatorNames[operatorId]) ||
+    `用戶 #${operatorId}`
   router.push({
     name: 'consultation-list',
     query: {
@@ -379,19 +279,6 @@ function viewOperatorDetails(operatorId: number) {
     },
   })
 }
-
-// 監聽 requests 變化，重新計算
-import { watch } from 'vue'
-watch(
-  () => props.requests,
-  () => {
-    calculateConversionRate()
-    calculateAvgConversionTime()
-    calculatePendingConversions()
-    calculateOperatorPerformance()
-  },
-  { deep: true, immediate: true }
-)
 </script>
 
 <style scoped>

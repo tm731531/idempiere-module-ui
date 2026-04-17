@@ -8,7 +8,7 @@
 
       <div class="dialog-content">
         <!-- Error message when no selection -->
-        <div v-if="showError" class="error-alert">
+        <div v-if="showError" class="error-alert" role="alert">
           <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <line x1="12" y1="8" x2="12" y2="12"/>
@@ -49,7 +49,7 @@
           type="button"
           class="btn btn-primary"
           :disabled="displayStatuses.length === 0 || selectedStatusId === null"
-          @click="() => { console.log('🔘 Confirm button clicked'); handleConfirm() }"
+          @click="handleConfirm"
         >
           確認
         </button>
@@ -75,7 +75,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-  'status-selected': [statusName: string]
+  'status-selected': [statusId: number]
   'close': []
 }>()
 
@@ -87,45 +87,34 @@ const displayStatuses = computed(() => {
   return props.statuses
 })
 
-// Computed to normalize currentStatusId to number
-const normalizedCurrentStatusId = computed(() => {
-  const currentId = typeof props.currentStatusId === 'string'
-    ? Number(props.currentStatusId)
-    : props.currentStatusId
-  return currentId
+// Computed to normalize currentStatusId to number (null when invalid)
+const normalizedCurrentStatusId = computed<number | null>(() => {
+  const raw = props.currentStatusId
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
+  if (typeof raw === 'string' && raw) {
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 })
 
 function handleConfirm() {
-  console.log('📋 StatusUpdateModal.handleConfirm called')
-  console.log('   selectedStatusId.value:', selectedStatusId.value)
-
-  // Check if a status is selected
   if (selectedStatusId.value === null) {
-    console.warn('⚠️ No status selected')
     showError.value = true
     return
   }
-
-  // Find the status object and emit the Name (string), not the ID
-  const selectedStatus = props.statuses.find(s => s.R_Status_ID === selectedStatusId.value)
-  const statusName = selectedStatus?.Name || String(selectedStatusId.value)
-
-  console.log('✅ Emitting status-selected with name:', statusName)
   showError.value = false
-  emit('status-selected', statusName)
+  emit('status-selected', selectedStatusId.value)
 }
 
-// Initialize and watch for prop changes
+// Initialize and watch for prop changes — resync local selection when parent
+// swaps the current status (e.g. record navigated).
 watch(
   () => props.currentStatusId,
   () => {
     selectedStatusId.value = normalizedCurrentStatusId.value
-    console.log('📋 Modal initialized')
-    console.log('   displayStatuses:', props.statuses)
-    console.log('   selectedStatusId:', selectedStatusId.value)
-    console.log('   button disabled?:', props.statuses.length === 0 || selectedStatusId.value === null)
   },
-  { immediate: true }
+  { immediate: true },
 )
 </script>
 

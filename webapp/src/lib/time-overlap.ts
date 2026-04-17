@@ -13,15 +13,18 @@ export interface ConflictResult {
 }
 
 /**
- * 檢查新時間範圍與現有預約是否有時間衝突
+ * 檢查新時間範圍與現有預約是否有時間衝突（本地記憶體比對，不呼叫 API）
  * 邊界時間不視為衝突（A.end <= B.start 不是衝突）
+ *
+ * Renamed from `checkConflict` to `checkConflictLocal` to avoid name collision
+ * with the async server-side `checkConflict` exported from `@/api/assignment`.
  *
  * @param newRange 新預約的時間範圍和服務人員
  * @param existingAppts 現有的所有預約
  * @param excludeApptId 排除的預約 ID（編輯時用，避免與自己比較）
  * @returns 衝突檢查結果
  */
-export function checkConflict(
+export function checkConflictLocal(
   newRange: TimeRange,
   existingAppts: any[],
   excludeApptId?: number

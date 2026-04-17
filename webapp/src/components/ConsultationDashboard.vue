@@ -1,8 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { calculateStats } from '@/utils/dashboardStats'
-import { REQUEST_STATUS_IDS, isWaitingStatus, STATISTICS_CONFIG } from '@/config/requestStatusConfig'
-import { extractStatusName } from '@/composables/useRequestStatuses'
+import { extractStatusName, isRequestCompleted } from '@/composables/useRequestStatuses'
+import { parseIdempiereDateTime } from '@/api/utils'
+
+// Days thresholds (kept local to the component since obsolete
+// `STATISTICS_CONFIG` was removed along with requestStatusConfig.ts).
+const SILENT_DAYS_THRESHOLD = 7
+const LOST_CUSTOMER_DAYS_THRESHOLD = 90
+
+function parseMaybeDate(value: unknown): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' && value) return parseIdempiereDateTime(value)
+  return new Date(NaN)
+}
 
 interface Props {
   requests: any[]
@@ -80,13 +91,11 @@ const drillIntoStatus = (status: string, count: number) => {
 
 // 鑽取函式 - 按客戶
 const drillIntoCustomer = (customerId: number, name: string, count: number) => {
-  console.log('🔍 drillIntoCustomer called:', { customerId, name, count })
   drillDown.value = {
     type: 'customer',
     label: `客戶: ${name} (${count} 筆)`,
     value: customerId,
   }
-  console.log('✅ drillDown set to:', drillDown.value)
 }
 
 // 鑽取函式 - 按警告類型
@@ -113,7 +122,7 @@ const filteredRequests = computed(() => {
 
   switch (drillDown.value.type) {
     case 'month':
-      return props.requests.filter((r) => new Date(r.Created).getTime() >= monthStart)
+      return props.requests.filter((r) => parseMaybeDate(r.Created).getTime() >= monthStart)
 
     case 'status':
       return props.requests.filter((r) => extractStatusName(r) === drillDown.value.value)
@@ -125,29 +134,21 @@ const filteredRequests = computed(() => {
       const now = Date.now()
 
       if (drillDown.value.value === 'silent') {
+        // Silent = not closed AND older than SILENT_DAYS_THRESHOLD days.
+        // Previously keyed off Description activity JSON, but Description is
+        // no longer fetched so that path always collapsed to the age check.
         return props.requests.filter((r) => {
-          const status = r.R_Status_ID?.id
-          // Only include consultations in WAITING status
-          if (!isWaitingStatus(status)) return false
-          try {
-            const activities = JSON.parse(r.Description || '[]')
-            if (activities.length === 0) {
-              const daysSince = (now - new Date(r.Created).getTime()) / (1000 * 24 * 3600)
-              return daysSince > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
-            }
-            const lastActivity = activities[activities.length - 1]?.timestamp
-            if (!lastActivity) return false
-            const daysSilent = (now - new Date(lastActivity).getTime()) / (1000 * 24 * 3600)
-            return daysSilent > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
-          } catch {
-            return false
-          }
+          if (isRequestCompleted(r)) return false
+          const createdMs = parseMaybeDate(r.Created).getTime()
+          if (Number.isNaN(createdMs)) return false
+          const daysSinceCreated = (now - createdMs) / (1000 * 24 * 3600)
+          return daysSinceCreated > SILENT_DAYS_THRESHOLD
         })
       } else if (drillDown.value.value === 'lost') {
         const customerLastActivity = new Map()
         props.requests.forEach((r) => {
           const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
-          const createdTime = new Date(r.Created).getTime()
+          const createdTime = parseMaybeDate(r.Created).getTime()
 
           if (!customerLastActivity.has(customerId)) {
             customerLastActivity.set(customerId, { lastTime: createdTime })
@@ -163,7 +164,7 @@ const filteredRequests = computed(() => {
           const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
           const lastTime = customerLastActivity.get(customerId)?.lastTime
           if (!lastTime) return false
-          return now - lastTime > STATISTICS_CONFIG.LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000
+          return now - lastTime > LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000
         })
       }
       return []
@@ -195,7 +196,7 @@ const calculatePercentage = (value: number, items: any[]) => {
 
 // 格式化日期
 const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr)
+  const date = parseMaybeDate(dateStr)
   return date.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 </script>

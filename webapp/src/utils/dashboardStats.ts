@@ -3,12 +3,13 @@
  * Calculates consultation metrics and analytics
  */
 
-import {
-  REQUEST_STATUS_IDS,
-  isWaitingStatus,
-  STATISTICS_CONFIG,
-} from '@/config/requestStatusConfig'
 import { isRequestCompleted, extractStatusName } from '@/composables/useRequestStatuses'
+import { parseIdempiereDateTime } from '@/api/utils'
+
+// Look-back thresholds (in days)
+const SILENT_DAYS_THRESHOLD = 7
+const LOST_CUSTOMER_DAYS_THRESHOLD = 90
+const DEFAULT_PENDING_STATUS_LABEL = '待處理'
 
 export interface RequestStats {
   totalThisMonth: number
@@ -19,6 +20,16 @@ export interface RequestStats {
   lostCustomerCount: number
   statusDistribution: Record<string, number>
   topCustomers: Array<{ customerId: number; name: string; count: number }>
+}
+
+/**
+ * Parse a date value that may be an iDempiere datetime string. Falls back to
+ * the native Date parser for non-iDempiere-shaped inputs (e.g. test fixtures).
+ */
+function parseMaybeDate(value: unknown): Date {
+  if (value instanceof Date) return value
+  if (typeof value === 'string' && value) return parseIdempiereDateTime(value)
+  return new Date(NaN)
 }
 
 /**
@@ -36,37 +47,30 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime()
 
   // Filter requests from the look-back period
-  const filtered = requests.filter((r) => new Date(r.Created).getTime() >= dayAgo)
+  const filtered = requests.filter((r) => parseMaybeDate(r.Created).getTime() >= dayAgo)
 
   // Filter requests from current month only
-  const thisMonth = requests.filter((r) => new Date(r.Created).getTime() >= monthStart)
+  const thisMonth = requests.filter((r) => parseMaybeDate(r.Created).getTime() >= monthStart)
 
-  // 計算狀態分布
-  // 新的來源是 R_Status_ID (expanded) 的 Name/identifier。
-  // 若記錄為舊版 (只有 LastResult 文字)，則以 LastResult 當作顯示名稱。
+  // Status distribution — source is R_Status_ID (expanded) Name/identifier.
+  // Legacy rows that only have LastResult surface that text instead.
   const statusDist: Record<string, number> = {}
   filtered.forEach((r) => {
-    const status = extractStatusName(r) || REQUEST_STATUS_IDS.PENDING
+    const status = extractStatusName(r) || DEFAULT_PENDING_STATUS_LABEL
     statusDist[status] = (statusDist[status] || 0) + 1
   })
 
-  // 計算沉默諮詢（等待回應 > 7 天）
+  // Silent consultations: not closed AND older than SILENT_DAYS_THRESHOLD days.
+  // The previous implementation inspected R_Request.Description for activity
+  // JSON, but Description is no longer fetched in $select — the parse always
+  // returned an empty array, so the heuristic collapsed to "created > N days".
+  // We now express that rule directly.
   const silentCount = filtered.filter((r) => {
-    const status = r.R_Status_ID?.id
-    if (!isWaitingStatus(status)) return false
-    try {
-      const activities = JSON.parse(r.Description || '[]')
-      if (activities.length === 0) {
-        const daysSince = (now - new Date(r.Created).getTime()) / (1000 * 24 * 3600)
-        return daysSince > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
-      }
-      const lastActivity = activities[activities.length - 1]?.timestamp
-      if (!lastActivity) return false
-      const daysSilent = (now - new Date(lastActivity).getTime()) / (1000 * 24 * 3600)
-      return daysSilent > STATISTICS_CONFIG.SILENT_DAYS_THRESHOLD
-    } catch {
-      return false
-    }
+    if (isRequestCompleted(r)) return false
+    const createdMs = parseMaybeDate(r.Created).getTime()
+    if (Number.isNaN(createdMs)) return false
+    const daysSinceCreated = (now - createdMs) / (1000 * 24 * 3600)
+    return daysSinceCreated > SILENT_DAYS_THRESHOLD
   }).length
 
   // Calculate lost customers: identify customers with no consultation for 90+ days
@@ -77,7 +81,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   requests.forEach((r) => {
     const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
     const name = r.C_BPartner_ID?.Name || `#${customerId}`
-    const createdTime = new Date(r.Created).getTime()
+    const createdTime = parseMaybeDate(r.Created).getTime()
 
     if (!customerLastActivity.has(customerId)) {
       customerLastActivity.set(customerId, { customerId, name, lastTime: createdTime })
@@ -93,8 +97,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   // Count customers with last consultation exceeding threshold days ago
   let lostCount = 0
   customerLastActivity.forEach(({ lastTime }) => {
-    // Check if the time elapsed since last activity exceeds configured threshold
-    if (now - lastTime > STATISTICS_CONFIG.LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000) {
+    if (now - lastTime > LOST_CUSTOMER_DAYS_THRESHOLD * 24 * 60 * 60 * 1000) {
       lostCount++
     }
   })
@@ -126,24 +129,23 @@ function calculateConversionRate(requests: any[]): string {
 }
 
 /**
- * Calculate average response time based on first activity timestamp
+ * Calculate average response time (Updated − Created) across completed
+ * consultations only. Description-based activity parsing was removed because
+ * Description is no longer included in $select.
  */
 function calculateAvgResponseTime(requests: any[]): string {
   if (requests.length === 0) return '0h'
   let totalMs = 0
   let count = 0
   requests.forEach((r) => {
-    try {
-      const activities = JSON.parse(r.Description || '[]')
-      if (activities.length > 0) {
-        const responseMs = new Date(activities[0].timestamp).getTime() - new Date(r.Created).getTime()
-        if (responseMs > 0) {
-          totalMs += responseMs
-          count++
-        }
-      }
-    } catch {
-      // skip parsing errors
+    if (!isRequestCompleted(r)) return
+    const createdMs = parseMaybeDate(r.Created).getTime()
+    const updatedMs = parseMaybeDate(r.Updated).getTime()
+    if (Number.isNaN(createdMs) || Number.isNaN(updatedMs)) return
+    const delta = updatedMs - createdMs
+    if (delta > 0) {
+      totalMs += delta
+      count++
     }
   })
   if (count === 0) return '0h'

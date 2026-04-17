@@ -183,10 +183,12 @@ import {
   loadRequestStatuses,
   findStatus,
 } from '@/composables/useRequestStatuses'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const toast = useToast()
 
 const requestId = computed(() => {
   const id = route.params.id
@@ -605,7 +607,7 @@ onMounted(async () => {
 // 建立訂單功能
 function onCreateOrder() {
   if (formData.value.C_BPartner_ID == null) {
-    alert('請先選擇客戶')
+    toast.add({ severity: 'warn', summary: '請先選擇客戶', life: 3000 })
     return
   }
 
@@ -620,7 +622,7 @@ function onCreateOrder() {
 // 建立預約功能
 function onCreateAppointment() {
   if (formData.value.C_BPartner_ID == null) {
-    alert('請先選擇客戶')
+    toast.add({ severity: 'warn', summary: '請先選擇客戶', life: 3000 })
     return
   }
 

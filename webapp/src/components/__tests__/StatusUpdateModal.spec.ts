@@ -62,7 +62,8 @@ describe('StatusUpdateModal', () => {
 
     expect(wrapper.emitted('status-selected')).toBeTruthy()
     const emitted = wrapper.emitted('status-selected')?.[0] as any[]
-    expect(emitted[0]).toBe('已指派')
+    // Component emits the numeric R_Status_ID (4 = '已指派'), not the name string
+    expect(emitted[0]).toBe(4)
   })
 
   it('emits close event when cancel button is clicked', async () => {

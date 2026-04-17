@@ -18,6 +18,9 @@
 
     <div v-if="loading" class="loading-state">載入中...</div>
     <div v-else-if="error" class="error-state">{{ error }}</div>
+    <div v-else-if="columns.length === 0" class="empty-state">
+      請先在 iDempiere 建立 R_Status 資料以使用看板
+    </div>
 
     <!-- Kanban board: horizontal scroll of status columns -->
     <div v-else class="kanban-board" @dragover.prevent @drop.prevent>
@@ -49,7 +52,8 @@
               v-for="card in cardsInCell(col.statusId, lane.repId)"
               :key="card.id"
               class="kanban-card"
-              draggable="true"
+              :class="{ 'is-pending': pendingCardIds.has(card.id) }"
+              :draggable="!pendingCardIds.has(card.id)"
               @dragstart="handleDragStart(card, col.statusId, lane.repId)"
               @dragend="handleDragEnd"
               @click="goToEdit(card)"
@@ -83,6 +87,7 @@ import { listRequests, updateRequest, getRequest, type RequestStatus } from '@/a
 import { listSalesReps, type SalesRep } from '@/api/bpartner'
 import { loadRequestStatuses } from '@/composables/useRequestStatuses'
 import { getTrackingBadge } from '@/utils/trackingBadge'
+import { useToast } from '@/composables/useToast'
 
 interface KanbanCard {
   id: number
@@ -111,6 +116,12 @@ interface DragTarget {
 }
 
 const router = useRouter()
+const toast = useToast()
+
+// Card IDs currently awaiting a server-side status update. Cards in this set
+// cannot be dragged again until the in-flight request resolves, preventing
+// races where a second drop overwrites the first.
+const pendingCardIds = ref<Set<number>>(new Set())
 
 // --- Mobile detection ---
 const windowWidth = ref(window.innerWidth)
@@ -263,30 +274,56 @@ async function handleDrop(targetStatusId: number | null, targetRepId: number | n
   const sameRep = card._repId === targetRepId
   if (sameStatus && sameRep) return  // no-op
 
+  // Ignore drops on cards whose previous update is still in flight
+  if (pendingCardIds.value.has(card.id)) return
+
   // Build update payload
   const payload: Record<string, any> = {}
   if (!sameStatus) payload.R_Status_ID = targetStatusId
   if (!sameRep) payload.SalesRep_ID = targetRepId
 
-  // Optimistic update
+  // Snapshot IDs (not the card reference) so rollback survives even if the
+  // reactive cards array is reshuffled mid-flight.
+  const cardId = card.id
   const prevStatusId = card._statusId
   const prevRepId = card._repId
+
+  // Optimistic update
   card._statusId = targetStatusId
   card._repId = targetRepId
 
+  // Mark this card as pending so the template can disable re-drag
+  const pending = new Set(pendingCardIds.value)
+  pending.add(cardId)
+  pendingCardIds.value = pending
+
   try {
-    await updateRequest(card.id, payload)
+    await updateRequest(cardId, payload)
     // Sync timestamps by refreshing the single record
-    const fresh = await getRequest(card.id)
-    const idx = cards.value.findIndex(c => c.id === card.id)
+    const fresh = await getRequest(cardId)
+    const idx = cards.value.findIndex(c => c.id === cardId)
     if (idx !== -1) {
       cards.value[idx] = toKanbanCard(fresh)
     }
-  } catch (e: any) {
-    // Rollback optimistic update
-    card._statusId = prevStatusId
-    card._repId = prevRepId
-    alert(`更新失敗：${e?.message || '未知錯誤'}`)
+  } catch (_e: any) {
+    // Rollback optimistic update by finding the card by id (closure-held
+    // reference may have been invalidated by a parallel refresh).
+    const idx = cards.value.findIndex(c => c.id === cardId)
+    if (idx !== -1) {
+      const c = cards.value[idx]!
+      c._statusId = prevStatusId
+      c._repId = prevRepId
+    }
+    toast.add({
+      severity: 'error',
+      summary: '更新失敗',
+      detail: '狀態更新失敗，請稍後再試',
+      life: 4000,
+    })
+  } finally {
+    const next = new Set(pendingCardIds.value)
+    next.delete(cardId)
+    pendingCardIds.value = next
   }
 }
 </script>
@@ -360,7 +397,8 @@ async function handleDrop(targetStatusId: number | null, targetRepId: number | n
 }
 
 .loading-state,
-.error-state {
+.error-state,
+.empty-state {
   text-align: center;
   padding: 3rem;
   color: #64748b;
@@ -368,6 +406,12 @@ async function handleDrop(targetStatusId: number | null, targetRepId: number | n
 
 .error-state {
   color: #dc2626;
+}
+
+.kanban-card.is-pending {
+  opacity: 0.55;
+  cursor: progress;
+  pointer-events: none;
 }
 
 /* Kanban board: horizontal scroll */

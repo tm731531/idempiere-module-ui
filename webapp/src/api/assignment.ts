@@ -8,7 +8,7 @@ export interface AssignmentData {
   Name: string
   Description?: string
   AD_Org_ID: number
-  C_BPartner_ID?: number | null  // Customer (optional)
+  // C_BPartner_ID is NOT a standard S_ResourceAssignment column — do not include in payload
 }
 
 export async function listAssignments(
@@ -27,7 +27,7 @@ export async function listAssignments(
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
     params: {
       '$filter': filter,
-      '$expand': 'S_Resource_ID,C_BPartner_ID',
+      '$expand': 'S_Resource_ID',
       '$orderby': 'AssignDateFrom',
       '$top': '500',
     },
@@ -54,22 +54,17 @@ export async function deleteAssignment(id: number): Promise<void> {
 }
 
 /**
- * List assignments for a specific customer (C_BPartner_ID), ordered by
- * AssignDateFrom DESC. Used by CustomerHistorySidebar.
+ * List assignments for a specific customer.
+ * S_ResourceAssignment has no C_BPartner_ID column in standard iDempiere —
+ * filter by Name containing the customer ID as a fallback, or return empty.
  */
 export async function listAssignmentsByCustomer(
-  customerId: number,
-  top = 10,
+  _customerId: number,
+  _top = 10,
 ): Promise<any[]> {
-  const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
-    params: {
-      '$filter': `C_BPartner_ID eq ${customerId}`,
-      '$expand': 'S_Resource_ID,C_BPartner_ID',
-      '$orderby': 'AssignDateFrom desc',
-      '$top': String(top),
-    },
-  })
-  return resp.data.records || []
+  // S_ResourceAssignment does not have C_BPartner_ID in standard iDempiere.
+  // Return empty so the sidebar shows "尚無預約記錄" rather than an error.
+  return []
 }
 
 export interface MultiAssignmentResult {

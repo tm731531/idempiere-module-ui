@@ -3,9 +3,11 @@
  *
  * Loads R_Status rows once and caches them in module scope.
  * R_Status.IsClosed is the source of truth for determining terminal
- * (completed / closed) consultation states, replacing the previous
- * hardcoded ['已完成', 'Closed', '已轉化', 'Completed'] string match
- * against the legacy R_Request.LastResult field.
+ * (completed / closed) consultation states.
+ *
+ * IsClosed=true covers BOTH successful conversion AND cancellation.
+ * isCancelledStatus() detects cancellation by name pattern so that
+ * cancelled consultations are NOT counted in conversion rate metrics.
  */
 
 import { ref, computed } from 'vue'
@@ -22,6 +24,31 @@ const loading = ref<Promise<RequestStatus[]> | null>(null)
  * This allows a smooth migration period where older records still work.
  */
 const FALLBACK_COMPLETED_NAMES = ['已完成', 'Closed', '已轉化', 'Completed']
+
+/**
+ * Substrings (case-insensitive) that indicate a CANCELLATION status.
+ * These statuses have IsClosed=true in iDempiere but should NOT count as
+ * successful conversions in metrics — iDempiere makes no distinction between
+ * "closed as done" vs "closed as cancelled" at the schema level.
+ */
+const CANCEL_PATTERNS = ['取消', 'cancel', 'void', '作廢', 'reject', '拒絕', 'cancelled', 'rejected']
+
+/**
+ * Returns true if the status (by ID or name) represents a cancellation.
+ * Cancellations have IsClosed=true but should not count as conversions.
+ */
+export function isCancelledStatus(idOrName: number | string | null | undefined): boolean {
+  if (idOrName == null || idOrName === '') return false
+  let name: string | null = null
+  if (typeof idOrName === 'number') {
+    name = findStatus(idOrName)?.Name ?? null
+  } else {
+    name = String(idOrName)
+  }
+  if (!name) return false
+  const lower = name.toLowerCase()
+  return CANCEL_PATTERNS.some(p => lower.includes(p.toLowerCase()))
+}
 
 /**
  * Extracts the numeric R_Status_ID from an R_Request record.
@@ -115,6 +142,9 @@ export function isCompletedStatus(
 ): boolean {
   if (idOrName == null || idOrName === '') return false
 
+  // Cancellations are terminal (IsClosed=true) but are NOT conversions
+  if (isCancelledStatus(idOrName)) return false
+
   if (typeof idOrName === 'number') {
     const s = findStatus(idOrName)
     if (s) return s.IsClosed === true
@@ -139,7 +169,8 @@ export function isRequestCompleted(req: any): boolean {
   if (!req) return false
   const id = extractStatusId(req)
   if (typeof id === 'number') {
-    // Known R_Status_ID — authoritative
+    // Cancelled statuses have IsClosed=true but are not conversions
+    if (isCancelledStatus(id)) return false
     const s = findStatus(id)
     if (s) return s.IsClosed === true
   }
@@ -183,6 +214,7 @@ export function useRequestStatuses() {
     load: loadRequestStatuses,
     clear: clearRequestStatusesCache,
     findStatus,
+    isCancelledStatus,
     isCompletedStatus,
     isRequestCompleted,
     getStatusName,

@@ -7,6 +7,7 @@ const MOCK_STATUSES = [
   { R_Status_ID: 1, Name: '待處理', SeqNo: 10, IsActive: true, IsClosed: false },
   { R_Status_ID: 2, Name: '等待回應', SeqNo: 20, IsActive: true, IsClosed: false },
   { R_Status_ID: 3, Name: '已完成', SeqNo: 30, IsActive: true, IsClosed: true },
+  { R_Status_ID: 4, Name: '取消', SeqNo: 40, IsActive: true, IsClosed: true },
 ]
 
 vi.mock('@/api/request', () => ({
@@ -19,6 +20,7 @@ import { loadRequestStatuses, clearRequestStatusesCache } from '@/composables/us
 const STATUS_PENDING = { id: 1, identifier: '待處理', Name: '待處理' }
 const STATUS_WAITING = { id: 2, identifier: '等待回應', Name: '等待回應' }
 const STATUS_COMPLETED = { id: 3, identifier: '已完成', Name: '已完成' }
+const STATUS_CANCELLED = { id: 4, identifier: '取消', Name: '取消' }
 
 describe('dashboardStats utilities', () => {
   beforeEach(async () => {
@@ -247,6 +249,40 @@ describe('dashboardStats utilities', () => {
 
       const stats = calculateStats(requests)
       expect(stats.silentCount).toBe(0)
+    })
+
+    it('excludes cancelled consultations from pendingCount', () => {
+      const requests = [
+        createMockRequest({ R_Status_ID: { ...STATUS_PENDING } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_CANCELLED } }),
+        createMockRequest({ R_Status_ID: { ...STATUS_CANCELLED } }),
+      ]
+
+      const stats = calculateStats(requests)
+      // Cancelled consultations (IsClosed=true, cancel pattern) must NOT be counted as pending
+      expect(stats.pendingCount).toBe(1)
+    })
+
+    it('excludes cancelled consultations from silentCount', () => {
+      const now = Date.now()
+      const tenDaysAgo = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString()
+
+      const requests = [
+        // 10 天前建立，已取消 → 不沉默（屬於 cancelled，應排除）
+        createMockRequest({
+          Created: tenDaysAgo,
+          R_Status_ID: { ...STATUS_CANCELLED },
+        }),
+        // 10 天前建立，待處理 → 沉默（未完成且未取消）
+        createMockRequest({
+          Created: tenDaysAgo,
+          R_Status_ID: { ...STATUS_PENDING },
+        }),
+      ]
+
+      const stats = calculateStats(requests)
+      // Only the pending (non-cancelled) request counts as silent
+      expect(stats.silentCount).toBe(1)
     })
   })
 

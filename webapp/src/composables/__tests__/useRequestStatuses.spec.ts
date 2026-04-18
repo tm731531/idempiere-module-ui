@@ -4,6 +4,7 @@ vi.mock('@/api/request', () => ({
   listRequestStatuses: vi.fn(async () => [
     { R_Status_ID: 1, Name: '待處理', SeqNo: 10, IsActive: true, IsClosed: false },
     { R_Status_ID: 2, Name: '已完成', SeqNo: 20, IsActive: true, IsClosed: true },
+    { R_Status_ID: 3, Name: '已取消', SeqNo: 30, IsActive: true, IsClosed: true },
   ]),
 }))
 
@@ -12,6 +13,7 @@ import {
   loadRequestStatuses,
   clearRequestStatusesCache,
   findStatus,
+  isCancelledStatus,
   isCompletedStatus,
   isRequestCompleted,
   extractStatusId,
@@ -31,9 +33,10 @@ describe('useRequestStatuses', () => {
       const result = await loadRequestStatuses()
 
       expect(listRequestStatuses).toHaveBeenCalledTimes(1)
-      expect(result).toHaveLength(2)
+      expect(result).toHaveLength(3)
       expect(result[0]!.R_Status_ID).toBe(1)
       expect(result[1]!.R_Status_ID).toBe(2)
+      expect(result[2]!.R_Status_ID).toBe(3)
     })
 
     it('returns cached result on second call without force', async () => {
@@ -112,6 +115,43 @@ describe('useRequestStatuses', () => {
       expect(isCompletedStatus('已轉化')).toBe(true)
       expect(isCompletedStatus('新單')).toBe(false)
     })
+
+    it('returns false for a cancelled status even when IsClosed=true (numeric ID)', () => {
+      expect(isCompletedStatus(3)).toBe(false)
+    })
+
+    it('returns false for cancelled status name string', () => {
+      expect(isCompletedStatus('已取消')).toBe(false)
+      expect(isCompletedStatus('cancelled')).toBe(false)
+    })
+  })
+
+  // ── isCancelledStatus ──────────────────────────────────────────────
+
+  describe('isCancelledStatus', () => {
+    beforeEach(async () => {
+      await loadRequestStatuses()
+    })
+
+    it('returns true for a status whose Name contains "取消"', () => {
+      expect(isCancelledStatus(3)).toBe(true)
+    })
+
+    it('returns false for a non-cancel status', () => {
+      expect(isCancelledStatus(2)).toBe(false)
+      expect(isCancelledStatus(1)).toBe(false)
+    })
+
+    it('detects cancel by string name', () => {
+      expect(isCancelledStatus('已取消')).toBe(true)
+      expect(isCancelledStatus('cancel')).toBe(true)
+      expect(isCancelledStatus('Cancelled')).toBe(true)
+    })
+
+    it('returns false for null/empty', () => {
+      expect(isCancelledStatus(null)).toBe(false)
+      expect(isCancelledStatus('')).toBe(false)
+    })
   })
 
   // ── isRequestCompleted ─────────────────────────────────────────────
@@ -141,6 +181,16 @@ describe('useRequestStatuses', () => {
       clearRequestStatusesCache()
       expect(isRequestCompleted({ LastResult: 'Closed' })).toBe(true)
       expect(isRequestCompleted({ LastResult: '新單' })).toBe(false)
+    })
+
+    it('returns false for a cancelled status even though IsClosed=true', () => {
+      const req = { R_Status_ID: { id: 3 } }
+      expect(isRequestCompleted(req)).toBe(false)
+    })
+
+    it('returns false when LastResult is a cancel name', () => {
+      clearRequestStatusesCache()
+      expect(isRequestCompleted({ LastResult: '已取消' })).toBe(false)
     })
   })
 

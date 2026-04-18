@@ -28,6 +28,7 @@
         :modelValue="formData"
         :disabled="readOnly"
         :columnFilters="columnFilters"
+        :fkLabels="fkLabels"
         @update:modelValue="formData = $event"
       />
 
@@ -69,6 +70,7 @@ const paymentId = computed(() => {
 const {
   visibleFieldDefs,
   formData,
+  fkLabels,
   recordData,
   docStatus,
   pageLoading,

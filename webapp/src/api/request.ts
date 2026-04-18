@@ -22,7 +22,7 @@ export interface RequestStatus {
 
 export async function listRequests(filter?: string, top = 100): Promise<any[]> {
   const params: Record<string, string> = {
-    '$select': 'R_Request_ID,Summary,R_Status_ID,C_BPartner_ID,Created,Updated,CreatedBy,UpdatedBy,LastResult,SalesRep_ID,DateNextAction,Priority',
+    '$select': 'R_Request_ID,DocumentNo,Summary,R_Status_ID,C_BPartner_ID,Created,Updated,CreatedBy,UpdatedBy,LastResult,SalesRep_ID,DateNextAction,Priority',
     '$expand': 'R_Status_ID,C_BPartner_ID,CreatedBy,UpdatedBy,SalesRep_ID',
     '$orderby': 'Created desc',
     '$top': String(top),

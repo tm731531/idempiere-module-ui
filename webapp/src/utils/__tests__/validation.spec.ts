@@ -6,6 +6,8 @@ import {
   validatePhone,
   sanitizeUserInput,
   validateStatusSelection,
+  validateTrackingDate,
+  validateTrackingTime,
 } from '../validation'
 
 describe('Activity Content Validation', () => {
@@ -172,6 +174,79 @@ describe('Input Sanitization', () => {
   it('preserves normal text', () => {
     const result = sanitizeUserInput('Hello World')
     expect(result).toBe('Hello World')
+  })
+})
+
+describe('Tracking Date Validation', () => {
+  it('accepts today\'s date in local time (not rejected due to UTC parse)', () => {
+    // Bug: new Date('2026-05-10') parses as UTC midnight.
+    // In UTC+8 that equals 2026-05-09 08:00 local — making today appear as "past".
+    // Fix: parseDateStringLocal() uses new Date(y, m-1, d) which is local midnight.
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const todayLocal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    const result = validateTrackingDate(todayLocal)
+    expect(result.isValid).toBe(true)
+    expect(result.errors.date).toBeUndefined()
+  })
+
+  it('rejects empty date', () => {
+    const result = validateTrackingDate('')
+    expect(result.isValid).toBe(false)
+    expect(result.errors.date).toBe('請選擇日期')
+  })
+
+  it('rejects a past date', () => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateStr = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`
+    const result = validateTrackingDate(dateStr)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.date).toBe('日期不能是過去的日期')
+  })
+
+  it('rejects a date more than 90 days in the future', () => {
+    const future = new Date()
+    future.setDate(future.getDate() + 91)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateStr = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`
+    const result = validateTrackingDate(dateStr)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.date).toBe('日期不能超過90天後')
+  })
+})
+
+describe('Tracking Time Validation — 20:00 boundary', () => {
+  it('accepts exactly 20:00 (boundary should be inclusive)', () => {
+    const result = validateTrackingTime('20:00')
+    expect(result.isValid).toBe(true)
+  })
+
+  it('rejects 20:01 (past boundary)', () => {
+    const result = validateTrackingTime('20:01')
+    expect(result.isValid).toBe(false)
+    expect(result.errors.time).toBe('時間必須在08:00-20:00之間')
+  })
+
+  it('rejects 21:00 (past boundary)', () => {
+    const result = validateTrackingTime('21:00')
+    expect(result.isValid).toBe(false)
+  })
+
+  it('rejects 07:59 (before business hours)', () => {
+    const result = validateTrackingTime('07:59')
+    expect(result.isValid).toBe(false)
+  })
+
+  it('accepts 08:00 (start of business hours)', () => {
+    const result = validateTrackingTime('08:00')
+    expect(result.isValid).toBe(true)
+  })
+
+  it('accepts 12:30 (mid-day)', () => {
+    const result = validateTrackingTime('12:30')
+    expect(result.isValid).toBe(true)
   })
 })
 

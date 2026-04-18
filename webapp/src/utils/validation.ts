@@ -37,6 +37,16 @@ export function validateActivityContent(content: string): ValidationResult {
   }
 }
 
+/**
+ * Parse a date-only string (YYYY-MM-DD) as local midnight.
+ * Using new Date('YYYY-MM-DD') parses as UTC midnight, which is wrong in UTC+8
+ * (off-by-one: 2026-05-10 UTC = 2026-05-09 23:00 local → date appears as yesterday).
+ */
+function parseDateStringLocal(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y!, m! - 1, d!) // local midnight, no UTC conversion
+}
+
 // Tracking Date Validation
 // Validates that selected date is within valid range: today to 90 days from today
 export function validateTrackingDate(dateStr: string): ValidationResult {
@@ -47,12 +57,12 @@ export function validateTrackingDate(dateStr: string): ValidationResult {
     return { isValid: false, errors }
   }
 
-  const selected = new Date(dateStr)
+  // Parse as local midnight to avoid UTC off-by-one in UTC+8 timezone
+  const selected = parseDateStringLocal(dateStr)
   const today = new Date()
 
   // Normalize both dates to midnight (00:00:00) for accurate date comparison
   // This prevents time-of-day from affecting the comparison
-  selected.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
 
   // Reject any date before today (no past dates allowed)
@@ -94,8 +104,8 @@ export function validateTrackingTime(timeStr: string): ValidationResult {
     return { isValid: false, errors }
   }
 
-  // Business hours: 08:00-19:59 (before 20:00)
-  if (hours < 8 || hours >= 20) {
+  // Business hours: 08:00-20:00 (20:00 exactly is allowed, 20:01+ is not)
+  if (hours < 8 || hours > 20 || (hours === 20 && minutes > 0)) {
     errors.time = '時間必須在08:00-20:00之間'
   }
 

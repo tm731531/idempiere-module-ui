@@ -2,6 +2,7 @@ import { ref, computed, type Ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMetadata } from './useMetadata'
 import { resolveDefaultValue, type FieldDefinition } from '@/api/metadata'
+import { getFieldLabel } from '@/i18n/fieldLabels'
 
 export interface DocumentFormOptions {
   tabId: number
@@ -63,7 +64,7 @@ export function useDocumentForm(options: DocumentFormOptions) {
       if (def.column.isMandatory) {
         const val = formData.value[def.column.columnName]
         if (val === null || val === undefined || val === '') {
-          errors.push(def.field.name)
+          errors.push(getFieldLabel(def.column.columnName, def.field.name))
         }
       }
     }

@@ -5,6 +5,15 @@
       <h2>{{ headerTitle }}</h2>
     </div>
 
+    <!-- Banner: navigated here from a consultation -->
+    <div v-if="relatedConsultationId" class="consultation-source-banner">
+      來自諮詢 #{{ relatedConsultationId }}
+      <router-link
+        :to="{ name: 'consultation-edit', params: { id: relatedConsultationId } }"
+        class="consultation-source-link"
+      >返回諮詢</router-link>
+    </div>
+
     <div v-if="pageLoading" class="loading-state">載入中...</div>
 
     <div v-else-if="pageError" class="form-error">{{ pageError }}</div>
@@ -341,6 +350,13 @@ const authStore = useAuthStore()
 const orderId = computed(() => {
   const id = route.params.id
   return id ? Number(id) : null
+})
+
+// When navigated from a consultation via "建立訂單", hold the source consultation ID
+// so we can show a banner and navigate back after save/cancel.
+const relatedConsultationId = computed(() => {
+  const val = route.query.relatedConsultationId
+  return val ? String(val) : null
 })
 
 // Order data (for DocumentNo display and totals reload)
@@ -752,7 +768,11 @@ async function handleCreateOrder() {
     payload.AD_Org_ID = authStore.context?.organizationId ?? 0
     payload.username = authStore.user?.name || ''
     const result = await createOrder(payload as any)
-    router.replace({ name: 'order-detail', params: { id: result.id } })
+    if (relatedConsultationId.value) {
+      router.push({ name: 'consultation-edit', params: { id: relatedConsultationId.value } })
+    } else {
+      router.replace({ name: 'order-detail', params: { id: result.id } })
+    }
   } catch (e: unknown) {
     const err = e as { message?: string }
     errorMsg.value = err.message || '建立訂單失敗'
@@ -769,6 +789,10 @@ async function handleUpdateOrder() {
   errorMsg.value = ''
   try {
     await updateOrder(orderId.value, payload)
+    if (relatedConsultationId.value) {
+      router.push({ name: 'consultation-edit', params: { id: relatedConsultationId.value } })
+      return
+    }
     const data = await getOrder(orderId.value)
     order.value = data
     errorMsg.value = ''
@@ -910,7 +934,11 @@ function onDocActionError(message: string) {
 }
 
 function goBack() {
-  router.push({ name: 'order-list' })
+  if (relatedConsultationId.value) {
+    router.push({ name: 'consultation-edit', params: { id: relatedConsultationId.value } })
+  } else {
+    router.push({ name: 'order-list' })
+  }
 }
 
 // After metadata defaults are loaded, apply initial callout chain for create mode.
@@ -1297,6 +1325,27 @@ onMounted(async () => {
   border-radius: 8px;
   cursor: pointer;
   min-height: var(--min-touch);
+}
+
+.consultation-source-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 0.875rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.consultation-source-link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-weight: 600;
+  margin-left: auto;
 }
 
 .sotrx-section {

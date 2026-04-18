@@ -37,7 +37,7 @@ describe('assignment API', () => {
     expect(apiClient.post).toHaveBeenCalled()
   })
 
-  it('createAssignment includes C_BPartner_ID when provided', async () => {
+  it('createAssignment does not include C_BPartner_ID (not a standard column)', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 2 } })
     const { createAssignment } = await import('@/api/assignment')
     await createAssignment({
@@ -46,32 +46,29 @@ describe('assignment API', () => {
       AssignDateTo: '2026-02-14T10:00:00',
       Name: 'Test with Customer',
       AD_Org_ID: 11,
-      C_BPartner_ID: 100005,
     })
-    expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/v1/models/S_ResourceAssignment',
-      expect.objectContaining({ C_BPartner_ID: 100005 }),
-    )
+    const payload = vi.mocked(apiClient.post).mock.calls[0]?.[1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('C_BPartner_ID')
   })
 
-  it('updateAssignment includes C_BPartner_ID in payload', async () => {
+  it('updateAssignment passes through arbitrary payload fields', async () => {
     vi.mocked(apiClient.put).mockResolvedValue({ data: { id: 1 } })
     const { updateAssignment } = await import('@/api/assignment')
-    await updateAssignment(1, { Name: 'Updated', C_BPartner_ID: 100005 })
+    await updateAssignment(1, { Name: 'Updated' })
     expect(apiClient.put).toHaveBeenCalledWith(
       '/api/v1/models/S_ResourceAssignment/1',
-      expect.objectContaining({ C_BPartner_ID: 100005 }),
+      expect.objectContaining({ Name: 'Updated' }),
     )
   })
 
-  it('listAssignments expands C_BPartner_ID', async () => {
+  it('listAssignments expands S_Resource_ID (no C_BPartner_ID — column does not exist)', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { records: [] } })
     const { listAssignments } = await import('@/api/assignment')
     await listAssignments(new Date('2026-02-14'), new Date('2026-02-14'))
     expect(apiClient.get).toHaveBeenCalledWith(
       '/api/v1/models/S_ResourceAssignment',
       expect.objectContaining({
-        params: expect.objectContaining({ '$expand': expect.stringContaining('C_BPartner_ID') }),
+        params: expect.objectContaining({ '$expand': 'S_Resource_ID' }),
       }),
     )
   })

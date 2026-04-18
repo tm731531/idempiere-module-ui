@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import { lookupCustomerGroupId } from './lookup'
+import { escapeODataString } from './utils'
 
 export interface CustomerCreateData {
   name: string
@@ -77,7 +78,7 @@ export async function createCustomer(data: CustomerCreateData, orgId: number): P
 }
 
 export async function searchCustomers(query: string): Promise<any[]> {
-  const safe = query.replace(/'/g, "''")
+  const safe = escapeODataString(query)
   const resp = await apiClient.get('/api/v1/models/C_BPartner', {
     params: {
       '$filter': `IsCustomer eq true and IsActive eq true and (contains(Name,'${safe}') or contains(TaxID,'${safe}'))`,

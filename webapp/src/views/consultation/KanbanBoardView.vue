@@ -279,7 +279,7 @@ async function handleDrop(targetStatusId: number | null, targetRepId: number | n
 
   // Build update payload
   const payload: Record<string, any> = {}
-  if (!sameStatus) payload.R_Status_ID = targetStatusId
+  if (!sameStatus && targetStatusId !== null) payload.R_Status_ID = targetStatusId
   if (!sameRep) payload.SalesRep_ID = targetRepId
 
   // Snapshot IDs (not the card reference) so rollback survives even if the

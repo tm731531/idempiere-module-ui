@@ -2,6 +2,7 @@
  * Request Activity Utilities
  * Handles parsing and management of activity timeline data
  */
+import { toIdempiereDateTime } from '@/api/utils'
 
 export interface Activity {
   timestamp: string
@@ -54,7 +55,7 @@ export function addActivity(
   const activities = parseActivities(existingJson)
   activities.push({
     ...activity,
-    timestamp: new Date().toISOString(),
+    timestamp: toIdempiereDateTime(new Date()),
   })
   return stringifyActivities(activities)
 }

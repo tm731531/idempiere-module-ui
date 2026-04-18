@@ -92,6 +92,7 @@ export async function listNotesForRecord(
     params: {
       '$filter': `AD_Table_ID eq ${tableId} and Record_ID eq ${recordId} and IsActive eq true`,
       '$select': 'AD_Note_ID,AD_Table_ID,Record_ID,Description,TextMsg,Created,CreatedBy',
+      '$expand': 'CreatedBy',
       '$orderby': 'Created desc',
       '$top': 200,
     },

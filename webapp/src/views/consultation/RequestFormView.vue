@@ -42,6 +42,7 @@
         :disabled="readOnly"
         :columnFilters="columnFilters"
         :highlightColumns="highlightColumns"
+        :fkLabels="fkLabels"
         @update:modelValue="formData = $event"
       />
 
@@ -189,6 +190,7 @@ import {
   findStatus,
 } from '@/composables/useRequestStatuses'
 import { useToast } from '@/composables/useToast'
+import { getFieldLabel } from '@/i18n/fieldLabels'
 
 const router = useRouter()
 const route = useRoute()
@@ -206,6 +208,7 @@ const preloadedData = (route as any).state?.preloadedData
 const {
   visibleFieldDefs,
   formData,
+  fkLabels,
   pageLoading,
   pageError,
   readOnly,
@@ -245,6 +248,18 @@ const {
     'C_Order_ID',          // handled separately via "建立訂單" button
     'Priority',            // 優先順序 — not relevant for clinic
     'DateNextAction',      // 下次跟進日期 — managed separately via TrackingDateModal
+    'IsInDispute',         // dispute tracking — not relevant for clinic
+    'PriorityUser',        // user-facing priority — not relevant
+    'PriorityRule',        // priority rule — not relevant
+    'DateLastAlert',       // system managed alert date
+    'Result',              // legacy result text field — not relevant
+    'R_Resolution_ID',     // resolution — not relevant for clinic
+    'R_Category_ID',       // category — not configured
+    'R_Group_ID',          // group — not configured
+    'R_RequestRelated_ID', // related request link — not used
+    'R_StandardResponse_ID', // standard response — not used
+    'AD_Table_ID',         // generic record link table — not relevant
+    'Record_ID',           // generic record link ID — not relevant
   ],
 })
 
@@ -273,6 +288,9 @@ const errorMsg = ref('')
 const successMsg = ref('')
 // R_Status_ID of the currently-selected status. 0 = unselected.
 const selectedStatusId = ref<number>(0)
+// Bug 3 fix: track the status as it was when the record was loaded, so we only
+// call updateRequestStatus when the user actually changes it.
+const initialStatusId = ref<number>(0)
 // DateNextAction — follow-up date stored in R_Request
 const dateNextAction = ref<string | null>(null)
 
@@ -285,6 +303,18 @@ const adjustedFieldDefs = computed(() =>
   (visibleFieldDefs.value ?? []).map(f =>
     CLINIC_MANDATORY.includes(f.column.columnName) ? { ...f, column: { ...f.column, isMandatory: true } } : f
   )
+)
+
+// Bug 2 fix: validate against adjustedFieldDefs (which forces C_BPartner_ID and SalesRep_ID
+// as mandatory) rather than the original visibleFieldDefs from AD metadata.
+const localMandatoryErrors = computed(() =>
+  adjustedFieldDefs.value
+    .filter(f => f.column.isMandatory)
+    .filter(f => {
+      const v = formData.value[f.column.columnName]
+      return v === null || v === undefined || v === ''
+    })
+    .map(f => getFieldLabel(f.column.columnName, f.field.name))
 )
 
 const showStatusModal = ref(false)
@@ -400,6 +430,11 @@ async function handleSubmit() {
     }
   }
 
+  if (localMandatoryErrors.value.length > 0) {
+    errorMsg.value = `請填寫必填欄位：${localMandatoryErrors.value.join('、')}`
+    return
+  }
+
   if (!cleanPayload.Summary || !String(cleanPayload.Summary).trim()) {
     errorMsg.value = '請輸入摘要'
     return
@@ -418,10 +453,14 @@ async function handleSubmit() {
       delete updatePayload.Updated
       delete updatePayload.UpdatedBy
       delete updatePayload.Processed
-      // Persist R_Status_ID separately via the dedicated endpoint when changed.
+      // Persist R_Status_ID separately via the dedicated endpoint, but only when changed.
       await updateRequest(requestId.value, updatePayload)
-      if (selectedStatusId.value && selectedStatusId.value > 0) {
+      if (
+        selectedStatusId.value > 0 &&
+        selectedStatusId.value !== initialStatusId.value
+      ) {
         await updateRequestStatus(requestId.value, selectedStatusId.value)
+        initialStatusId.value = selectedStatusId.value
       }
       router.push({ name: 'consultation-list' })
     } else {
@@ -666,6 +705,8 @@ onMounted(async () => {
   } else {
     selectedStatusId.value = 0
   }
+  // Bug 3 fix: record the loaded status so handleSubmit can skip updateRequestStatus when unchanged
+  initialStatusId.value = selectedStatusId.value
 
   // Hydrate dateNextAction from loaded formData
   const rawDate = formData.value?.DateNextAction
@@ -878,7 +919,7 @@ function onCreateAppointment() {
   gap: 0.75rem;
   margin-top: 1.5rem;
   position: sticky;
-  bottom: 0;
+  bottom: 88px;
   background: white;
   padding: 1rem;
   border-top: 1px solid #e5e7eb;

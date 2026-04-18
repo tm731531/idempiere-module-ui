@@ -348,7 +348,8 @@ export async function createTax(data: {
  * Lookup current user's AD_User_ID by username.
  */
 export async function lookupCurrentUserId(username: string): Promise<number> {
-  if (cache['AD_User'] !== undefined) return cache['AD_User']
+  const cacheKey = `AD_User_${username}`
+  if (cache[cacheKey] !== undefined) return cache[cacheKey]
 
   const safe = username.replace(/'/g, "''")
   const resp = await apiClient.get('/api/v1/models/AD_User', {
@@ -361,7 +362,7 @@ export async function lookupCurrentUserId(username: string): Promise<number> {
 
   const records = resp.data.records || []
   const id = records[0]?.id || 0
-  cache['AD_User'] = id
+  cache[cacheKey] = id
   return id
 }
 

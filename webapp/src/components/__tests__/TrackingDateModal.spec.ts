@@ -246,7 +246,8 @@ describe('TrackingDateModal', () => {
 
     const future = new Date()
     future.setDate(future.getDate() + 91)
-    const futureStr = future.toISOString().split('T')[0]
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const futureStr = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`
 
     await wrapper.find('input[type="date"]').setValue(futureStr)
     await wrapper.find('input[type="time"]').setValue('14:00')

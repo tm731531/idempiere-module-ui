@@ -124,8 +124,8 @@ export async function updateSysConfig(name: string, value: string): Promise<bool
     const records = resp.data.records || []
 
     if (records.length > 0) {
-      // Update existing
-      const configId = records[0].AD_SysConfig_ID || records[0].id || records[0].adSysconfigId
+      // Update existing — iDempiere REST returns the PK as top-level `id`
+      const configId = records[0].id
       if (!configId) {
         console.error('❌ No ID field found. Available keys:', Object.keys(records[0]))
         return false

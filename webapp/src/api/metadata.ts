@@ -1,4 +1,5 @@
 import { apiClient } from './client'
+import { toIdempiereDateTime, toDateString } from './utils'
 
 export interface FieldMeta {
   id: number; name: string; seqNo: number; isDisplayed: boolean
@@ -270,7 +271,7 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext, refer
   if (/^@[#A-Za-z_]+@$/.test(defaultExpr)) {
     const varName = defaultExpr.slice(1, -1)
     const contextMap: Record<string, any> = {
-      '#Date': new Date().toISOString().split('T')[0],
+      '#Date': toDateString(new Date()),
       'AD_Org_ID': ctx.organizationId,
       '#AD_Org_ID': ctx.organizationId,
       'M_Warehouse_ID': ctx.warehouseId,
@@ -290,11 +291,12 @@ export function resolveDefaultValue(defaultExpr: string, ctx: AuthContext, refer
   if (defaultExpr === 'N') return false
 
   // Date keywords — server-side SQL tokens, resolve to current date/time
+  // Must use local time with fake-Z suffix (iDempiere REST convention)
   if (defaultExpr === 'SYSDATE' || defaultExpr === 'CURRENT_TIMESTAMP') {
-    return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+    return toIdempiereDateTime(new Date())
   }
   if (defaultExpr === 'CURRENT_DATE') {
-    return new Date().toISOString().split('T')[0]
+    return toDateString(new Date())
   }
 
   // Numeric literals — but only convert if the field is NOT a string-type reference

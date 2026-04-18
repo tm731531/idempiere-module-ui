@@ -40,7 +40,7 @@
           <select v-model="form.resourceId" class="form-input">
             <option :value="0" disabled>請選擇</option>
             <option
-              v-for="r in resources"
+              v-for="r in effectiveResources"
               :key="r.id"
               :value="r.id"
             >
@@ -65,7 +65,7 @@
         <label class="form-label">選擇服務人員（可多選）</label>
         <div class="resource-checklist">
           <label
-            v-for="r in resources"
+            v-for="r in effectiveResources"
             :key="r.id"
             class="resource-check-row"
           >
@@ -82,7 +82,7 @@
               title="此時段已有預約"
             >●</span>
           </label>
-          <div v-if="resources.length === 0" class="no-resources">尚無服務人員</div>
+          <div v-if="effectiveResources.length === 0" class="no-resources">尚無服務人員</div>
         </div>
       </div>
 
@@ -92,6 +92,8 @@
           v-model="form.dateFrom"
           type="datetime-local"
           class="form-input"
+          :disabled="!!editingAppt"
+          :title="editingAppt ? '開始時間在 iDempiere 中不可修改' : ''"
         />
       </div>
 
@@ -101,6 +103,8 @@
           v-model="form.dateTo"
           type="datetime-local"
           class="form-input"
+          :disabled="!!editingAppt"
+          :title="editingAppt ? '結束時間在 iDempiere 中不可修改' : ''"
         />
       </div>
 
@@ -111,6 +115,7 @@
           type="text"
           class="form-input"
           placeholder="預約名稱"
+          maxlength="60"
         />
       </div>
 
@@ -198,8 +203,8 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { createAssignment, createMultipleAssignments, updateAssignment, deleteAssignment, checkConflict } from '@/api/assignment'
-import { createResource } from '@/api/resource'
+import { listAssignments, createAssignment, createMultipleAssignments, updateAssignment, deleteAssignment, checkConflict } from '@/api/assignment'
+import { listResources, createResource } from '@/api/resource'
 import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import SearchSelector from '@/components/SearchSelector.vue'
@@ -242,6 +247,21 @@ const form = reactive({
 const saving = ref(false)
 const deleting = ref(false)
 const errorMsg = ref('')
+
+// When used as a standalone page (/appointment/new), props.resources is [] because
+// no parent loads it. localResources fills that gap.
+const localResources = ref<any[]>([])
+const effectiveResources = computed(() =>
+  (props.resources?.length ?? 0) > 0 ? props.resources : localResources.value
+)
+
+// When used as a standalone page, props.existingAssignments is [] because the
+// parent CalendarView doesn't provide them. localAssignments fills that gap for
+// conflict detection.
+const localAssignments = ref<any[]>([])
+const effectiveAssignments = computed(() =>
+  (props.existingAssignments?.length ?? 0) > 0 ? props.existingAssignments : localAssignments.value
+)
 
 // Debounce + stale-response guard for conflict checks
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -335,7 +355,7 @@ watch(
 
       if (failedIds.length > 0) {
         const failedNames = failedIds
-          .map(id => props.resources.find(r => r.id === id)?.Name ?? `#${id}`)
+          .map(id => effectiveResources.value.find(r => r.id === id)?.Name ?? `#${id}`)
           .join('、')
         errorMsg.value = `無法檢查衝突的服務人員：${failedNames}`
       }
@@ -353,7 +373,31 @@ function toDatetimeLocal(d: Date): string {
   return `${y}-${mo}-${day}T${h}:${mi}`
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Standalone page mode: load resources ourselves (CalendarView provides them in modal mode)
+  if (!props.resources?.length) {
+    try {
+      localResources.value = await listResources()
+    } catch {
+      // non-fatal — dropdown will be empty but form still usable
+    }
+  }
+
+  // Standalone page mode: load assignments for the next 30 days (covers most scheduling).
+  // CalendarView already passes the visible date range's assignments via props; in standalone
+  // mode props.existingAssignments is always [] so we must fetch ourselves.
+  if (!props.existingAssignments?.length) {
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const future = new Date(today)
+      future.setDate(future.getDate() + 30)
+      localAssignments.value = await listAssignments(today, future)
+    } catch {
+      // non-fatal — conflict detection will miss existing appointments but form still usable
+    }
+  }
+
   if (props.editingAppt) {
     // Edit mode: pre-fill from existing appointment
     const a = props.editingAppt
@@ -446,7 +490,7 @@ function checkConflictLocal(): boolean {
   const newTo = new Date(form.dateTo).getTime()
   const editId = props.editingAppt?.id
 
-  return props.existingAssignments.some((a) => {
+  return effectiveAssignments.value.some((a) => {
     if (editId && a.id === editId) return false
 
     const aResId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
@@ -476,13 +520,17 @@ async function handleSave() {
   try {
     if (props.editingAppt) {
       // Edit mode: always single-resource
+      // All time/resource columns are IsUpdateable=N in iDempiere AD_Column:
+      // S_Resource_ID, AssignDateFrom, AssignDateTo, Qty.
+      // Only Name and Description accept changes.
       await updateAssignment(props.editingAppt.id, {
-        S_Resource_ID: form.resourceId,
-        AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
-        AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
-        C_BPartner_ID: form.bpartnerId ?? undefined,
+        // S_Resource_ID omitted — IsUpdateable=N
+        // AssignDateFrom omitted — IsUpdateable=N
+        // AssignDateTo omitted — IsUpdateable=N
+        // Qty omitted — IsUpdateable=N
+        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
       })
       // Persist color override (non-blocking — failure does not block save)
       void setAssignmentColorOverride(props.editingAppt.id, form.colorOverride)
@@ -494,7 +542,7 @@ async function handleSave() {
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
         AD_Org_ID: orgId,
-        C_BPartner_ID: form.bpartnerId ?? undefined,
+        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
       }
       const results = await createMultipleAssignments(sharedPayload, selectedResourceIds.value)
       const successCount = results.filter((r) => r.result !== undefined).length
@@ -534,7 +582,7 @@ async function handleSave() {
         Name: form.name.trim(),
         Description: form.description.trim() || undefined,
         AD_Org_ID: orgId,
-        C_BPartner_ID: form.bpartnerId ?? undefined,
+        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
       })
       // Persist color override for newly-created assignment (non-blocking)
       const newId = newAssignment?.id ?? newAssignment?.S_ResourceAssignment_ID
@@ -550,8 +598,13 @@ async function handleSave() {
     } else {
       emit('saved')
     }
-  } catch {
-    errorMsg.value = '儲存失敗，請稍後再試'
+  } catch (e: unknown) {
+    const axiosErr = e as { response?: { data?: { detail?: string; message?: string; error?: string } }; message?: string }
+    const detail = axiosErr?.response?.data?.detail
+      ?? axiosErr?.response?.data?.message
+      ?? axiosErr?.response?.data?.error
+      ?? axiosErr?.message
+    errorMsg.value = detail ? `儲存失敗：${detail}` : '儲存失敗，請稍後再試'
     saving.value = false
   }
 }

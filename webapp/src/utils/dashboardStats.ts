@@ -3,7 +3,7 @@
  * Calculates consultation metrics and analytics
  */
 
-import { isRequestCompleted, extractStatusName } from '@/composables/useRequestStatuses'
+import { isRequestCompleted, extractStatusName, isCancelledStatus, extractStatusId } from '@/composables/useRequestStatuses'
 import { parseIdempiereDateTime } from '@/api/utils'
 
 // Look-back thresholds (in days)
@@ -60,13 +60,14 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     statusDist[status] = (statusDist[status] || 0) + 1
   })
 
-  // Silent consultations: not closed AND older than SILENT_DAYS_THRESHOLD days.
+  // Silent consultations: not closed AND not cancelled AND older than SILENT_DAYS_THRESHOLD days.
   // The previous implementation inspected R_Request.Description for activity
   // JSON, but Description is no longer fetched in $select — the parse always
   // returned an empty array, so the heuristic collapsed to "created > N days".
   // We now express that rule directly.
   const silentCount = filtered.filter((r) => {
     if (isRequestCompleted(r)) return false
+    if (isCancelledStatus(extractStatusId(r) ?? extractStatusName(r) ?? undefined)) return false
     const createdMs = parseMaybeDate(r.Created).getTime()
     if (Number.isNaN(createdMs)) return false
     const daysSinceCreated = (now - createdMs) / (1000 * 24 * 3600)
@@ -80,6 +81,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
   const customerLastActivity = new Map()
   requests.forEach((r) => {
     const customerId = r.C_BPartner_ID?.id ?? r.C_BPartner_ID
+    if (customerId == null) return  // skip records with no customer FK
     const name = r.C_BPartner_ID?.Name || `#${customerId}`
     const createdTime = parseMaybeDate(r.Created).getTime()
 
@@ -108,7 +110,7 @@ export function calculateStats(requests: any[], daysBefore: number = 90): Reques
     // stay meaningful when consultations span multiple months.
     conversionRate: calculateConversionRate(requests),
     avgResponseTime: calculateAvgResponseTime(filtered),
-    pendingCount: filtered.filter((r) => !isRequestCompleted(r)).length,
+    pendingCount: filtered.filter((r) => !isRequestCompleted(r) && !isCancelledStatus(extractStatusId(r) ?? extractStatusName(r) ?? undefined)).length,
     silentCount,
     lostCustomerCount: lostCount,
     statusDistribution: statusDist,

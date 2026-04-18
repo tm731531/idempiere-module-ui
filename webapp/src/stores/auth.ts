@@ -153,18 +153,10 @@ export const useAuthStore = defineStore('auth', () => {
 
       availableOrgs.value = orgs.map((o: any) => ({ id: o.id, name: o.name || '' }))
 
-      const specificOrgs = orgs.filter((o: any) => o.id !== 0)
-      if (orgs.length === 0) {
-        // No org at all — use system org 0
-        await selectOrg(0)
-      } else if (specificOrgs.length === 1) {
-        // Exactly one real org (possibly alongside *): auto-select it, skip org picker
-        await selectOrg(specificOrgs[0].id)
-      } else if (orgs.length === 1) {
-        // Only * org available
-        await selectOrg(orgs[0].id)
+      if (orgs.length <= 1) {
+        // 0 or 1 org: auto-select
+        await selectOrg(orgs[0]?.id || 0)
       } else {
-        // Multiple specific orgs: let user choose
         loginStep.value = 'org'
       }
     } catch {

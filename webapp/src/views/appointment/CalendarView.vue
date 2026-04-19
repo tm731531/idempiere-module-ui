@@ -10,6 +10,18 @@
           placeholder="搜尋預約..."
           type="search"
         />
+        <div v-if="searchResults.length > 0" class="search-results">
+          <div
+            v-for="evt in searchResults"
+            :key="evt.id"
+            class="search-result-item"
+            @click="jumpToEvent(evt)"
+          >
+            <span class="result-dot" :style="{ backgroundColor: evt.backgroundColor }"></span>
+            <span class="result-title">{{ evt.title }}</span>
+            <span class="result-date">{{ formatEventDate(evt.start) }}</span>
+          </div>
+        </div>
       </div>
 
       <!-- Resource filter -->
@@ -106,13 +118,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { CalendarOptions, EventDropArg, EventResizeDoneArg, DateSelectArg, EventClickArg, DatesSetArg } from '@fullcalendar/core'
+import type { CalendarOptions, EventDropArg, DateSelectArg, EventClickArg, DatesSetArg } from '@fullcalendar/core'
+import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
 
 import { listResources } from '@/api/resource'
@@ -269,6 +283,35 @@ const calendarEvents = computed(() => {
       }
     })
 })
+
+// ─── Router ───────────────────────────────────────────────────────────────────
+const router = useRouter()
+
+// ─── Search results for date-jump ────────────────────────────────────────────
+const searchResults = computed(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q || q.length < 2) return []
+  return calendarEvents.value
+    .filter(e =>
+      e.title.toLowerCase().includes(q) ||
+      (e.extendedProps.desc?.bpartner_name ?? '').toLowerCase().includes(q) ||
+      (e.extendedProps.desc?.service ?? '').toLowerCase().includes(q)
+    )
+    .slice(0, 8)
+})
+
+function jumpToEvent(event: { start: string | Date }) {
+  const api = calendarRef.value?.getApi()
+  if (!api || !event.start) return
+  api.gotoDate(new Date(event.start))
+  searchQuery.value = ''
+}
+
+function formatEventDate(start: string | Date | undefined): string {
+  if (!start) return ''
+  const d = new Date(start)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 // ─── FullCalendar ref & helpers ───────────────────────────────────────────────
 const calendarRef = ref<InstanceType<typeof FullCalendar> | null>(null)
@@ -513,6 +556,46 @@ onBeforeUnmount(() => flushPendingSave())
   font-size: 0.8125rem;
   background: #f8fafc;
   color: var(--color-text);
+}
+
+.search-results {
+  margin-top: 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: white;
+  overflow: hidden;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: #f8fafc; }
+
+.result-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.result-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-date {
+  color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .search-input:focus {

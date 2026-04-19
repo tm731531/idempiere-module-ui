@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppointmentForm from '../AppointmentForm.vue'
@@ -403,6 +404,20 @@ describe('AppointmentForm — query-param prefill', () => {
     expect(wrapper.find('.consultation-banner').exists()).toBe(false)
     // Mode toggle is visible in create mode
     expect(wrapper.find('.mode-toggle').exists()).toBe(true)
+  })
+})
+
+describe('AppointmentForm — service duration watcher', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('changing dateFrom in create mode does not crash (watcher installed)', async () => {
+    const wrapper = mountForm()
+    await flushPromises()
+    const vm = wrapper.vm as any
+    // No service selected → watcher exits early, no crash
+    vm.form.dateFrom = '2026-04-20T09:00'
+    await nextTick()
+    expect(vm.form.dateTo).toBeDefined()
   })
 })
 

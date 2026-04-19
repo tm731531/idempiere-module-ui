@@ -462,6 +462,19 @@ function onServiceChange() {
   form.dateTo = `${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}T${pad(to.getHours())}:${pad(to.getMinutes())}`
 }
 
+// Recalculate end time when start time changes in create mode, if a service with duration is selected
+watch(() => form.dateFrom, (newFrom) => {
+  if (props.editingAppt || !form.service || !newFrom) return
+  const matched = appointmentServices.value.find(s => s.Name === form.service)
+  const duration = matched?.durationMinutes ?? 0
+  if (duration <= 0) return
+  const from = new Date(newFrom)
+  if (isNaN(from.getTime())) return
+  const to = new Date(from.getTime() + duration * 60 * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  form.dateTo = `${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}T${pad(to.getHours())}:${pad(to.getMinutes())}`
+})
+
 // ─── Conflict detection ───────────────────────────────────────────────────────
 
 // Recheck per-resource conflicts whenever selected resources or time window change.

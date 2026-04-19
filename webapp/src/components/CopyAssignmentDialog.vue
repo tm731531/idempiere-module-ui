@@ -99,6 +99,15 @@
       <div v-if="errorMsg" class="error-banner">
         {{ errorMsg }}
       </div>
+
+      <!-- Result summary (partial success) -->
+      <div
+        v-if="resultSummary"
+        class="result-summary"
+        :class="resultSummary.hasError ? 'summary-partial' : 'summary-ok'"
+      >
+        {{ resultSummary.text }}
+      </div>
     </div>
   </div>
 </template>
@@ -132,6 +141,7 @@ const selectedResourceIds = reactive(new Set<number>())
 const copyName = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
+const resultSummary = ref<{ text: string; hasError: boolean } | null>(null)
 
 // Initialize default times based on source appointment
 const initializeDefaultTimes = () => {
@@ -187,13 +197,12 @@ function formatSourceTime(): string {
 
 async function handleCopy() {
   errorMsg.value = ''
+  resultSummary.value = null
 
-  // Validation
   if (selectedResourceIds.size === 0) {
     errorMsg.value = '請至少選擇一個服務人員'
     return
   }
-
   if (!selectedStartTime.value || !selectedEndTime.value) {
     errorMsg.value = '請選擇開始和結束時間'
     return
@@ -201,7 +210,6 @@ async function handleCopy() {
 
   const startDate = new Date(selectedStartTime.value)
   const endDate = new Date(selectedEndTime.value)
-
   if (startDate >= endDate) {
     errorMsg.value = '結束時間必須晚於開始時間'
     return
@@ -210,91 +218,85 @@ async function handleCopy() {
   saving.value = true
 
   try {
-    // Use the selected start and end times directly
-    const selectedFromDate = startDate
-    const selectedToDate = endDate
+    const resourceIdList = [...selectedResourceIds]
+    const sourceResId = typeof props.sourceAppt.S_Resource_ID === 'object'
+      ? props.sourceAppt.S_Resource_ID.id
+      : props.sourceAppt.S_Resource_ID
 
-    for (const resourceId of selectedResourceIds) {
-      // Check for conflicts with existing appointments
-      const excludeId = resourceId === (typeof props.sourceAppt.S_Resource_ID === 'object' ? props.sourceAppt.S_Resource_ID.id : props.sourceAppt.S_Resource_ID)
-        ? props.sourceAppt.id
-        : undefined
+    // Step A: check conflicts for all resources in parallel
+    const conflictChecks = await Promise.allSettled(
+      resourceIdList.map(async (resourceId) => {
+        const excludeId = resourceId === sourceResId ? props.sourceAppt.id : undefined
+        const hasConflict = await checkConflict(resourceId, startDate, endDate, excludeId)
+        return { resourceId, hasConflict }
+      }),
+    )
 
-      const hasConflict = await checkConflict(resourceId, selectedFromDate, selectedToDate, excludeId)
-      if (hasConflict) {
-        const resName = props.resources.find(r => r.id === resourceId)?.Name || `服務人員 ${resourceId}`
-        errorMsg.value = `❌ ${resName} 在 ${selectedStartTime.value} 至 ${selectedEndTime.value} 時間已有預約，無法複製`
-        saving.value = false
-        return
+    const conflictIds = new Set<number>()
+    const checkFailIds = new Set<number>()
+    conflictChecks.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        checkFailIds.add(resourceIdList[idx]!)
+      } else if (r.value.hasConflict) {
+        conflictIds.add(r.value.resourceId)
       }
+    })
 
-      // Prepare payload
-      const payload = {
-        S_Resource_ID: resourceId,
-        AssignDateFrom: toIdempiereDateTime(selectedFromDate),
-        AssignDateTo: toIdempiereDateTime(selectedToDate),
-        Name: copyName.value || props.sourceAppt.Name,
-        AD_Org_ID: props.sourceAppt.AD_Org_ID,
-      } as any
+    const eligibleIds = resourceIdList.filter(id => !conflictIds.has(id) && !checkFailIds.has(id))
 
-      // Copy optional fields if they exist
-      if (props.sourceAppt.Description) {
-        payload.Description = props.sourceAppt.Description
-      }
-
-      // Copy customer linkage from source appointment
-      if (props.sourceAppt.C_BPartner_ID) {
-        const bpId = typeof props.sourceAppt.C_BPartner_ID === 'object'
-          ? props.sourceAppt.C_BPartner_ID.id
-          : props.sourceAppt.C_BPartner_ID
-        if (bpId) payload.C_BPartner_ID = bpId
-      }
-
-      // API call
-      try {
-        await createAssignment(payload)
-      } catch (e: any) {
-        const resName = props.resources.find(r => r.id === resourceId)?.Name || `服務人員 ${resourceId}`
-
-        // Convert error codes to user-friendly messages
-        let userMsg = '複製失敗'
-        if (e.response?.status === 400) {
-          userMsg = '資料不完整或格式不正確'
-        } else if (e.response?.status === 401) {
-          userMsg = '登入已過期，請重新登入'
-        } else if (e.response?.status === 403) {
-          userMsg = '沒有權限執行此操作'
-        } else if (e.response?.status === 404) {
-          userMsg = '找不到指定的資源'
-        } else if (e.response?.status === 409) {
-          userMsg = '時間衝突或資源已被占用'
-        } else if (e.response?.status === 500) {
-          userMsg = '伺服器錯誤，請稍後重試'
-        }
-
-        errorMsg.value = `❌ ${resName} 複製失敗：${userMsg}`
-        saving.value = false
-        return
-      }
+    if (eligibleIds.length === 0) {
+      const names = resourceIdList
+        .map(id => props.resources.find(r => r.id === id)?.Name ?? `#${id}`)
+        .join('、')
+      errorMsg.value = `所有選擇的服務人員（${names}）在此時段均有衝突，無法複製`
+      return
     }
 
-    // Success
-    emit('success')
-  } catch (error: any) {
-    // Only show error if not already set by specific error handler
-    if (!errorMsg.value) {
-      let userMsg = '複製失敗'
-      if (error.response?.status === 400) {
-        userMsg = '資料不完整或格式不正確'
-      } else if (error.response?.status === 401) {
-        userMsg = '登入已過期，請重新登入'
-      } else if (error.response?.status === 403) {
-        userMsg = '沒有權限執行此操作'
-      } else if (error.response?.status === 500) {
-        userMsg = '伺服器錯誤，請稍後重試'
-      }
-      errorMsg.value = `❌ ${userMsg}`
+    // Step B: create for eligible resources in parallel
+    const basePayload: Record<string, unknown> = {
+      AssignDateFrom: toIdempiereDateTime(startDate),
+      AssignDateTo: toIdempiereDateTime(endDate),
+      Name: copyName.value || props.sourceAppt.Name,
+      AD_Org_ID: props.sourceAppt.AD_Org_ID,
     }
+    if (props.sourceAppt.Description) basePayload.Description = props.sourceAppt.Description
+
+    const createResults = await Promise.allSettled(
+      eligibleIds.map(async (resourceId) => {
+        await createAssignment({ ...basePayload, S_Resource_ID: resourceId } as any)
+        return resourceId
+      }),
+    )
+
+    const succeeded = createResults
+      .filter((r): r is PromiseFulfilledResult<number> => r.status === 'fulfilled')
+      .map(r => r.value)
+    const createFailIds = createResults
+      .filter(r => r.status === 'rejected')
+      .map((_, i) => eligibleIds[i]!)
+    const allFailedIds = [...conflictIds, ...checkFailIds, ...createFailIds]
+
+    const successCount = succeeded.length
+    const failCount = allFailedIds.length
+
+    if (failCount === 0) {
+      resultSummary.value = { text: `${successCount} 筆預約已複製`, hasError: false }
+      setTimeout(() => emit('success'), 800)
+    } else {
+      const failedNames = allFailedIds
+        .map(id => props.resources.find(r => r.id === id)?.Name ?? `#${id}`)
+        .join('、')
+      const conflictNote = conflictIds.size > 0 ? '（時段衝突）' : ''
+      resultSummary.value = {
+        text: `${successCount} 成功、${failCount} 失敗 ${conflictNote}：${failedNames}`,
+        hasError: true,
+      }
+      if (successCount > 0) {
+        setTimeout(() => emit('success'), 2000)
+      }
+    }
+  } catch {
+    errorMsg.value = '複製時發生錯誤，請重試'
   } finally {
     saving.value = false
   }
@@ -567,5 +569,23 @@ onMounted(() => {
     flex: 1;
     min-height: 44px;
   }
+}
+
+.result-summary {
+  margin: 0.75rem 1rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.summary-ok {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+.summary-partial {
+  background: #fef9c3;
+  color: #713f12;
+  border: 1px solid #fde047;
 }
 </style>

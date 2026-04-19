@@ -195,8 +195,8 @@ import type { CalendarOptions, EventDropArg, DateSelectArg, EventClickArg, Dates
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
 
-import { listResources, listResourceTypes, deactivateResource } from '@/api/resource'
-import type { ResourceType } from '@/api/resource'
+import { listResources, listResourceTypes, deactivateResource, listResourceUnavailability } from '@/api/resource'
+import type { ResourceType, ResourceUnavailability } from '@/api/resource'
 import { listAssignments, updateAssignment } from '@/api/assignment'
 import { toIdempiereDateTime } from '@/api/utils'
 import { parseDesc } from '@/composables/useAppointmentDesc'
@@ -357,6 +357,9 @@ const showCancelled = ref(false)
 const visibleStart = ref<Date>(new Date())
 const visibleEnd = ref<Date>(new Date())
 
+// Resource unavailability blocks (grey background events)
+const unavailabilityBlocks = ref<ResourceUnavailability[]>([])
+
 async function loadAssignments() {
   loading.value = true
   try {
@@ -372,7 +375,7 @@ async function loadAssignments() {
 // ─── Calendar events (derived from assignments) ───────────────────────────────
 const calendarEvents = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
-  return assignments.value
+  const regularEvents = assignments.value
     .filter((a) => {
       // Resource filter
       const resId = typeof a.S_Resource_ID === 'object' ? a.S_Resource_ID.id : a.S_Resource_ID
@@ -423,6 +426,28 @@ const calendarEvents = computed(() => {
         extendedProps: { assignment: a, desc },
       }
     })
+
+  // Append resource unavailability background events (grey blocks)
+  const bgEvents = unavailabilityBlocks.value
+    .filter(u => selectedResourceIds.has(u.resourceId))
+    .map(u => {
+      const resName = resources.value.find(r => r.id === u.resourceId)?.Name ?? ''
+      const exclusiveEnd = new Date(
+        new Date(u.dateTo ?? u.dateFrom).getTime() + 86400000,
+      ).toISOString().slice(0, 10)
+      return {
+        id: `unavail-${u.id}`,
+        title: resName ? `${resName}: ${u.name}` : u.name,
+        start: u.dateFrom,
+        end: exclusiveEnd,
+        display: 'background' as const,
+        color: '#e2e8f0',
+        classNames: ['unavail-block'],
+        extendedProps: {},
+      }
+    })
+
+  return [...regularEvents, ...bgEvents]
 })
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -549,6 +574,12 @@ function handleDatesSet(info: DatesSetArg) {
   visibleEnd.value = info.end
   if (changed) {
     loadAssignments()
+    // Refresh unavailability blocks for the new date range
+    if (resources.value.length > 0) {
+      const allIds = resources.value.map(r => r.id)
+      listResourceUnavailability(allIds, info.start, info.end)
+        .then(blocks => { unavailabilityBlocks.value = blocks })
+    }
   }
 }
 
@@ -624,6 +655,13 @@ async function reloadResources() {
     }
     resources.value = newList
     resourceTypes.value = newTypes
+    // Refresh unavailability for updated resource list
+    if (newList.length > 0) {
+      const allIds = newList.map(r => r.id)
+      unavailabilityBlocks.value = await listResourceUnavailability(
+        allIds, visibleStart.value, visibleEnd.value,
+      )
+    }
   } catch { /* silent */ }
 }
 

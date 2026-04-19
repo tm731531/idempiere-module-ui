@@ -108,6 +108,11 @@
         />
       </div>
 
+      <!-- Edit mode: explain why time fields are locked -->
+      <div v-if="editingAppt" class="time-locked-info">
+        ℹ️ iDempiere 不允許修改已儲存預約的時間。如需更改時間，請先「取消預約」再重新建立。
+      </div>
+
       <div class="form-group">
         <label class="form-label">名稱</label>
         <input
@@ -244,6 +249,29 @@
         >
           {{ cancelling ? '取消中...' : '取消預約' }}
         </button>
+
+        <!-- Order creation: shown only in edit mode when status = DON -->
+        <template v-if="editingAppt && form.status === 'DON'">
+          <button
+            v-if="linkedOrderId"
+            type="button"
+            class="btn btn-order"
+            @click="router.push({ name: 'order-detail', params: { id: linkedOrderId } })"
+          >
+            查看訂單
+          </button>
+          <button
+            v-else
+            type="button"
+            class="btn btn-order"
+            :disabled="creatingOrder || (!selectedBp && !form.bpartnerId)"
+            :title="(!selectedBp && !form.bpartnerId) ? '請先選擇客戶' : ''"
+            @click="handleCreateOrder"
+          >
+            {{ creatingOrder ? '建立中...' : '建立帳單' }}
+          </button>
+        </template>
+
         <div class="actions-right">
           <button class="btn btn-secondary" @click="handleCancel">關閉</button>
           <button class="btn btn-primary" :disabled="saving || (multiMode && selectedResourceIds.length === 0)" @click="handleSave">
@@ -260,6 +288,7 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { listAssignments, createAssignment, createMultipleAssignments, updateAssignment, cancelAssignment, checkConflict } from '@/api/assignment'
+import { createOrder } from '@/api/order'
 import { listResources, createResource } from '@/api/resource'
 import { searchCustomers, getCustomerDetail } from '@/api/bpartner'
 import { lookupOrgWarehouse } from '@/api/lookup'
@@ -269,8 +298,10 @@ import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignme
 import { useAppointmentStatuses } from '@/composables/useAppointmentStatuses'
 import { useAppointmentServices } from '@/composables/useAppointmentServices'
 import { parseDesc, serializeDesc, buildName } from '@/composables/useAppointmentDesc'
+import { useToast } from '@/composables/useToast'
 
 const { setAssignmentColorOverride } = useAssignmentColors()
+const toast = useToast()
 const { statuses, load: loadStatuses } = useAppointmentStatuses()
 const { services: appointmentServices, load: loadServices } = useAppointmentServices()
 
@@ -321,6 +352,8 @@ let bpDebounce: ReturnType<typeof setTimeout> | null = null
 const saving = ref(false)
 const deleting = ref(false)
 const cancelling = ref(false)
+const creatingOrder = ref(false)
+const linkedOrderId = ref<number | null>(null)
 const errorMsg = ref('')
 
 // When used as a standalone page (/appointment/new), props.resources is [] because
@@ -541,6 +574,7 @@ onMounted(async () => {
     form.status = desc.status ?? 'SCH'
     form.service = desc.service ?? ''
     form.notes = desc.notes ?? ''
+    linkedOrderId.value = desc.order_id ?? null
     // description field now holds freeform notes from the old format OR just preserved as-is
     form.description = existingDescRaw.value
 
@@ -678,6 +712,44 @@ function buildNamePayload(): string {
   return combined || form.name.trim()
 }
 
+async function handleCreateOrder() {
+  const bpId = selectedBp.value?.id ?? form.bpartnerId
+  if (!bpId) {
+    errorMsg.value = '請先選擇客戶才能建立訂單'
+    return
+  }
+  const orgId = authStore.context?.organizationId ?? 0
+  const whId = authStore.context?.warehouseId ?? 0
+
+  creatingOrder.value = true
+  errorMsg.value = ''
+  try {
+    const order = await createOrder({
+      C_BPartner_ID: bpId,
+      AD_Org_ID: orgId,
+      M_Warehouse_ID: whId,
+      IsSOTrx: true,
+      Description: `來自預約：${props.editingAppt!.Name}`,
+      username: authStore.user?.name ?? '',
+    })
+    const orderId: number = order.id ?? order.C_Order_ID
+    linkedOrderId.value = orderId
+
+    // Write order_id back into Description JSON
+    const desc = parseDesc(existingDescRaw.value)
+    desc.order_id = orderId
+    const newDesc = serializeDesc(desc)
+    existingDescRaw.value = newDesc
+    await updateAssignment(props.editingAppt!.id, { Description: newDesc })
+
+    toast.add({ severity: 'success', summary: '訂單已建立', detail: '可至訂單管理查看', life: 4000 })
+  } catch (e: any) {
+    errorMsg.value = e.message || '建立訂單失敗'
+  } finally {
+    creatingOrder.value = false
+  }
+}
+
 async function handleSave() {
   if (!validate()) return
 
@@ -707,6 +779,7 @@ async function handleSave() {
       })
       // Persist color override (non-blocking — failure does not block save)
       void setAssignmentColorOverride(props.editingAppt.id, form.colorOverride)
+      toast.add({ severity: 'success', summary: '預約已更新', life: 3000 })
     } else if (multiMode.value) {
       // Multi-resource create: one POST per resource in parallel
       const sharedPayload = {
@@ -723,8 +796,12 @@ async function handleSave() {
       if (failCount === 0) {
         multiResultSummary.value = { text: `${successCount} 筆預約已建立`, hasError: false }
       } else {
+        const failedNames = results
+          .filter(r => r.error !== undefined)
+          .map(r => effectiveResources.value.find(res => res.id === r.resourceId)?.Name ?? `#${r.resourceId}`)
+          .join('、')
         multiResultSummary.value = {
-          text: `${successCount} 成功、${failCount} 失敗`,
+          text: `${successCount} 成功、${failCount} 失敗：${failedNames}`,
           hasError: true,
         }
       }
@@ -759,6 +836,7 @@ async function handleSave() {
       if (newId && form.colorOverride) {
         void setAssignmentColorOverride(newId, form.colorOverride)
       }
+      toast.add({ severity: 'success', summary: '預約已建立', life: 3000 })
     }
 
     saving.value = false
@@ -1197,4 +1275,28 @@ async function handleCancelAppointment() {
   color: #ef4444;
   background: #fee2e2;
 }
+
+.time-locked-info {
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.btn-order {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.btn-order:hover:not(:disabled) { background: #0284c7; }
+.btn-order:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

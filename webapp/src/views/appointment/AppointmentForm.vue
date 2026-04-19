@@ -1381,7 +1381,7 @@ async function handleCancelAppointment() {
 }
 
 .btn-order {
-  background: #0ea5e9;
+  background: var(--color-primary);
   color: white;
   border: none;
   padding: 0.5rem 1rem;
@@ -1390,6 +1390,6 @@ async function handleCancelAppointment() {
   font-size: 0.875rem;
   font-weight: 500;
 }
-.btn-order:hover:not(:disabled) { background: #0284c7; }
+.btn-order:hover:not(:disabled) { background: var(--color-primary-hover, var(--color-primary)); opacity: 0.9; }
 .btn-order:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

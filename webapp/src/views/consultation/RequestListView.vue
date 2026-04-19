@@ -63,7 +63,7 @@
           @click="switchTab(tab.key)"
         >
           {{ tab.label }}
-          <span v-if="tabCounts[tab.key] > 0" class="tab-count-badge">{{ tabCounts[tab.key] }}</span>
+          <span v-if="(tabCounts[tab.key] ?? 0) > 0" class="tab-count-badge">{{ tabCounts[tab.key] }}</span>
         </button>
       </div>
 
@@ -105,12 +105,11 @@
             >
               ✓ 已轉化
             </span>
-            <!-- TODO: memoize getTrackingBadge per card (currently called 3× per render) -->
             <span
-              v-if="getTrackingBadge(r.DateNextAction)"
-              :class="['tracking-badge', `tracking-badge--${getTrackingBadge(r.DateNextAction)!.color}`]"
+              v-if="trackingBadgeCache[r.R_Request_ID ?? r.id]"
+              :class="['tracking-badge', `tracking-badge--${trackingBadgeCache[r.R_Request_ID ?? r.id]!.color}`]"
             >
-              {{ getTrackingBadge(r.DateNextAction)!.text }}
+              {{ trackingBadgeCache[r.R_Request_ID ?? r.id]!.text }}
             </span>
             <span class="card-operator">👤 {{ getOperatorName(r) }}</span>
             <span class="card-date">{{ formatDate(r.Created) }}</span>
@@ -165,6 +164,16 @@ const allRequests = ref<any[]>([])
 const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
+
+// Memoized tracking badge per request ID — avoids calling getTrackingBadge 3× per card per render
+const trackingBadgeCache = computed(() => {
+  const cache: Record<number, ReturnType<typeof getTrackingBadge>> = {}
+  for (const r of requests.value) {
+    const id = r.R_Request_ID ?? r.id
+    if (id != null) cache[id] = getTrackingBadge(r.DateNextAction)
+  }
+  return cache
+})
 
 // Count per status tab — drives count badges on filter tabs
 const tabCounts = computed(() => {

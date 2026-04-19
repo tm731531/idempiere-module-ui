@@ -76,6 +76,16 @@
           顯示已取消
         </label>
       </div>
+
+      <!-- Admin shortcuts -->
+      <div class="sidebar-section sidebar-admin">
+        <button class="admin-shortcut-btn" @click="router.push({ name: 'reference-data' })">
+          管理資源設定
+        </button>
+        <button class="admin-shortcut-btn" @click="router.push({ name: 'reference-data' })">
+          管理狀態設定
+        </button>
+      </div>
     </aside>
 
     <!-- Main calendar area -->
@@ -718,6 +728,29 @@ onBeforeUnmount(() => flushPendingSave())
 
 .toggle-checkbox {
   cursor: pointer;
+}
+
+.sidebar-admin {
+  margin-top: auto;
+}
+
+.admin-shortcut-btn {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-shortcut-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
 }
 
 /* Empty state */

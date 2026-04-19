@@ -151,7 +151,14 @@
               :key="bp.id"
               class="bp-dropdown-item"
               @click="selectBp(bp)"
-            >{{ bp.Name }}</div>
+            >
+              <div class="bp-name">{{ bp.Name }}</div>
+              <div v-if="bp.Phone || bp.EMail" class="bp-contact">
+                <span v-if="bp.Phone">{{ bp.Phone }}</span>
+                <span v-if="bp.Phone && bp.EMail"> · </span>
+                <span v-if="bp.EMail">{{ bp.EMail }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -281,7 +288,7 @@ const existingDescRaw = ref('')
 
 // BPartner search state
 const bpSearch = ref('')
-const bpResults = ref<{ id: number; Name: string }[]>([])
+const bpResults = ref<{ id: number; Name: string; Phone?: string; EMail?: string }[]>([])
 const selectedBp = ref<{ id: number; Name: string } | null>(null)
 let bpDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -370,6 +377,8 @@ function handleBpSearch() {
       bpResults.value = results.map((r: any) => ({
         id: r.id ?? r.C_BPartner_ID,
         Name: r.Name ?? r.identifier ?? '',
+        Phone: r.Phone || undefined,
+        EMail: r.EMail || undefined,
       }))
     } catch {
       bpResults.value = []
@@ -377,7 +386,7 @@ function handleBpSearch() {
   }, 300)
 }
 
-function selectBp(bp: { id: number; Name: string }) {
+function selectBp(bp: { id: number; Name: string; Phone?: string; EMail?: string }) {
   selectedBp.value = bp
   form.bpartnerId = bp.id
   bpSearch.value = ''
@@ -1103,6 +1112,16 @@ async function handleCancelAppointment() {
 .bp-dropdown-item:hover {
   background: #f8fafc;
   color: var(--color-primary);
+}
+
+.bp-name {
+  font-size: 0.9375rem;
+}
+
+.bp-contact {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 1px;
 }
 
 .bp-selected {

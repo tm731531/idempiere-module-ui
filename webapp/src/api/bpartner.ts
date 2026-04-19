@@ -82,7 +82,7 @@ export async function searchCustomers(query: string): Promise<any[]> {
   const resp = await apiClient.get('/api/v1/models/C_BPartner', {
     params: {
       '$filter': `IsCustomer eq true and IsActive eq true and (contains(Name,'${safe}') or contains(TaxID,'${safe}'))`,
-      '$select': 'C_BPartner_ID,Name,TaxID',
+      '$select': 'C_BPartner_ID,Name,TaxID,Phone,EMail',
       '$orderby': 'Name',
       '$top': 50,
     },

@@ -49,6 +49,11 @@
           >
             <span class="chip-dot" :style="{ backgroundColor: getResourceColor(res.id) }"></span>
             <span class="chip-name">{{ res.Name }}</span>
+            <button
+              class="chip-deactivate"
+              title="停用此資源"
+              @click.stop="handleDeactivateResource(res.id, res.Name)"
+            >×</button>
           </label>
         </div>
       </div>
@@ -139,7 +144,8 @@ import type { CalendarOptions, EventDropArg, DateSelectArg, EventClickArg, Dates
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
 
-import { listResources } from '@/api/resource'
+import { listResources, listResourceTypes, deactivateResource } from '@/api/resource'
+import type { ResourceType } from '@/api/resource'
 import { listAssignments, updateAssignment } from '@/api/assignment'
 import { toIdempiereDateTime } from '@/api/utils'
 import { parseDesc } from '@/composables/useAppointmentDesc'
@@ -162,6 +168,7 @@ const statusesLoading = ref(true)
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 const resources = ref<any[]>([])
+const resourceTypes = ref<ResourceType[]>([])
 const resourcesLoading = ref(false)
 const selectedResourceIds = reactive(new Set<number>())
 
@@ -485,14 +492,27 @@ async function onCopySuccess() {
 
 async function reloadResources() {
   try {
-    const newList = await listResources()
+    const [newList, newTypes] = await Promise.all([listResources(), listResourceTypes()])
     for (const r of newList) {
       if (!resources.value.find((x: any) => x.id === r.id)) {
         selectedResourceIds.add(r.id)
       }
     }
     resources.value = newList
+    resourceTypes.value = newTypes
   } catch { /* silent */ }
+}
+
+async function handleDeactivateResource(resourceId: number, resourceName: string) {
+  if (!confirm(`確定要停用「${resourceName}」嗎？停用後將不再顯示於行事曆。`)) return
+  try {
+    await deactivateResource(resourceId)
+    selectedResourceIds.delete(resourceId)
+    await reloadResources()
+    toast.add({ severity: 'success', summary: `已停用 ${resourceName}`, life: 3000 })
+  } catch {
+    toast.add({ severity: 'error', summary: '停用失敗', life: 3000 })
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -503,7 +523,9 @@ onMounted(async () => {
 
   resourcesLoading.value = true
   try {
-    resources.value = await listResources()
+    const [resList, typeList] = await Promise.all([listResources(), listResourceTypes()])
+    resources.value = resList
+    resourceTypes.value = typeList
     resources.value.forEach(r => selectedResourceIds.add(r.id))
   } catch {
     resources.value = []
@@ -751,6 +773,26 @@ onBeforeUnmount(() => flushPendingSave())
 .admin-shortcut-btn:hover {
   background: #f1f5f9;
   color: #334155;
+}
+
+.chip-deactivate {
+  display: none;
+  margin-left: auto;
+  padding: 0 3px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.resource-chip:hover .chip-deactivate {
+  display: inline-block;
+}
+
+.chip-deactivate:hover {
+  color: #ef4444;
 }
 
 /* Empty state */

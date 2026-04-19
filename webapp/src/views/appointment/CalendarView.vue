@@ -74,6 +74,27 @@
         </div>
       </div>
 
+      <!-- Service preset filter (only shown when presets are configured) -->
+      <div v-if="appointmentServices.length > 0" class="sidebar-section">
+        <div class="selector-header">
+          <span class="selector-title">服務項目</span>
+          <button class="btn-toggle-all" @click="toggleAllServices">
+            {{ allServicesSelected ? '取消全選' : '全選' }}
+          </button>
+        </div>
+        <div class="service-chips">
+          <label
+            v-for="s in appointmentServices"
+            :key="s.Value"
+            class="service-chip"
+            :class="{ selected: selectedServices.has(s.Name) }"
+            @click.prevent="toggleService(s.Name)"
+          >
+            <span class="chip-name">{{ s.Name }}</span>
+          </label>
+        </div>
+      </div>
+
       <!-- Show cancelled toggle -->
       <div class="sidebar-section">
         <label class="toggle-label">
@@ -150,6 +171,7 @@ import { listAssignments, updateAssignment } from '@/api/assignment'
 import { toIdempiereDateTime } from '@/api/utils'
 import { parseDesc } from '@/composables/useAppointmentDesc'
 import { useAppointmentStatuses, isTerminalStatus } from '@/composables/useAppointmentStatuses'
+import { useAppointmentServices } from '@/composables/useAppointmentServices'
 import { useToast } from '@/composables/useToast'
 import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
 import { CALENDAR_CONFIG } from '@/constants/calendar'
@@ -165,6 +187,28 @@ const { load: loadColors, resolveAssignmentColor, setResourceColor, clearResourc
 // ─── Appointment statuses ─────────────────────────────────────────────────────
 const { statuses, load: loadStatuses, getStatusColor } = useAppointmentStatuses()
 const statusesLoading = ref(true)
+
+// ─── Appointment services (service preset filter) ─────────────────────────────
+const { services: appointmentServices, load: loadServices } = useAppointmentServices()
+const selectedServices = reactive(new Set<string>())
+const allServicesSelected = computed(
+  () => appointmentServices.value.length === 0 ||
+    appointmentServices.value.every(s => selectedServices.has(s.Name))
+)
+
+watch(appointmentServices, (newServices) => {
+  newServices.forEach(s => selectedServices.add(s.Name))
+})
+
+function toggleService(name: string) {
+  if (selectedServices.has(name)) selectedServices.delete(name)
+  else selectedServices.add(name)
+}
+
+function toggleAllServices() {
+  if (allServicesSelected.value) selectedServices.clear()
+  else appointmentServices.value.forEach(s => selectedServices.add(s.Name))
+}
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 const resources = ref<any[]>([])
@@ -261,6 +305,11 @@ const calendarEvents = computed(() => {
       // Terminal status filter
       const desc = parseDesc(a.Description)
       if (!showCancelled.value && isTerminalStatus(desc.status ?? '')) return false
+      // Service filter (only active when presets exist and some deselected)
+      if (appointmentServices.value.length > 0 && !allServicesSelected.value) {
+        const svc = desc.service ?? ''
+        if (svc && !selectedServices.has(svc)) return false
+      }
       // Search filter
       if (q) {
         const name = (a.Name ?? '').toLowerCase()
@@ -517,8 +566,9 @@ async function handleDeactivateResource(resourceId: number, resourceName: string
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  // Load colors and statuses in parallel with resources
+  // Load colors, statuses, and services in parallel with resources
   void loadColors()
+  void loadServices()
   loadStatuses().finally(() => { statusesLoading.value = false })
 
   resourcesLoading.value = true
@@ -793,6 +843,32 @@ onBeforeUnmount(() => flushPendingSave())
 
 .chip-deactivate:hover {
   color: #ef4444;
+}
+
+.service-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.service-chip {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.service-chip.selected {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
 }
 
 /* Empty state */

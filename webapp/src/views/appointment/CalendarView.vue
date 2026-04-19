@@ -67,17 +67,40 @@
 
       <!-- Status legend -->
       <div class="sidebar-section">
-        <div class="selector-title" style="margin-bottom: 0.5rem;">狀態圖例</div>
+        <div class="selector-header">
+          <span class="selector-title">狀態圖例</span>
+          <button class="btn-toggle-all" @click="showStatusManager = !showStatusManager">
+            {{ showStatusManager ? '完成' : '編輯' }}
+          </button>
+        </div>
         <div v-if="statusesLoading" class="selector-loading">載入中...</div>
-        <div v-else class="status-legend">
-          <div
-            v-for="s in statuses"
-            :key="s.Value"
-            class="legend-item"
-          >
+        <div v-else-if="!showStatusManager" class="status-legend">
+          <div v-for="s in statuses" :key="s.Value" class="legend-item">
             <span class="legend-dot" :style="{ backgroundColor: s.color }"></span>
             <span class="legend-name">{{ s.Name }}</span>
           </div>
+        </div>
+        <div v-else class="status-manager">
+          <div v-for="s in statuses" :key="s.Value" class="status-manager-row">
+            <input
+              type="color"
+              :value="s.color"
+              class="status-color-input"
+              :title="`${s.Value} 顏色`"
+              @change="onStatusColorChange(s.Value, ($event.target as HTMLInputElement).value)"
+            />
+            <input
+              type="text"
+              :value="s.Name"
+              class="status-name-input"
+              :placeholder="s.Value"
+              @blur="onStatusNameChange(s.Value, ($event.target as HTMLInputElement).value)"
+              @keydown.enter="($event.target as HTMLInputElement).blur()"
+            />
+          </div>
+          <button class="btn-reset-overrides" @click="resetAllStatusOverrides">
+            重設為預設
+          </button>
         </div>
       </div>
 
@@ -177,7 +200,11 @@ import type { ResourceType } from '@/api/resource'
 import { listAssignments, updateAssignment } from '@/api/assignment'
 import { toIdempiereDateTime } from '@/api/utils'
 import { parseDesc } from '@/composables/useAppointmentDesc'
-import { useAppointmentStatuses, isTerminalStatus } from '@/composables/useAppointmentStatuses'
+import {
+  useAppointmentStatuses, isTerminalStatus,
+  saveStatusColorOverride, saveStatusNameOverride, clearStatusOverrides,
+  clearAppointmentStatusCache,
+} from '@/composables/useAppointmentStatuses'
 import { useAppointmentServices } from '@/composables/useAppointmentServices'
 import { useToast } from '@/composables/useToast'
 import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
@@ -194,6 +221,25 @@ const { load: loadColors, resolveAssignmentColor, setResourceColor, clearResourc
 // ─── Appointment statuses ─────────────────────────────────────────────────────
 const { statuses, load: loadStatuses, getStatusColor } = useAppointmentStatuses()
 const statusesLoading = ref(true)
+const showStatusManager = ref(false)
+
+function onStatusColorChange(value: string, color: string) {
+  saveStatusColorOverride(value, color)
+  clearAppointmentStatusCache()
+  void loadStatuses()
+}
+
+function onStatusNameChange(value: string, name: string) {
+  saveStatusNameOverride(value, name.trim() || null)
+  clearAppointmentStatusCache()
+  void loadStatuses()
+}
+
+function resetAllStatusOverrides() {
+  clearStatusOverrides()
+  clearAppointmentStatusCache()
+  void loadStatuses()
+}
 
 // ─── Appointment services (service preset filter) ─────────────────────────────
 const { services: appointmentServices, load: loadServices } = useAppointmentServices()
@@ -814,6 +860,58 @@ onBeforeUnmount(() => flushPendingSave())
 
 .legend-name {
   white-space: nowrap;
+}
+
+.status-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.status-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.status-color-input {
+  width: 28px;
+  height: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.status-name-input {
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.status-name-input:focus {
+  outline: none;
+  border-color: #94a3b8;
+}
+
+.btn-reset-overrides {
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.btn-reset-overrides:hover {
+  color: #64748b;
 }
 
 /* Show cancelled toggle */

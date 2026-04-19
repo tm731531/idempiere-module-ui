@@ -63,13 +63,13 @@ export async function loadAppointmentStatuses(): Promise<AppointmentStatus[]> {
       const refRecords: any[] = refResp.data?.records ?? []
       if (refRecords.length === 0) {
         // AD_Reference not configured — use defaults silently
-        cached = DEFAULT_STATUSES
+        cached = applyOverrides(DEFAULT_STATUSES)
         return cached
       }
 
       const refId: number = refRecords[0]!.id ?? refRecords[0]!.AD_Reference_ID
       if (!refId) {
-        cached = DEFAULT_STATUSES
+        cached = applyOverrides(DEFAULT_STATUSES)
         return cached
       }
 
@@ -84,21 +84,21 @@ export async function loadAppointmentStatuses(): Promise<AppointmentStatus[]> {
       })
       const listRecords: any[] = listResp.data?.records ?? []
       if (listRecords.length === 0) {
-        cached = DEFAULT_STATUSES
+        cached = applyOverrides(DEFAULT_STATUSES)
         return cached
       }
 
-      cached = listRecords.map((r) => ({
+      cached = applyOverrides(listRecords.map((r) => ({
         Value: String(r.Value ?? ''),
         Name: String(r.Name ?? r.Value ?? ''),
         // Description field stores the hex color (e.g. "#FBBF24")
         color: isHexColor(r.Description) ? r.Description : (getFallbackColor(r.Value) ?? '#94A3B8'),
-      }))
+      })))
 
       return cached
     } catch {
       // Network error or permission issue — fall back to defaults
-      cached = DEFAULT_STATUSES
+      cached = applyOverrides(DEFAULT_STATUSES)
       return cached
     } finally {
       loadingPromise = null
@@ -137,10 +137,63 @@ export function isTerminalStatus(value: string): boolean {
   return TERMINAL_CODES.has(value)
 }
 
-/** Reset the cache (e.g. on logout). */
+/** Reset the cache (e.g. on logout). Note: does NOT clear localStorage overrides (user preference). */
 export function clearAppointmentStatusCache(): void {
   cached = null
   loadingPromise = null
+}
+
+// ─── localStorage override support ────────────────────────────────────────────
+
+const OVERRIDE_KEY = 'appointmentStatusOverrides'
+interface StatusOverride { name?: string; color?: string }
+type OverrideMap = Record<string, StatusOverride>
+
+function readOverrides(): OverrideMap {
+  try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) ?? '{}') }
+  catch { return {} }
+}
+
+function writeOverrides(map: OverrideMap): void {
+  localStorage.setItem(OVERRIDE_KEY, JSON.stringify(map))
+}
+
+export function applyOverrides(statuses: AppointmentStatus[]): AppointmentStatus[] {
+  const overrides = readOverrides()
+  return statuses.map(s => {
+    const ov = overrides[s.Value]
+    if (!ov) return s
+    return { ...s, Name: ov.name ?? s.Name, color: ov.color ?? s.color }
+  })
+}
+
+/** Save a color override for a status (null = remove override). */
+export function saveStatusColorOverride(value: string, color: string | null): void {
+  const map = readOverrides()
+  if (!map[value]) map[value] = {}
+  if (color === null) delete map[value]!.color
+  else map[value]!.color = color
+  writeOverrides(map)
+  if (cached) cached = applyOverrides(cached)
+}
+
+/** Save a name override for a status (null = remove override). */
+export function saveStatusNameOverride(value: string, name: string | null): void {
+  const map = readOverrides()
+  if (!map[value]) map[value] = {}
+  if (name === null) delete map[value]!.name
+  else map[value]!.name = name
+  writeOverrides(map)
+  if (cached) cached = applyOverrides(cached)
+}
+
+/** Remove all localStorage overrides. */
+export function clearStatusOverrides(): void {
+  localStorage.removeItem(OVERRIDE_KEY)
+  if (cached) {
+    // Re-apply with empty overrides (i.e. remove all overrides from cached)
+    clearAppointmentStatusCache()
+  }
 }
 
 /**

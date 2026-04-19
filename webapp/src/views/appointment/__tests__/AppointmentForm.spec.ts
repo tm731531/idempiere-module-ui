@@ -9,6 +9,7 @@ vi.mock('@/api/assignment', () => ({
   createMultipleAssignments: vi.fn(),
   updateAssignment: vi.fn(),
   deleteAssignment: vi.fn(),
+  cancelAssignment: vi.fn(),
   checkConflict: vi.fn(),
 }))
 vi.mock('@/api/resource', () => ({
@@ -16,6 +17,36 @@ vi.mock('@/api/resource', () => ({
 }))
 vi.mock('@/api/lookup', () => ({
   lookupOrgWarehouse: vi.fn(),
+}))
+vi.mock('@/api/bpartner', () => ({
+  searchCustomers: vi.fn().mockResolvedValue([]),
+  getCustomerDetail: vi.fn().mockResolvedValue(null),
+}))
+
+// useAppointmentStatuses composable — stub to avoid API calls in tests
+vi.mock('@/composables/useAppointmentStatuses', () => ({
+  useAppointmentStatuses: () => ({
+    statuses: { value: [
+      { Value: 'SCH', Name: '預約中', color: '#FBBF24' },
+      { Value: 'CFM', Name: '已確認', color: '#3B82F6' },
+    ] },
+    load: vi.fn().mockResolvedValue(undefined),
+    getStatusColor: vi.fn().mockReturnValue('#FBBF24'),
+    getStatusName: vi.fn().mockReturnValue('預約中'),
+    isTerminalStatus: vi.fn().mockReturnValue(false),
+    clearCache: vi.fn(),
+  }),
+  isTerminalStatus: vi.fn().mockReturnValue(false),
+  loadAppointmentStatuses: vi.fn().mockResolvedValue([]),
+  getStatusColor: vi.fn().mockReturnValue('#FBBF24'),
+  clearAppointmentStatusCache: vi.fn(),
+}))
+
+// useAppointmentDesc composable — stub
+vi.mock('@/composables/useAppointmentDesc', () => ({
+  parseDesc: vi.fn().mockReturnValue({}),
+  serializeDesc: vi.fn().mockReturnValue('{}'),
+  buildName: vi.fn().mockReturnValue(''),
 }))
 vi.mock('@/api/utils', () => ({
   parseIdempiereDateTime: (s: string) => new Date(s),
@@ -97,7 +128,8 @@ describe('AppointmentForm — single resource mode (default)', () => {
 
   it('renders single-resource selector by default', () => {
     const wrapper = mountForm()
-    expect(wrapper.find('select.form-input').exists()).toBe(true)
+    // Single-resource mode: resource <select> is inside .selector-row
+    expect(wrapper.find('.selector-row select').exists()).toBe(true)
     expect(wrapper.find('.resource-checklist').exists()).toBe(false)
   })
 
@@ -129,7 +161,10 @@ describe('AppointmentForm — multi-resource mode', () => {
     await switchToMultiMode(wrapper)
 
     expect(wrapper.find('.resource-checklist').exists()).toBe(true)
-    expect(wrapper.find('select.form-input').exists()).toBe(false)
+    // The single-resource <select> (resource selector) should be gone in multi-mode.
+    // Note: the status <select> is still present; use .selector-row select to target
+    // the resource selector specifically.
+    expect(wrapper.find('.selector-row select').exists()).toBe(false)
   })
 
   it('renders one checkbox per resource', async () => {
@@ -289,8 +324,8 @@ describe('AppointmentForm — createMultipleAssignments helper', () => {
     vi.mocked(createAssignment).mockResolvedValue({ id: 99 })
 
     const wrapper = mountForm()
-    // Stay in single mode, select resource via the select
-    const select = wrapper.find('select.form-input')
+    // Stay in single mode, select resource via the resource selector (inside .selector-row)
+    const select = wrapper.find('.selector-row select')
     await select.setValue('101')
 
     const timeInputs = wrapper.findAll('input[type="datetime-local"]')

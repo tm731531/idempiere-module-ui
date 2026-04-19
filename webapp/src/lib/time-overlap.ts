@@ -1,4 +1,6 @@
 import { parseIdempiereDateTime } from '@/api/utils'
+import { parseDesc } from '@/composables/useAppointmentDesc'
+import { isTerminalStatus } from '@/composables/useAppointmentStatuses'
 
 export interface TimeRange {
   start: Date
@@ -34,6 +36,12 @@ export function checkConflictLocal(
   for (const appt of existingAppts) {
     // 排除指定的預約（編輯自己時）
     if (excludeApptId && appt.id === excludeApptId) {
+      continue
+    }
+
+    // 排除已取消或未到的預約（CXL / ABS）— 已釋放時段
+    const descStatus = parseDesc(appt.Description)?.status ?? ''
+    if (isTerminalStatus(descStatus)) {
       continue
     }
 

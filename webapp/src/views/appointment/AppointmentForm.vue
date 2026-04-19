@@ -119,16 +119,41 @@
         />
       </div>
 
+      <!-- Status dropdown (loaded from AD_Reference) -->
+      <div class="form-group">
+        <label class="form-label">狀態</label>
+        <select v-model="form.status" class="form-input">
+          <option v-for="s in statuses" :key="s.Value" :value="s.Value">
+            {{ s.Name }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Customer BPartner search -->
       <div class="form-group">
         <label class="form-label">客戶</label>
-        <SearchSelector
-          v-model="form.bpartnerId"
-          table-name="C_BPartner"
-          display-field="Name"
-          search-field="Name"
-          filter="IsCustomer eq true"
-          :initial-label="form.bpartnerLabel"
-        />
+        <div v-if="selectedBp" class="bp-selected">
+          <span class="bp-selected-name">{{ selectedBp.Name }}</span>
+          <button type="button" class="bp-clear-btn" @click="clearBp">✕</button>
+        </div>
+        <div v-else class="bp-search-wrapper">
+          <input
+            v-model="bpSearch"
+            type="text"
+            class="form-input"
+            placeholder="輸入2個字以上搜尋客戶..."
+            @input="handleBpSearch"
+            autocomplete="off"
+          />
+          <div v-if="bpResults.length > 0" class="bp-dropdown">
+            <div
+              v-for="bp in bpResults"
+              :key="bp.id"
+              class="bp-dropdown-item"
+              @click="selectBp(bp)"
+            >{{ bp.Name }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- Color override (optional per-assignment color) -->
@@ -183,13 +208,13 @@
         <button
           v-if="editingAppt"
           class="btn btn-danger"
-          :disabled="saving"
-          @click="handleDelete"
+          :disabled="saving || cancelling"
+          @click="handleCancelAppointment"
         >
-          {{ deleting ? '刪除中...' : '刪除' }}
+          {{ cancelling ? '取消中...' : '取消預約' }}
         </button>
         <div class="actions-right">
-          <button class="btn btn-secondary" @click="handleCancel">取消</button>
+          <button class="btn btn-secondary" @click="handleCancel">關閉</button>
           <button class="btn btn-primary" :disabled="saving || (multiMode && selectedResourceIds.length === 0)" @click="handleSave">
             {{ saving ? '儲存中...' : '儲存' }}
           </button>
@@ -203,15 +228,18 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { listAssignments, createAssignment, createMultipleAssignments, updateAssignment, deleteAssignment, checkConflict } from '@/api/assignment'
+import { listAssignments, createAssignment, createMultipleAssignments, updateAssignment, cancelAssignment, checkConflict } from '@/api/assignment'
 import { listResources, createResource } from '@/api/resource'
+import { searchCustomers, getCustomerDetail } from '@/api/bpartner'
 import { lookupOrgWarehouse } from '@/api/lookup'
 import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
-import SearchSelector from '@/components/SearchSelector.vue'
 import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
 import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
+import { useAppointmentStatuses } from '@/composables/useAppointmentStatuses'
+import { parseDesc, serializeDesc, buildName } from '@/composables/useAppointmentDesc'
 
 const { setAssignmentColorOverride } = useAssignmentColors()
+const { statuses, load: loadStatuses } = useAppointmentStatuses()
 
 const router = useRouter()
 const route = useRoute()
@@ -242,10 +270,24 @@ const form = reactive({
   bpartnerId: null as number | null,
   bpartnerLabel: '',
   colorOverride: null as string | null,
+  status: 'SCH',    // appointment status value
+  service: '',       // service / treatment name (stored in Description JSON)
+  notes: '',         // notes (stored in Description JSON)
 })
+
+// The raw Description string from the existing assignment (edit mode only)
+// Used for merging when serializing updates
+const existingDescRaw = ref('')
+
+// BPartner search state
+const bpSearch = ref('')
+const bpResults = ref<{ id: number; Name: string }[]>([])
+const selectedBp = ref<{ id: number; Name: string } | null>(null)
+let bpDebounce: ReturnType<typeof setTimeout> | null = null
 
 const saving = ref(false)
 const deleting = ref(false)
+const cancelling = ref(false)
 const errorMsg = ref('')
 
 // When used as a standalone page (/appointment/new), props.resources is [] because
@@ -313,6 +355,44 @@ async function handleCreateResource() {
   }
 }
 
+// ─── BPartner search ──────────────────────────────────────────────────────────
+
+function handleBpSearch() {
+  if (bpDebounce !== null) clearTimeout(bpDebounce)
+  if (bpSearch.value.trim().length < 2) {
+    bpResults.value = []
+    return
+  }
+  bpDebounce = setTimeout(async () => {
+    bpDebounce = null
+    try {
+      const results = await searchCustomers(bpSearch.value.trim())
+      bpResults.value = results.map((r: any) => ({
+        id: r.id ?? r.C_BPartner_ID,
+        Name: r.Name ?? r.identifier ?? '',
+      }))
+    } catch {
+      bpResults.value = []
+    }
+  }, 300)
+}
+
+function selectBp(bp: { id: number; Name: string }) {
+  selectedBp.value = bp
+  form.bpartnerId = bp.id
+  bpSearch.value = ''
+  bpResults.value = []
+}
+
+function clearBp() {
+  selectedBp.value = null
+  form.bpartnerId = null
+  bpSearch.value = ''
+  bpResults.value = []
+}
+
+// ─── Conflict detection ───────────────────────────────────────────────────────
+
 // Recheck per-resource conflicts whenever selected resources or time window change.
 // Debounced (300 ms) to prevent parallel API calls when the user clicks multiple
 // resources rapidly. A sequence counter discards stale responses.
@@ -374,6 +454,9 @@ function toDatetimeLocal(d: Date): string {
 }
 
 onMounted(async () => {
+  // Load statuses (non-blocking)
+  void loadStatuses()
+
   // Standalone page mode: load resources ourselves (CalendarView provides them in modal mode)
   if (!props.resources?.length) {
     try {
@@ -384,8 +467,6 @@ onMounted(async () => {
   }
 
   // Standalone page mode: load assignments for the next 30 days (covers most scheduling).
-  // CalendarView already passes the visible date range's assignments via props; in standalone
-  // mode props.existingAssignments is always [] so we must fetch ourselves.
   if (!props.existingAssignments?.length) {
     try {
       const today = new Date()
@@ -394,7 +475,7 @@ onMounted(async () => {
       future.setDate(future.getDate() + 30)
       localAssignments.value = await listAssignments(today, future)
     } catch {
-      // non-fatal — conflict detection will miss existing appointments but form still usable
+      // non-fatal
     }
   }
 
@@ -406,20 +487,37 @@ onMounted(async () => {
     form.dateFrom = toDatetimeLocal(parseIdempiereDateTime(a.AssignDateFrom))
     form.dateTo = toDatetimeLocal(parseIdempiereDateTime(a.AssignDateTo))
     form.name = a.Name || ''
-    form.description = a.Description || ''
+    existingDescRaw.value = a.Description || ''
+    // Parse Description JSON to fill status / service / notes
+    const desc = parseDesc(existingDescRaw.value)
+    form.status = desc.status ?? 'SCH'
+    form.service = desc.service ?? ''
+    form.notes = desc.notes ?? ''
+    // description field now holds freeform notes from the old format OR just preserved as-is
+    form.description = existingDescRaw.value
+
     // Pre-fill color override from composable cache
     const assignId = a.id ?? a.S_ResourceAssignment_ID
     if (assignId) {
       const { assignmentColors } = useAssignmentColors()
       form.colorOverride = assignmentColors.value[assignId] ?? null
     }
-    // Pre-fill customer if present
-    if (a.C_BPartner_ID) {
+
+    // Pre-fill customer from Description JSON first, then from C_BPartner_ID FK
+    if (desc.bpartner_id && desc.bpartner_name) {
+      selectedBp.value = { id: desc.bpartner_id, Name: desc.bpartner_name }
+      form.bpartnerId = desc.bpartner_id
+    } else if (a.C_BPartner_ID) {
       if (typeof a.C_BPartner_ID === 'object') {
-        form.bpartnerId = a.C_BPartner_ID.id ?? null
-        form.bpartnerLabel = a.C_BPartner_ID.identifier || a.C_BPartner_ID.Name || ''
-      } else {
+        const bpId = a.C_BPartner_ID.id ?? null
+        const bpName = a.C_BPartner_ID.identifier || a.C_BPartner_ID.Name || ''
+        if (bpId) {
+          selectedBp.value = { id: bpId, Name: bpName }
+          form.bpartnerId = bpId
+        }
+      } else if (typeof a.C_BPartner_ID === 'number') {
         form.bpartnerId = a.C_BPartner_ID
+        // Name will be resolved below if we don't have it
       }
     }
   } else {
@@ -442,7 +540,15 @@ onMounted(async () => {
       const parsed = Number(customerIdParam)
       if (!Number.isNaN(parsed) && parsed > 0) {
         form.bpartnerId = parsed
-        // bpartnerLabel will be resolved by SearchSelector via initialLabel/resolveCurrentLabel
+        // Try to resolve the name for display in the selectedBp field
+        try {
+          const found = await getCustomerDetail(parsed)
+          if (found) {
+            selectedBp.value = { id: parsed, Name: found.Name ?? found.identifier ?? `#${parsed}` }
+          }
+        } catch {
+          // Non-fatal: form still works, just won't show the name
+        }
       }
     }
   }
@@ -503,6 +609,27 @@ function checkConflictLocal(): boolean {
   })
 }
 
+function buildDescPayload(): string {
+  const existing = parseDesc(existingDescRaw.value)
+  const desc = {
+    ...existing,
+    status: form.status || 'SCH',
+    bpartner_id: selectedBp.value?.id ?? form.bpartnerId ?? null,
+    bpartner_name: selectedBp.value?.Name ?? '',
+    service: form.service.trim(),
+    notes: form.notes.trim(),
+  }
+  return serializeDesc(desc)
+}
+
+function buildNamePayload(): string {
+  const bpName = selectedBp.value?.Name ?? ''
+  const svc = form.service.trim()
+  const combined = buildName(bpName, svc)
+  // Fall back to the manually entered name if buildName produces nothing
+  return combined || form.name.trim()
+}
+
 async function handleSave() {
   if (!validate()) return
 
@@ -518,19 +645,17 @@ async function handleSave() {
   }
 
   try {
+    const descStr = buildDescPayload()
+    const nameStr = buildNamePayload()
+
     if (props.editingAppt) {
       // Edit mode: always single-resource
       // All time/resource columns are IsUpdateable=N in iDempiere AD_Column:
       // S_Resource_ID, AssignDateFrom, AssignDateTo, Qty.
       // Only Name and Description accept changes.
       await updateAssignment(props.editingAppt.id, {
-        Name: form.name.trim(),
-        Description: form.description.trim() || undefined,
-        // S_Resource_ID omitted — IsUpdateable=N
-        // AssignDateFrom omitted — IsUpdateable=N
-        // AssignDateTo omitted — IsUpdateable=N
-        // Qty omitted — IsUpdateable=N
-        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
+        Name: nameStr || form.name.trim(),
+        Description: descStr,
       })
       // Persist color override (non-blocking — failure does not block save)
       void setAssignmentColorOverride(props.editingAppt.id, form.colorOverride)
@@ -539,10 +664,9 @@ async function handleSave() {
       const sharedPayload = {
         AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
         AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
-        Name: form.name.trim(),
-        Description: form.description.trim() || undefined,
+        Name: nameStr || form.name.trim(),
+        Description: descStr,
         AD_Org_ID: orgId,
-        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
       }
       const results = await createMultipleAssignments(sharedPayload, selectedResourceIds.value)
       const successCount = results.filter((r) => r.result !== undefined).length
@@ -559,7 +683,6 @@ async function handleSave() {
 
       saving.value = false
       if (failCount === 0) {
-        // All succeeded — close as normal
         if (linkedConsultationId.value) {
           router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
         } else {
@@ -579,10 +702,9 @@ async function handleSave() {
         S_Resource_ID: form.resourceId,
         AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
         AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
-        Name: form.name.trim(),
-        Description: form.description.trim() || undefined,
+        Name: nameStr || form.name.trim(),
+        Description: descStr,
         AD_Org_ID: orgId,
-        // C_BPartner_ID omitted — not a standard S_ResourceAssignment column
       })
       // Persist color override for newly-created assignment (non-blocking)
       const newId = newAssignment?.id ?? newAssignment?.S_ResourceAssignment_ID
@@ -593,7 +715,6 @@ async function handleSave() {
 
     saving.value = false
     if (linkedConsultationId.value) {
-      // Standalone mode: navigate back to the originating consultation
       router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
     } else {
       emit('saved')
@@ -609,16 +730,22 @@ async function handleSave() {
   }
 }
 
-async function handleDelete() {
+/**
+ * Cancel appointment: change status to CXL in Description JSON.
+ * The record is kept in the database; the time slot is released.
+ */
+async function handleCancelAppointment() {
   if (!props.editingAppt) return
-  deleting.value = true
+  const confirmed = confirm(`確認取消「${props.editingAppt.Name}」? 紀錄將保留但時段會釋放。`)
+  if (!confirmed) return
+  cancelling.value = true
   try {
-    await deleteAssignment(props.editingAppt.id)
+    await cancelAssignment(props.editingAppt.id, existingDescRaw.value)
     emit('saved')
   } catch {
-    errorMsg.value = '刪除失敗，請稍後再試'
+    errorMsg.value = '取消失敗，請稍後再試'
   } finally {
-    deleting.value = false
+    cancelling.value = false
   }
 }
 </script>
@@ -939,6 +1066,76 @@ async function handleDelete() {
 }
 
 .btn-clear-color:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+/* BPartner search */
+.bp-search-wrapper {
+  position: relative;
+}
+
+.bp-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 200;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.bp-dropdown-item {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bp-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.bp-dropdown-item:hover {
+  background: #f8fafc;
+  color: var(--color-primary);
+}
+
+.bp-selected {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.bp-selected-name {
+  flex: 1;
+  font-size: 0.9375rem;
+  color: #166534;
+  font-weight: 500;
+}
+
+.bp-clear-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.bp-clear-btn:hover {
   color: #ef4444;
   background: #fee2e2;
 }

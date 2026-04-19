@@ -14,11 +14,17 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.20",
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/list": "^6.1.20",
+    "@fullcalendar/timegrid": "^6.1.20",
+    "@fullcalendar/vue3": "^6.1.20",
+    "@primevue/themes": "^4.5.4",
     "axios": "^1.13.4",
     "browser-image-compression": "^2.0.2",
     "pinia": "^3.0.4",
     "primevue": "^4.5.4",
-    "@primevue/themes": "^4.5.4",
     "vue": "^3.5.24",
     "vue-router": "^4.6.4"
   },

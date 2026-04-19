@@ -1,5 +1,7 @@
 import { apiClient } from './client'
 import { toIdempiereDateTime } from './utils'
+import { parseDesc, serializeDesc } from '@/composables/useAppointmentDesc'
+import { isTerminalStatus } from '@/composables/useAppointmentStatuses'
 
 export interface AssignmentData {
   S_Resource_ID: number
@@ -54,6 +56,22 @@ export async function deleteAssignment(id: number): Promise<void> {
 }
 
 /**
+ * Cancel an assignment by setting its status to CXL in Description JSON.
+ * The record is retained in the database; only the status changes.
+ * Conflict detection will exclude CXL/ABS records after this call.
+ *
+ * @param id - S_ResourceAssignment_ID
+ * @param currentDesc - current raw Description string (will be merged)
+ */
+export async function cancelAssignment(id: number, currentDesc: string): Promise<void> {
+  const desc = parseDesc(currentDesc)
+  desc.status = 'CXL'
+  await apiClient.put(`/api/v1/models/S_ResourceAssignment/${id}`, {
+    Description: serializeDesc(desc),
+  })
+}
+
+/**
  * List assignments for a specific customer.
  * S_ResourceAssignment has no C_BPartner_ID column in standard iDempiere —
  * filter by Name containing the customer ID as a fallback, or return empty.
@@ -103,14 +121,22 @@ export async function checkConflict(
   dateTo: Date,
   excludeId?: number,
 ): Promise<boolean> {
-  // Check for overlapping assignments for the same resource
+  // Check for overlapping assignments for the same resource.
+  // Fetch a small batch so we can filter terminal statuses (CXL/ABS) client-side
+  // — iDempiere OData cannot filter on JSON embedded in the Description field.
   const fromStr = toIdempiereDateTime(dateFrom)
   const toStr = toIdempiereDateTime(dateTo)
   let filter = `S_Resource_ID eq ${resourceId} and AssignDateFrom lt '${toStr}' and AssignDateTo gt '${fromStr}'`
   if (excludeId) filter += ` and S_ResourceAssignment_ID neq ${excludeId}`
 
   const resp = await apiClient.get('/api/v1/models/S_ResourceAssignment', {
-    params: { '$filter': filter, '$top': '1' },
+    params: { '$filter': filter, '$select': 'Description', '$top': '50' },
   })
-  return (resp.data.records || []).length > 0
+  const records: any[] = resp.data.records || []
+  // Exclude terminal-status records (CXL / ABS) from conflict consideration
+  const active = records.filter((r) => {
+    const status = parseDesc(r.Description)?.status ?? ''
+    return !isTerminalStatus(status)
+  })
+  return active.length > 0
 }

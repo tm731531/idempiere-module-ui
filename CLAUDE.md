@@ -1,6 +1,6 @@
 # iDempiere Aesthetics UI (idempiere-module-ui)
 
-## Domain Brain: idempiere-rest-api, idempiere-po-model, design-principles
+## Domain Brain: idempiere-rest-api, idempiere-po-model, design-principles, vue-vitest-testing, vue-ux-clinic
 ## Domain Skill: idempiere-rest-resource, idempiere-mapped-model-factory-service
 
 ## Project Overview

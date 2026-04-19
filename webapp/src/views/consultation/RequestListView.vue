@@ -63,6 +63,7 @@
           @click="switchTab(tab.key)"
         >
           {{ tab.label }}
+          <span v-if="tabCounts[tab.key] > 0" class="tab-count-badge">{{ tabCounts[tab.key] }}</span>
         </button>
       </div>
 
@@ -165,6 +166,15 @@ const operatorNames = ref<Record<number, string>>({})
 const loading = ref(false)
 const dashboardLoading = ref(false)
 
+// Count per status tab — drives count badges on filter tabs
+const tabCounts = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const tab of tabs.value) {
+    counts[tab.key] = filterRequestsByStatus(allRequests.value, tab.key).length
+  }
+  return counts
+})
+
 // Count of unassigned requests — drives the badge on the "待分配" tab button
 const unassignedCount = computed(() =>
   allRequests.value.filter(r => {
@@ -249,10 +259,12 @@ async function loadRequests() {
   loading.value = true
   try {
     const allReqs = await listRequests()
+    allRequests.value = allReqs
     const filtered = filterRequestsByStatus(allReqs, activeTab.value)
     requests.value = sortRequests(filtered)
   } catch {
     requests.value = []
+    allRequests.value = []
   } finally {
     loading.value = false
   }
@@ -450,6 +462,24 @@ onMounted(async () => {
   border-radius: 999px;
   font-size: 0.6875rem;
   font-weight: 700;
+}
+
+.tab-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+.tab-btn.active .tab-count-badge {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .list-view,

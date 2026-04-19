@@ -12,7 +12,10 @@
 
       <!-- Consultation link banner (shown when navigated from consultation edit page) -->
       <div v-if="linkedConsultationId" class="consultation-banner">
-        關聯諮詢 #{{ linkedConsultationId }}
+        <router-link
+          :to="{ name: 'consultation-edit', params: { id: linkedConsultationId } }"
+          class="consultation-banner-link"
+        >← 返回諮詢 #{{ linkedConsultationId }}</router-link>
       </div>
 
       <!-- Mode toggle (create mode only) -->
@@ -31,11 +34,12 @@
             @click="multiMode = true"
           >多資源同時</button>
         </div>
+        <p v-if="multiMode" class="mode-hint">同時為多位醫師或診間建立同一筆預約</p>
       </div>
 
       <!-- Single resource selector -->
       <div v-if="!multiMode" class="form-group">
-        <label class="form-label">服務人員</label>
+        <label class="form-label">服務人員 <span class="required-mark">*</span></label>
         <div class="selector-row">
           <select v-model="form.resourceId" class="form-input">
             <option :value="0" disabled>請選擇</option>
@@ -87,7 +91,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">開始時間</label>
+        <label class="form-label">開始時間 <span class="required-mark">*</span></label>
         <input
           v-model="form.dateFrom"
           type="datetime-local"
@@ -96,7 +100,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">結束時間</label>
+        <label class="form-label">結束時間 <span class="required-mark">*</span></label>
         <input
           v-model="form.dateTo"
           type="datetime-local"
@@ -105,7 +109,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">名稱</label>
+        <label class="form-label">名稱 <span class="required-mark">*</span></label>
         <input
           v-model="form.name"
           type="text"
@@ -180,6 +184,9 @@
               </div>
             </div>
           </div>
+          <div v-else-if="!bpSearching && bpSearch.trim().length >= 2" class="bp-no-result">
+            未找到符合的客戶
+          </div>
         </div>
       </div>
 
@@ -241,6 +248,11 @@
           {{ cancelling ? '取消中...' : '取消預約' }}
         </button>
 
+        <!-- Billing hint: shown in edit mode when status is not DON -->
+        <p v-if="editingAppt && form.status !== 'DON'" class="billing-hint">
+          將狀態設為「完成」後，可建立銷售訂單
+        </p>
+
         <!-- Order creation: shown only in edit mode when status = DON -->
         <template v-if="editingAppt && form.status === 'DON'">
           <button
@@ -256,10 +268,10 @@
             type="button"
             class="btn btn-order"
             :disabled="creatingOrder || (!selectedBp && !form.bpartnerId)"
-            :title="(!selectedBp && !form.bpartnerId) ? '請先選擇客戶' : ''"
+            :title="(!selectedBp && !form.bpartnerId) ? '請先選擇客戶' : '點擊建立銷售訂單，可在訂單管理查看明細'"
             @click="handleCreateOrder"
           >
-            {{ creatingOrder ? '建立中...' : '建立帳單' }}
+            {{ creatingOrder ? '建立中...' : '建立訂單' }}
           </button>
         </template>
 
@@ -338,6 +350,7 @@ const existingDescRaw = ref('')
 // BPartner search state
 const bpSearch = ref('')
 const bpResults = ref<{ id: number; Name: string; Phone?: string; EMail?: string }[]>([])
+const bpSearching = ref(false)
 const selectedBp = ref<{ id: number; Name: string } | null>(null)
 let bpDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -419,8 +432,10 @@ function handleBpSearch() {
   if (bpDebounce !== null) clearTimeout(bpDebounce)
   if (bpSearch.value.trim().length < 2) {
     bpResults.value = []
+    bpSearching.value = false
     return
   }
+  bpSearching.value = true
   bpDebounce = setTimeout(async () => {
     bpDebounce = null
     try {
@@ -434,6 +449,8 @@ function handleBpSearch() {
     } catch {
       bpResults.value = []
       errorMsg.value = '客戶搜尋失敗，請稍後再試'
+    } finally {
+      bpSearching.value = false
     }
   }, 300)
 }
@@ -948,6 +965,47 @@ async function handleCancelAppointment() {
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   margin-bottom: 0.75rem;
+}
+
+.consultation-banner-link {
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.consultation-banner-link:hover {
+  text-decoration: underline;
+}
+
+.required-mark {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.mode-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.billing-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #6b7280);
+  padding: 0.4rem 0.6rem;
+  background: #f8fafc;
+  border-radius: 4px;
+  border-left: 3px solid #cbd5e1;
+}
+
+.bp-no-result {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #6b7280);
+  padding: 0.5rem 0.75rem;
+  background: #f9fafb;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 6px;
+  margin-top: 4px;
 }
 
 .form-group {

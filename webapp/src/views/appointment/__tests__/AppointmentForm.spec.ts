@@ -392,7 +392,7 @@ describe('AppointmentForm — query-param prefill', () => {
 
     const banner = wrapper.find('.consultation-banner')
     expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('關聯諮詢 #42')
+    expect(banner.text()).toContain('42')
   })
 
   it('does NOT show consultation banner when no consultationId param', async () => {
@@ -490,7 +490,7 @@ describe('AppointmentForm — handleCreateOrder adds order line', () => {
     })
     await flushPromises()
 
-    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立帳單'))
+    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立訂單'))
     expect(orderBtn).toBeTruthy()
     await orderBtn!.trigger('click')
     await flushPromises()
@@ -526,7 +526,7 @@ describe('AppointmentForm — handleCreateOrder adds order line', () => {
     })
     await flushPromises()
 
-    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立帳單'))
+    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立訂單'))
     await orderBtn!.trigger('click')
     await flushPromises()
 

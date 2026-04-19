@@ -37,24 +37,31 @@
           <p>尚未設定任何資源</p>
           <p>請至管理員設定新增資源</p>
         </div>
-        <div v-else class="resource-chips">
-          <label
-            v-for="res in resources"
-            :key="res.id"
-            class="resource-chip"
-            :class="{ selected: selectedResourceIds.has(res.id) }"
-            @click.prevent="toggleResource(res.id)"
-            @contextmenu.prevent="openChipColorPicker($event, res.id)"
-            :title="`${res.Name}（右鍵可更改顏色）`"
-          >
-            <span class="chip-dot" :style="{ backgroundColor: getResourceColor(res.id) }"></span>
-            <span class="chip-name">{{ res.Name }}</span>
-            <button
-              class="chip-deactivate"
-              title="停用此資源"
-              @click.stop="handleDeactivateResource(res.id, res.Name)"
-            >×</button>
-          </label>
+        <div v-else class="resource-groups">
+          <div v-for="group in groupedResources" :key="group.typeId ?? 'ungrouped'" class="resource-group">
+            <div v-if="groupedResources.length > 1 && group.typeName" class="resource-group-header">
+              {{ group.typeName }}
+            </div>
+            <div class="resource-chips">
+              <label
+                v-for="res in group.resources"
+                :key="res.id"
+                class="resource-chip"
+                :class="{ selected: selectedResourceIds.has(res.id) }"
+                @click.prevent="toggleResource(res.id)"
+                @contextmenu.prevent="openChipColorPicker($event, res.id)"
+                :title="`${res.Name}（右鍵可更改顏色）`"
+              >
+                <span class="chip-dot" :style="{ backgroundColor: getResourceColor(res.id) }"></span>
+                <span class="chip-name">{{ res.Name }}</span>
+                <button
+                  class="chip-deactivate"
+                  title="停用此資源"
+                  @click.stop="handleDeactivateResource(res.id, res.Name)"
+                >×</button>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -219,6 +226,28 @@ const selectedResourceIds = reactive(new Set<number>())
 const allSelected = computed(() =>
   resources.value.length > 0 && resources.value.every(r => selectedResourceIds.has(r.id))
 )
+
+const groupedResources = computed(() => {
+  if (resourceTypes.value.length === 0) {
+    return [{ typeId: null as number | null, typeName: null as string | null, resources: resources.value }]
+  }
+  const typeMap = new Map<number, { typeId: number; typeName: string; resources: typeof resources.value }>()
+  const ungrouped: typeof resources.value = []
+  for (const r of resources.value) {
+    if (r.resourceTypeId === null) {
+      ungrouped.push(r)
+    } else {
+      if (!typeMap.has(r.resourceTypeId)) {
+        const typeName = resourceTypes.value.find(t => t.id === r.resourceTypeId)?.Name ?? '其他'
+        typeMap.set(r.resourceTypeId, { typeId: r.resourceTypeId, typeName, resources: [] })
+      }
+      typeMap.get(r.resourceTypeId)!.resources.push(r)
+    }
+  }
+  const groups: { typeId: number | null; typeName: string | null; resources: typeof resources.value }[] = [...typeMap.values()]
+  if (ungrouped.length > 0) groups.push({ typeId: null, typeName: groups.length > 0 ? '其他' : null, resources: ungrouped })
+  return groups
+})
 
 function toggleResource(id: number) {
   if (selectedResourceIds.has(id)) {
@@ -869,6 +898,25 @@ onBeforeUnmount(() => flushPendingSave())
   background: #eff6ff;
   border-color: #bfdbfe;
   color: #1e40af;
+}
+
+.resource-groups {
+  display: flex;
+  flex-direction: column;
+}
+
+.resource-group-header {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.375rem 0.25rem 0.125rem;
+  margin-top: 0.25rem;
+}
+
+.resource-group:first-child .resource-group-header {
+  margin-top: 0;
 }
 
 /* Empty state */

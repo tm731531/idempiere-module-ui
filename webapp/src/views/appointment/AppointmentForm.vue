@@ -92,8 +92,6 @@
           v-model="form.dateFrom"
           type="datetime-local"
           class="form-input"
-          :disabled="!!editingAppt"
-          :title="editingAppt ? '開始時間在 iDempiere 中不可修改' : ''"
         />
       </div>
 
@@ -103,14 +101,7 @@
           v-model="form.dateTo"
           type="datetime-local"
           class="form-input"
-          :disabled="!!editingAppt"
-          :title="editingAppt ? '結束時間在 iDempiere 中不可修改' : ''"
         />
-      </div>
-
-      <!-- Edit mode: explain why time fields are locked -->
-      <div v-if="editingAppt" class="time-locked-info">
-        ℹ️ iDempiere 不允許修改已儲存預約的時間。如需更改時間，請先「取消預約」再重新建立。
       </div>
 
       <div class="form-group">
@@ -769,11 +760,11 @@ async function handleSave() {
     const nameStr = buildNamePayload()
 
     if (props.editingAppt) {
-      // Edit mode: always single-resource
-      // All time/resource columns are IsUpdateable=N in iDempiere AD_Column:
-      // S_Resource_ID, AssignDateFrom, AssignDateTo, Qty.
-      // Only Name and Description accept changes.
+      // Edit mode: always single-resource. Include time fields — if iDempiere REST
+      // rejects them (IsUpdateable=N enforcement), the catch block below surfaces the error.
       await updateAssignment(props.editingAppt.id, {
+        AssignDateFrom: toIdempiereDateTime(new Date(form.dateFrom)),
+        AssignDateTo: toIdempiereDateTime(new Date(form.dateTo)),
         Name: nameStr || form.name.trim(),
         Description: descStr,
       })

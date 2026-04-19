@@ -136,10 +136,7 @@
       <!-- Admin shortcuts -->
       <div class="sidebar-section sidebar-admin">
         <button class="admin-shortcut-btn" @click="router.push({ name: 'reference-data' })">
-          管理資源設定
-        </button>
-        <button class="admin-shortcut-btn" @click="router.push({ name: 'reference-data' })">
-          管理狀態設定
+          管理設定
         </button>
       </div>
     </aside>
@@ -191,7 +188,7 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { CalendarOptions, EventDropArg, DateSelectArg, EventClickArg, DatesSetArg } from '@fullcalendar/core'
+import type { CalendarOptions, DateSelectArg, EventClickArg, DatesSetArg, EventDropArg } from '@fullcalendar/core'
 import type { EventResizeDoneArg } from '@fullcalendar/interaction'
 import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
 
@@ -428,7 +425,7 @@ const calendarEvents = computed(() => {
     })
 
   // Append resource unavailability background events (grey blocks)
-  const bgEvents = unavailabilityBlocks.value
+  const bgEvents: any[] = unavailabilityBlocks.value
     .filter(u => selectedResourceIds.has(u.resourceId))
     .map(u => {
       const resName = resources.value.find(r => r.id === u.resourceId)?.Name ?? ''
@@ -443,7 +440,7 @@ const calendarEvents = computed(() => {
         display: 'background' as const,
         color: '#e2e8f0',
         classNames: ['unavail-block'],
-        extendedProps: {},
+        extendedProps: { assignment: null, desc: {} },
       }
     })
 
@@ -457,11 +454,14 @@ const router = useRouter()
 const searchResults = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
   if (!q || q.length < 2) return []
-  return calendarEvents.value
+  return (calendarEvents.value as any[])
     .filter(e =>
-      e.title.toLowerCase().includes(q) ||
-      (e.extendedProps.desc?.bpartner_name ?? '').toLowerCase().includes(q) ||
-      (e.extendedProps.desc?.service ?? '').toLowerCase().includes(q)
+      e.extendedProps?.assignment !== null &&
+      (
+        (e.title ?? '').toLowerCase().includes(q) ||
+        (e.extendedProps?.desc?.bpartner_name ?? '').toLowerCase().includes(q) ||
+        (e.extendedProps?.desc?.service ?? '').toLowerCase().includes(q)
+      )
     )
     .slice(0, 8)
 })
@@ -525,13 +525,15 @@ function handleEventClick(info: EventClickArg) {
   showForm.value = true
 }
 
+
 async function handleEventDrop(info: EventDropArg) {
+  if (!info.event.extendedProps.assignment) { info.revert(); return }
   const a = info.event.extendedProps.assignment
-  const newStart = info.event.start
-  const newEnd = info.event.end ?? new Date(newStart!.getTime() + 30 * 60 * 1000)
+  const newStart = info.event.start!
+  const newEnd = info.event.end ?? new Date(newStart.getTime() + 30 * 60 * 1000)
   try {
     await updateAssignment(a.id, {
-      AssignDateFrom: toIdempiereDateTime(newStart!),
+      AssignDateFrom: toIdempiereDateTime(newStart),
       AssignDateTo: toIdempiereDateTime(newEnd),
     })
     await loadAssignments()
@@ -540,13 +542,14 @@ async function handleEventDrop(info: EventDropArg) {
     toast.add({
       severity: 'error',
       summary: '拖拉更新失敗',
-      detail: '無法更新預約時間，已恢復原位置',
-      life: 4000,
+      detail: '無法更新預約時間，請點選事件開啟編輯',
+      life: 5000,
     })
   }
 }
 
 async function handleEventResize(info: EventResizeDoneArg) {
+  if (!info.event.extendedProps.assignment) { info.revert(); return }
   const a = info.event.extendedProps.assignment
   const newEnd = info.event.end
   if (!newEnd) { info.revert(); return }
@@ -560,8 +563,8 @@ async function handleEventResize(info: EventResizeDoneArg) {
     toast.add({
       severity: 'error',
       summary: '調整時間失敗',
-      detail: '無法更新預約結束時間',
-      life: 4000,
+      detail: '無法更新預約結束時間，請點選事件開啟編輯',
+      life: 5000,
     })
   }
 }
@@ -615,7 +618,7 @@ const calendarOptions = computed<CalendarOptions>(() => ({
   editable: true,
   selectable: true,
   height: '100%',
-  events: calendarEvents.value,
+  events: calendarEvents.value as any[],
   select: handleSelect,
   eventClick: handleEventClick,
   eventDrop: handleEventDrop,

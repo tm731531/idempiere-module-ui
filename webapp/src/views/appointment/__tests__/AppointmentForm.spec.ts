@@ -405,3 +405,45 @@ describe('AppointmentForm — query-param prefill', () => {
     expect(wrapper.find('.mode-toggle').exists()).toBe(true)
   })
 })
+
+describe('AppointmentForm — edit mode time fields', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const editingAppt = {
+    id: 99,
+    Name: 'Test',
+    S_Resource_ID: { id: 101 },
+    AssignDateFrom: '2026-04-19T10:00:00Z',
+    AssignDateTo: '2026-04-19T11:00:00Z',
+    Description: '{}',
+  }
+
+  it('time inputs are NOT disabled in edit mode', async () => {
+    const wrapper = mountForm({ editingAppt })
+    await flushPromises()
+    const dtInputs = wrapper.findAll('input[type="datetime-local"]')
+    expect(dtInputs.length).toBeGreaterThanOrEqual(2)
+    for (const input of dtInputs) {
+      expect(input.attributes('disabled')).toBeUndefined()
+    }
+  })
+
+  it('handleSave in edit mode sends AssignDateFrom and AssignDateTo', async () => {
+    const { updateAssignment } = await import('@/api/assignment')
+    vi.mocked(updateAssignment).mockResolvedValue({})
+
+    const wrapper = mountForm({ editingAppt })
+    await flushPromises()
+
+    await wrapper.find('button.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(updateAssignment).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({
+        AssignDateFrom: expect.any(String),
+        AssignDateTo: expect.any(String),
+      }),
+    )
+  })
+})

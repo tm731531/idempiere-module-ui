@@ -58,6 +58,13 @@ vi.mock('@/stores/auth', () => ({
     context: { organizationId: 1 },
   }),
 }))
+vi.mock('@/api/order', () => ({
+  createOrder: vi.fn(),
+  addOrderLine: vi.fn(),
+}))
+vi.mock('@/api/product', () => ({
+  listProducts: vi.fn().mockResolvedValue([]),
+}))
 
 // SearchSelector is heavy — stub it out
 vi.mock('@/components/SearchSelector.vue', () => ({
@@ -404,6 +411,84 @@ describe('AppointmentForm — query-param prefill', () => {
     expect(wrapper.find('.consultation-banner').exists()).toBe(false)
     // Mode toggle is visible in create mode
     expect(wrapper.find('.mode-toggle').exists()).toBe(true)
+  })
+})
+
+describe('AppointmentForm — handleCreateOrder adds order line', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('calls addOrderLine when a M_Product matches the service name', async () => {
+    const { createOrder, addOrderLine } = await import('@/api/order')
+    const { listProducts } = await import('@/api/product')
+    vi.mocked(createOrder).mockResolvedValue({ id: 200 })
+    vi.mocked(addOrderLine).mockResolvedValue({})
+    vi.mocked(listProducts).mockResolvedValue([
+      { id: 50, Name: '諮詢', C_UOM_ID: { id: 100 } },
+    ])
+
+    const { parseDesc, serializeDesc } = await import('@/composables/useAppointmentDesc')
+    vi.mocked(parseDesc).mockReturnValue({ status: 'DON', bpartner_id: 1001, bpartner_name: '王小明', service: '諮詢' })
+    vi.mocked(serializeDesc).mockReturnValue('{}')
+
+    const { updateAssignment } = await import('@/api/assignment')
+    vi.mocked(updateAssignment).mockResolvedValue({})
+
+    const editingAppt = {
+      id: 99, Name: '王小明 - 諮詢',
+      S_Resource_ID: { id: 1 },
+      AssignDateFrom: '2026-04-19T10:00:00Z',
+      AssignDateTo: '2026-04-19T11:00:00Z',
+      Description: '{"status":"DON","bpartner_id":1001,"bpartner_name":"王小明","service":"諮詢"}',
+    }
+
+    const wrapper = mount(AppointmentForm, {
+      props: { resources: [], existingAssignments: [], editingAppt },
+      global: { plugins: [mockRouter] },
+    })
+    await flushPromises()
+
+    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立帳單'))
+    expect(orderBtn).toBeTruthy()
+    await orderBtn!.trigger('click')
+    await flushPromises()
+
+    expect(addOrderLine).toHaveBeenCalledWith(200, expect.objectContaining({ M_Product_ID: 50, QtyOrdered: 1 }))
+  })
+
+  it('skips addOrderLine when no product matches service name', async () => {
+    const { createOrder, addOrderLine } = await import('@/api/order')
+    const { listProducts } = await import('@/api/product')
+    vi.mocked(createOrder).mockResolvedValue({ id: 201 })
+    vi.mocked(addOrderLine).mockResolvedValue({})
+    vi.mocked(listProducts).mockResolvedValue([])
+
+    const { parseDesc, serializeDesc } = await import('@/composables/useAppointmentDesc')
+    vi.mocked(parseDesc).mockReturnValue({ status: 'DON', bpartner_id: 1001, bpartner_name: '王小明', service: '未知服務' })
+    vi.mocked(serializeDesc).mockReturnValue('{}')
+
+    const { updateAssignment } = await import('@/api/assignment')
+    vi.mocked(updateAssignment).mockResolvedValue({})
+
+    const editingAppt = {
+      id: 99, Name: 'Test',
+      S_Resource_ID: { id: 1 },
+      AssignDateFrom: '2026-04-19T10:00:00Z',
+      AssignDateTo: '2026-04-19T11:00:00Z',
+      Description: '{"status":"DON","bpartner_id":1001,"bpartner_name":"王小明","service":"未知服務"}',
+    }
+
+    const wrapper = mount(AppointmentForm, {
+      props: { resources: [], existingAssignments: [], editingAppt },
+      global: { plugins: [mockRouter] },
+    })
+    await flushPromises()
+
+    const orderBtn = wrapper.findAll('button').find(b => b.text().includes('建立帳單'))
+    await orderBtn!.trigger('click')
+    await flushPromises()
+
+    expect(createOrder).toHaveBeenCalled()
+    expect(addOrderLine).not.toHaveBeenCalled()
   })
 })
 

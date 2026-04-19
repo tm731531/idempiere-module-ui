@@ -279,7 +279,8 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { listAssignments, createAssignment, createMultipleAssignments, updateAssignment, cancelAssignment, checkConflict } from '@/api/assignment'
-import { createOrder } from '@/api/order'
+import { createOrder, addOrderLine } from '@/api/order'
+import { listProducts } from '@/api/product'
 import { listResources, createResource } from '@/api/resource'
 import { searchCustomers, getCustomerDetail } from '@/api/bpartner'
 import { lookupOrgWarehouse } from '@/api/lookup'
@@ -739,12 +740,39 @@ async function handleCreateOrder() {
     const orderId: number = order.id ?? order.C_Order_ID
     linkedOrderId.value = orderId
 
+    // Attempt to add an order line for the service product (non-fatal if no product match)
+    const serviceName = form.service.trim()
+    if (serviceName) {
+      try {
+        const products = await listProducts(`Name eq '${serviceName}' and IsActive eq true`)
+        if (products.length > 0) {
+          const product = products[0]!
+          const productId: number = product.id ?? product.M_Product_ID
+          const uomId: number | undefined =
+            typeof product.C_UOM_ID === 'object'
+              ? (product.C_UOM_ID?.id ?? undefined)
+              : (product.C_UOM_ID ?? undefined)
+          await addOrderLine(orderId, {
+            M_Product_ID: productId,
+            C_UOM_ID: uomId,
+            QtyOrdered: 1,
+            PriceEntered: 0,
+            Description: `來自預約：${props.editingAppt!.Name}`,
+          })
+        }
+      } catch { /* non-fatal — order still created */ }
+    }
+
     // Write order_id back into Description JSON
     const desc = parseDesc(existingDescRaw.value)
     desc.order_id = orderId
     const newDesc = serializeDesc(desc)
     existingDescRaw.value = newDesc
-    await updateAssignment(props.editingAppt!.id, { Description: newDesc })
+    try {
+      await updateAssignment(props.editingAppt!.id, { Description: newDesc })
+    } catch {
+      toast.add({ severity: 'warn', summary: '訂單已建立，但關聯寫回失敗', life: 5000 })
+    }
 
     toast.add({ severity: 'success', summary: '訂單已建立', detail: '可至訂單管理查看', life: 4000 })
   } catch (e: any) {

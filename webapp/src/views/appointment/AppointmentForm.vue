@@ -840,14 +840,16 @@ async function handleSave() {
       }
 
       saving.value = false
-      if (failCount === 0) {
+
+      // Close after showing the summary (3s on partial failure, 800ms on full success)
+      const delay = failCount > 0 ? 3000 : 800
+      setTimeout(() => {
         if (linkedConsultationId.value) {
           router.push({ name: 'consultation-edit', params: { id: linkedConsultationId.value } })
         } else {
           emit('saved')
         }
-      }
-      // On partial failure: stay open so the user can see the summary
+      }, delay)
       return
     } else {
       // Single-resource create

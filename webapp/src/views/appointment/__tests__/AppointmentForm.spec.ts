@@ -414,6 +414,49 @@ describe('AppointmentForm — query-param prefill', () => {
   })
 })
 
+describe('AppointmentForm — multi-resource partial failure auto-close', () => {
+  it('emits saved after 3 seconds on partial failure', async () => {
+    vi.useFakeTimers()
+    vi.mocked(createMultipleAssignments).mockResolvedValue([
+      { resourceId: 101, result: { id: 10 } },
+      { resourceId: 102, error: new Error('conflict') },
+    ])
+
+    const wrapper = mountForm()
+    await flushPromises()
+
+    // Switch to multi mode
+    const modeBtns = wrapper.findAll('.mode-btn')
+    await modeBtns[1]!.trigger('click')
+    await flushPromises()
+
+    // Select both resources
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    await checkboxes[0]!.setValue(true)
+    await checkboxes[1]!.setValue(true)
+
+    // Fill mandatory fields
+    const timeInputs = wrapper.findAll('input[type="datetime-local"]')
+    await timeInputs[0]!.setValue('2026-04-20T10:00')
+    await timeInputs[1]!.setValue('2026-04-20T11:00')
+    await wrapper.find('input[type="text"]').setValue('Test')
+
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    // Summary shown, not yet closed
+    expect(wrapper.find('.summary-partial').exists()).toBe(true)
+    expect(wrapper.emitted('saved')).toBeFalsy()
+
+    // Advance 3s → auto-close
+    await vi.advanceTimersByTimeAsync(3000)
+    await flushPromises()
+    expect(wrapper.emitted('saved')).toBeTruthy()
+
+    vi.useRealTimers()
+  })
+})
+
 describe('AppointmentForm — handleCreateOrder adds order line', () => {
   beforeEach(() => vi.clearAllMocks())
 

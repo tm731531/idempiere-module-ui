@@ -5,6 +5,7 @@ import { clearLookupCache } from '@/api/lookup'
 import { clearRequestStatusesCache } from '@/composables/useRequestStatuses'
 import { clearAssignmentColors } from '@/composables/useAssignmentColors'
 import { clearAdNoteCache } from '@/api/adNote'
+import { clearAppointmentServiceCache } from '@/composables/useAppointmentServices'
 
 interface User {
   id: number
@@ -347,6 +348,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearRequestStatusesCache()
     clearAssignmentColors()
     clearAdNoteCache()
+    clearAppointmentServiceCache()
 
     try {
       // Re-POST with saved credentials to get fresh token + clients
@@ -418,6 +420,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearRequestStatusesCache()
     clearAssignmentColors()
     clearAdNoteCache()
+    clearAppointmentServiceCache()
   }
 
   // 初始化：如果有 token + context，還原登入狀態

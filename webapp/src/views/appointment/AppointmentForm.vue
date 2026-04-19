@@ -433,6 +433,7 @@ function handleBpSearch() {
       }))
     } catch {
       bpResults.value = []
+      errorMsg.value = '客戶搜尋失敗，請稍後再試'
     }
   }, 300)
 }
@@ -522,7 +523,7 @@ watch(
         const failedNames = failedIds
           .map(id => effectiveResources.value.find(r => r.id === id)?.Name ?? `#${id}`)
           .join('、')
-        errorMsg.value = `無法檢查衝突的服務人員：${failedNames}`
+        errorMsg.value = `衝突偵測失敗（${failedNames}）— 請手動確認是否有時段衝突`
       }
     }, 300)
   },

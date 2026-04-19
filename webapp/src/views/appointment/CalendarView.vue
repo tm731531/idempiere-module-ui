@@ -695,6 +695,7 @@ onMounted(async () => {
     resources.value.forEach(r => selectedResourceIds.add(r.id))
   } catch {
     resources.value = []
+    toast.add({ severity: 'error', summary: '無法載入服務人員', detail: '請重新整理頁面', life: 5000 })
   } finally {
     resourcesLoading.value = false
   }

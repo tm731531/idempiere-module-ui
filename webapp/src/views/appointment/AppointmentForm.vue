@@ -129,6 +129,30 @@
         </select>
       </div>
 
+      <!-- Service preset -->
+      <div class="form-group">
+        <label class="form-label">服務項目</label>
+        <select
+          v-if="appointmentServices.length > 0"
+          v-model="form.service"
+          class="form-input"
+          @change="onServiceChange"
+        >
+          <option value="">（請選擇）</option>
+          <option v-for="s in appointmentServices" :key="s.Value" :value="s.Name">
+            {{ s.Name }}{{ s.durationMinutes ? ` (${s.durationMinutes}分鐘)` : '' }}
+          </option>
+        </select>
+        <input
+          v-else
+          v-model="form.service"
+          type="text"
+          class="form-input"
+          placeholder="服務項目（選填）"
+          maxlength="100"
+        />
+      </div>
+
       <!-- Customer BPartner search -->
       <div class="form-group">
         <label class="form-label">客戶</label>
@@ -197,7 +221,7 @@
       <div class="form-group">
         <label class="form-label">備註</label>
         <textarea
-          v-model="form.description"
+          v-model="form.notes"
           class="form-input form-textarea"
           placeholder="選填"
           rows="3"
@@ -243,10 +267,12 @@ import { parseIdempiereDateTime, toIdempiereDateTime } from '@/api/utils'
 import ColorPickerPopover from '@/components/ColorPickerPopover.vue'
 import { useAssignmentColors, flushPendingSave } from '@/composables/useAssignmentColors'
 import { useAppointmentStatuses } from '@/composables/useAppointmentStatuses'
+import { useAppointmentServices } from '@/composables/useAppointmentServices'
 import { parseDesc, serializeDesc, buildName } from '@/composables/useAppointmentDesc'
 
 const { setAssignmentColorOverride } = useAssignmentColors()
 const { statuses, load: loadStatuses } = useAppointmentStatuses()
+const { services: appointmentServices, load: loadServices } = useAppointmentServices()
 
 const router = useRouter()
 const route = useRoute()
@@ -400,6 +426,18 @@ function clearBp() {
   bpResults.value = []
 }
 
+function onServiceChange() {
+  if (!form.service || !form.dateFrom || !!props.editingAppt) return
+  const matched = appointmentServices.value.find(s => s.Name === form.service)
+  const duration = matched?.durationMinutes ?? 0
+  if (duration <= 0) return
+  const from = new Date(form.dateFrom)
+  if (isNaN(from.getTime())) return
+  const to = new Date(from.getTime() + duration * 60 * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  form.dateTo = `${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}T${pad(to.getHours())}:${pad(to.getMinutes())}`
+}
+
 // ─── Conflict detection ───────────────────────────────────────────────────────
 
 // Recheck per-resource conflicts whenever selected resources or time window change.
@@ -463,8 +501,9 @@ function toDatetimeLocal(d: Date): string {
 }
 
 onMounted(async () => {
-  // Load statuses (non-blocking)
+  // Load statuses and services (non-blocking)
   void loadStatuses()
+  void loadServices()
 
   // Standalone page mode: load resources ourselves (CalendarView provides them in modal mode)
   if (!props.resources?.length) {
